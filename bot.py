@@ -1,14 +1,14 @@
-from flask import Flask, request
+from flask import Flask
 import threading
 import os
 import time
-import cv2
 import numpy as np
+from PIL import Image
 
 app = Flask(__name__)
 
 BOT_RUNNING = False
-MODE = "auto"  # auto / farm / build / stop
+MODE = "auto"
 
 # ----------------
 # TOUCH
@@ -21,20 +21,19 @@ def tap(x, y):
 # ----------------
 def screenshot():
     os.system("screencap -p /sdcard/screen.png")
-    return cv2.imread("/sdcard/screen.png")
+    img = np.array(Image.open("/sdcard/screen.png"))
+    return img
 
 # ----------------
-# BASİT AI
+# BASİT ANALİZ (AI yerine hafif sistem)
 # ----------------
 def analyze(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 100, 200)
+    # parlaklık ortalaması (çok basit ama hızlı)
+    brightness = np.mean(img)
 
-    yoğunluk = np.count_nonzero(edges)
-
-    if yoğunluk > 25000:
+    if brightness > 180:
         return "upgrade"
-    elif yoğunluk > 10000:
+    elif brightness > 130:
         return "build"
     else:
         return "farm"
@@ -45,7 +44,7 @@ def analyze(img):
 def bot_loop():
     global BOT_RUNNING, MODE
 
-    print("BOT BASLADI")
+    print("LITE BOT BASLADI")
 
     while BOT_RUNNING:
         img = screenshot()
@@ -82,7 +81,7 @@ def bot_loop():
 @app.route("/")
 def home():
     return """
-    <h2>BOT PANEL</h2>
+    <h2>LITE BOT PANEL</h2>
     <a href="/start">START</a><br>
     <a href="/stop">STOP</a><br><br>
 
