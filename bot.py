@@ -1,120 +1,118 @@
-from flask import Flask,render_template_string,jsonify import random import threading import time import requests import xml.etree.ElementTree as ET
+from flask import Flask, render_template_string, jsonify
+import random
+import threading
+import time
+import requests
+import xml.etree.ElementTree as ET
 
-app = Flask(name)
+app = Flask(__name__)
 
------------------------------
-
-News store (categorized + scored)
-
------------------------------
-
-data_store = { "news": {} }
-
-NEWS_SOURCES = [ "https://news.google.com/rss?hl=tr&gl=TR&ceid=TR:tr", "https://feeds.bbci.co.uk/news/rss.xml", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "https://rss.cnn.com/rss/edition.rss", "https://www.aljazeera.com/xml/rss/all.xml", "https://www.theguardian.com/world/rss", "https://www.reuters.com/world/rss", "https://www.hurriyet.com.tr/rss/anasayfa", "https://www.sabah.com.tr/rss/gundem.xml" ]
-
------------------------------
-
-Categorization
-
------------------------------
-
-def categorize(title): t = title.lower()
-
-if any(k in t for k in ["economy", "ekonomi", "finance", "market", "dolar", "euro", "faiz"]):
-    return "Economy"
-elif any(k in t for k in ["sport", "football", "basketball", "spor", "maç"]):
-    return "Sports"
-elif any(k in t for k in ["technology", "tech", "ai", "yazılım", "teknoloji"]):
-    return "Technology"
-elif any(k in t for k in ["turkey", "türkiye", "istanbul", "ankara", "kayseri"]):
-    return "Turkey"
-elif any(k in t for k in ["world", "global", "usa", "uk", "china", "russia"]):
-    return "World"
-else:
-    return "Other"
-
------------------------------
-
-Critical scoring algorithm
-
------------------------------
-
-def score(title): t = title.lower() s = 0
-
-keywords = {
-    "war": 5, "attack": 5, "crisis": 4, "breaking": 5,
-    "earthquake": 5, "deprem": 5, "explosion": 5,
-    "president": 3, "government": 3, "policy": 2,
-    "economy": 3, "inflation": 4, "faiz": 4,
-    "bitcoin": 3, "ai": 3, "technology": 2
+data_store = {
+    "news": {}
 }
 
-for k, v in keywords.items():
-    if k in t:
-        s += v
+NEWS_SOURCES = [
+    "https://news.google.com/rss?hl=tr&gl=TR&ceid=TR:tr",
+    "https://feeds.bbci.co.uk/news/rss.xml",
+    "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+    "https://rss.cnn.com/rss/edition.rss",
+    "https://www.aljazeera.com/xml/rss/all.xml",
+    "https://www.theguardian.com/world/rss",
+    "https://www.reuters.com/world/rss",
+    "https://www.hurriyet.com.tr/rss/anasayfa",
+    "https://www.sabah.com.tr/rss/gundem.xml"
+]
 
-# extra boost for uppercase / breaking style headlines
-if "breaking" in t:
-    s += 5
+def categorize(title):
+    t = title.lower()
 
-return s
+    if any(k in t for k in ["economy", "ekonomi", "finance", "market", "dolar", "euro", "faiz"]):
+        return "Economy"
+    elif any(k in t for k in ["sport", "football", "basketball", "spor", "maç"]):
+        return "Sports"
+    elif any(k in t for k in ["technology", "tech", "ai", "yazılım", "teknoloji"]):
+        return "Technology"
+    elif any(k in t for k in ["turkey", "türkiye", "istanbul", "ankara", "kayseri"]):
+        return "Turkey"
+    elif any(k in t for k in ["world", "global", "usa", "uk", "china", "russia"]):
+        return "World"
+    else:
+        return "Other"
 
------------------------------
+def score(title):
+    t = title.lower()
+    s = 0
 
-Fetch live news
+    keywords = {
+        "war": 5, "attack": 5, "crisis": 4, "breaking": 5,
+        "earthquake": 5, "deprem": 5, "explosion": 5,
+        "president": 3, "government": 3,
+        "economy": 3, "inflation": 4, "faiz": 4,
+        "bitcoin": 3, "ai": 3
+    }
 
------------------------------
+    for k, v in keywords.items():
+        if k in t:
+            s += v
 
-def fetch_news(): while True: categorized = { "World": [], "Turkey": [], "Technology": [], "Economy": [], "Sports": [], "Other": [] }
+    if "breaking" in t:
+        s += 5
 
-for url in NEWS_SOURCES:
-        try:
-            res = requests.get(url, timeout=5)
-            root = ET.fromstring(res.content)
+    return s
 
-            for item in root.findall("./channel/item")[:10]:
-                title_el = item.find("title")
-                date_el = item.find("pubDate")
+def fetch_news():
+    while True:
+        categorized = {
+            "World": [],
+            "Turkey": [],
+            "Technology": [],
+            "Economy": [],
+            "Sports": [],
+            "Other": []
+        }
 
-                title = title_el.text if title_el is not None else ""
-                date = date_el.text if date_el is not None else ""
+        for url in NEWS_SOURCES:
+            try:
+                res = requests.get(url, timeout=5)
+                root = ET.fromstring(res.content)
 
-                cat = categorize(title)
-                s = score(title)
+                for item in root.findall("./channel/item")[:10]:
+                    title_el = item.find("title")
+                    date_el = item.find("pubDate")
 
-                categorized[cat].append({
-                    "title": title,
-                    "date": date,
-                    "score": s
+                    title = title_el.text if title_el is not None else ""
+                    date = date_el.text if date_el is not None else ""
+
+                    cat = categorize(title)
+                    s = score(title)
+
+                    categorized[cat].append({
+                        "title": title,
+                        "date": date,
+                        "score": s
+                    })
+
+            except Exception as e:
+                categorized["Other"].append({
+                    "title": f"Error: {str(e)}",
+                    "date": url,
+                    "score": 0
                 })
 
-        except Exception as e:
-            categorized["Other"].append({
-                "title": f"Kaynak hatası: {str(e)}",
-                "date": url,
-                "score": 0
-            })
+        for cat in categorized:
+            categorized[cat] = sorted(categorized[cat], key=lambda x: x["score"], reverse=True)
 
-    # Sort each category by score (critical first)
-    for cat in categorized:
-        categorized[cat] = sorted(categorized[cat], key=lambda x: x["score"], reverse=True)
+        data_store["news"] = categorized
 
-    data_store["news"] = categorized
-    time.sleep(10)  # faster refresh for near real-time feel
+        time.sleep(10)
 
 threading.Thread(target=fetch_news, daemon=True).start()
 
------------------------------
-
-UI
-
------------------------------
-
 HTML_PAGE = """
-
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html>
 <head>
-    <title>Termux News Panel</title>
+    <title>News Panel</title>
     <style>
         body {
             background: #0f172a;
@@ -133,10 +131,6 @@ HTML_PAGE = """
         .category {
             margin-top: 20px;
         }
-        .category h2 {
-            border-bottom: 1px solid #334155;
-            padding-bottom: 5px;
-        }
         .news-item {
             padding: 8px 0;
             border-bottom: 1px solid #334155;
@@ -145,23 +139,16 @@ HTML_PAGE = """
             color: #f87171;
             font-weight: bold;
         }
-        .title {
-            font-size: 14px;
-        }
-        .date {
-            font-size: 12px;
-            color: #94a3b8;
-        }
-        .score {
-            font-size: 11px;
-            color: #38bdf8;
-        }
     </style>
 </head>
-<body><div class="card">
-    <h1>📰 Kritik + Canlı Haberler</h1>
-    <div id="news">Yükleniyor...</div>
-</div><script>
+<body>
+
+<div class="card">
+    <h1>📰 Live News</h1>
+    <div id="news"></div>
+</div>
+
+<script>
 async function loadNews() {
     const res = await fetch('/news');
     const data = await res.json();
@@ -173,20 +160,20 @@ async function loadNews() {
         const section = document.createElement("div");
         section.className = "category";
 
-        const title = document.createElement("h2");
-        title.innerText = category;
-        section.appendChild(title);
+        const h = document.createElement("h2");
+        h.innerText = category;
+        section.appendChild(h);
 
         data.news[category].forEach(item => {
             const div = document.createElement("div");
             div.className = "news-item";
 
-            const isCritical = item.score >= 6;
+            const critical = item.score >= 6;
 
             div.innerHTML =
-                "<div class='title " + (isCritical ? "critical" : "") + "'>" + item.title + "</div>" +
-                "<div class='date'>" + item.date + "</div>" +
-                "<div class='score'>Score: " + item.score + "</div>";
+                "<div class='" + (critical ? "critical" : "") + "'>" + item.title + "</div>" +
+                "<div>" + item.date + "</div>" +
+                "<small>Score: " + item.score + "</small>";
 
             section.appendChild(div);
         });
@@ -197,10 +184,21 @@ async function loadNews() {
 
 loadNews();
 setInterval(loadNews, 10000);
-</script></body>
+</script>
+
+</body>
 </html>
-"""@app.route("/") def index(): return render_template_string(HTML_PAGE)
+"""
 
-@app.route("/news") def get_news(): return jsonify(data_store)
+@app.route("/")
+def index():
+    return render_template_string(HTML_PAGE)
 
-if name == "main": port = random.randint(5000, 9000) print(f"Server running on http://127.0.0.1:{port}") app.run(host="0.0.0.0", port=port)
+@app.route("/news")
+def get_news():
+    return jsonify(data_store)
+
+if __name__ == "__main__":
+    port = random.randint(5000, 9000)
+    print(f"Server running on http://127.0.0.1:{port}")
+    app.run(host="0.0.0.0", port=port)
