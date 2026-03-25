@@ -30,14 +30,13 @@ PY=$(command -v python3 || command -v python)
 TMPD="${TMPDIR:-/tmp}"
 HTML="$TMPD/skywatch_index.html"
 
-# Dinamik port (sadece bu kısım eklendi)
-PORT=8080
-while ss -tuln | grep -q ":$PORT " 2>/dev/null; do ((PORT++)); done
+# Rastgele port (8080-8999 arası)
+PORT=$((8080 + RANDOM % 920))
 
-echo -e "  \( {C}HTML olusturuluyor... \){N}"
+echo -e "  ${C}HTML olusturuluyor... (Port: \( PORT) \){N}"
 
 $PY << 'PYEOF'
-import os, sys
+import os, sys, random
 
 TMPD = os.environ.get("TMPDIR", "/tmp")
 HTML = os.path.join(TMPD, "skywatch_index.html")
@@ -223,7 +222,8 @@ page = (
 "function parseS(s){\n"
 "  return{icao24:s[0],callsign:(s[1]||'').trim()||s[0],country:s[2]||'?',lon:s[5],lat:s[6],\n"
 "    alt:s[7]?Math.round(s[7]):null,ground:s[8],vel:s[9]?Math.round(s[9]*3.6):null,\n"
-"    hdg:s[10]?Math.round(s[10]):null,sqk:s[14]||'?'};}\n"
+"    hdg:s[10]?Math.round(s[10]):null,sqk:s[14]||'?'};\n"
+"}\n"
 "\n"
 "function genDemo(){\n"
 "  var al=['TK','LH','BA','AF','EK','QR','SU','PC','FR','W6'],\n"
@@ -409,11 +409,11 @@ with open(HTML, 'w', encoding='utf-8') as f:
 print("HTML hazır:", HTML)
 PYEOF
 
-echo -e "  \( {G}SKYWATCH başlatılıyor... \){N}"
-echo -e "  \( {C}Tarayıcıda açılıyor → http://localhost: \){PORT}${N}"
+echo -e "  ${G}SKYWATCH başlatılıyor... (Port: \( PORT) \){N}"
+echo -e "  \( {C}Tarayıcıda aç: http://localhost: \){PORT}${N}"
 
 cd "$TMPD" || exit
-termux-open-url "http://localhost:\( {PORT}" 2>/dev/null || echo -e " \){Y}Manuel olarak http://localhost:\( {PORT} adresini tarayıcıya yazın. \){N}"
+termux-open-url "http://localhost:\( {PORT}" 2>/dev/null || echo -e " \){Y}Tarayıcı otomatik açılamadı. Lütfen http://localhost:\( {PORT} adresini kendin yaz. \){N}"
 
-echo -e "\( {Y}Sunucuyu durdurmak için Ctrl + C \){N}"
+echo -e "\( {Y}Sunucuyu durdurmak için Ctrl + C bas. \){N}"
 $PY -m http.server $PORT --bind 127.0.0.1
