@@ -1,117 +1,144 @@
-from flask import Flask
+from flask import Flask, jsonify, request, render_template_string
 import threading
-import os
 import time
 import numpy as np
-from PIL import Image
 
 app = Flask(__name__)
 
-BOT_RUNNING = False
-MODE = "auto"
+plasma = {
+    "temperature": 100,
+    "stability": 50,
+    "energy": 0,
+    "auto_mode": True
+}
 
-# ----------------
-# TOUCH
-# ----------------
-def tap(x, y):
-    os.system(f"input tap {x} {y}")
+# --- AI Kontrol (basit dengeleme algoritması) ---
+def ai_control():
+    target_temp = 150
 
-# ----------------
-# SCREENSHOT
-# ----------------
-def screenshot():
-    os.system("screencap -p /sdcard/screen.png")
-    img = np.array(Image.open("/sdcard/screen.png"))
-    return img
+    while True:
+        if plasma["auto_mode"]:
+            # sıcaklığı hedefe yaklaştır
+            diff = target_temp - plasma["temperature"]
 
-# ----------------
-# BASİT ANALİZ (AI yerine hafif sistem)
-# ----------------
-def analyze(img):
-    # parlaklık ortalaması (çok basit ama hızlı)
-    brightness = np.mean(img)
+            adjustment = diff * 0.1  # kontrol katsayısı
+            plasma["temperature"] += adjustment
 
-    if brightness > 180:
-        return "upgrade"
-    elif brightness > 130:
-        return "build"
-    else:
-        return "farm"
+        # doğal dalgalanma
+        plasma["temperature"] += np.random.uniform(-2, 2)
 
-# ----------------
-# BOT LOOP
-# ----------------
-def bot_loop():
-    global BOT_RUNNING, MODE
+        # stabilite hesapla
+        plasma["stability"] = max(0, 100 - abs(plasma["temperature"] - 150))
 
-    print("LITE BOT BASLADI")
-
-    while BOT_RUNNING:
-        img = screenshot()
-
-        if MODE == "auto":
-            action = analyze(img)
-        else:
-            action = MODE
-
-        print("MODE:", action)
-
-        if action == "build":
-            tap(500, 1800)
-            time.sleep(0.3)
-            tap(800, 1000)
-
-        elif action == "upgrade":
-            tap(800, 1000)
-            time.sleep(0.3)
-            tap(900, 1700)
-
-        elif action == "farm":
-            for _ in range(5):
-                tap(700, 1200)
-                time.sleep(0.1)
+        # enerji üretimi
+        plasma["energy"] = plasma["temperature"] * plasma["stability"] / 100
 
         time.sleep(1)
 
-    print("BOT DURDU")
+# --- Web Panel ---
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plazma Kontrol Paneli</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body style="background:#111;color:#fff;font-family:Arial;text-align:center;">
 
-# ----------------
-# WEB PANEL
-# ----------------
+<h1>🔥 Plazma Reaktör Paneli</h1>
+
+<p>Sıcaklık: <span id="temp"></span></p>
+<p>Stabilite: <span id="stab"></span></p>
+<p>Enerji: <span id="energy"></span></p>
+
+<button onclick="control('increase')">➕ Isı Artır</button>
+<button onclick="control('decrease')">➖ Isı Azalt</button>
+<button onclick="toggleAuto()">🤖 Auto Mode</button>
+
+<canvas id="chart" width="400" height="200"></canvas>
+
+<script>
+let tempData = [];
+
+async function fetchData(){
+    let res = await fetch('/data');
+    let data = await res.json();
+
+    document.getElementById('temp').innerText = data.temperature.toFixed(2);
+    document.getElementById('stab').innerText = data.stability.toFixed(2);
+    document.getElementById('energy').innerText = data.energy.toFixed(2);
+
+    tempData.push(data.temperature);
+    if(tempData.length > 20) tempData.shift();
+
+    chart.data.datasets[0].data = tempData;
+    chart.update();
+}
+
+setInterval(fetchData, 1000);
+
+// kontrol butonları
+function control(action){
+    fetch('/control', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({action:action})
+    });
+}
+
+function toggleAuto(){
+    fetch('/toggle_auto', {method:'POST'});
+}
+
+// grafik
+let ctx = document.getElementById('chart').getContext('2d');
+let chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: Array(20).fill(""),
+        datasets: [{
+            label: 'Temperature',
+            data: [],
+            borderColor: 'cyan',
+            fill: false
+        }]
+    },
+    options: {
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+</script>
+
+</body>
+</html>
+"""
+
 @app.route("/")
 def home():
-    return """
-    <h2>LITE BOT PANEL</h2>
-    <a href="/start">START</a><br>
-    <a href="/stop">STOP</a><br><br>
+    return render_template_string(HTML)
 
-    <a href="/mode/auto">AUTO</a><br>
-    <a href="/mode/build">BUILD</a><br>
-    <a href="/mode/upgrade">UPGRADE</a><br>
-    <a href="/mode/farm">FARM</a><br>
-    """
+@app.route("/data")
+def data():
+    return jsonify(plasma)
 
-@app.route("/start")
-def start():
-    global BOT_RUNNING
-    if not BOT_RUNNING:
-        BOT_RUNNING = True
-        threading.Thread(target=bot_loop).start()
-    return "BOT STARTED"
+@app.route("/control", methods=["POST"])
+def control():
+    action = request.json.get("action")
 
-@app.route("/stop")
-def stop():
-    global BOT_RUNNING
-    BOT_RUNNING = False
-    return "BOT STOPPED"
+    if action == "increase":
+        plasma["temperature"] += 20
+    elif action == "decrease":
+        plasma["temperature"] -= 20
 
-@app.route("/mode/<m>")
-def mode(m):
-    global MODE
-    MODE = m
-    return f"MODE: {m}"
+    return jsonify({"status": "ok"})
 
-# ----------------
-# RUN
-# ----------------
-app.run(host="0.0.0.0", port=5000)
+@app.route("/toggle_auto", methods=["POST"])
+def toggle_auto():
+    plasma["auto_mode"] = not plasma["auto_mode"]
+    return jsonify({"auto_mode": plasma["auto_mode"]})
+
+if __name__ == "__main__":
+    threading.Thread(target=ai_control, daemon=True).start()
+    app.run(host="0.0.0.0", port=5000)
