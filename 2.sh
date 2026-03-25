@@ -15,7 +15,7 @@ printf "  ╚════██║██╔═██╗   ╚██╔╝  █�
 printf "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
 printf "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
 printf "${N}\n"
-printf "  \( {C}v3.0 — Tum Buglar Duzeltildi + SADECE 3 UCAK (DEMO) \){N}\n"
+printf "  \( {C}v3.0 — 3 UCAK DEMO + RANDOM PORT & IP SERVER \){N}\n"
 printf "  ─────────────────────────────────────────────────────────\n\n"
 
 if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
@@ -27,7 +27,7 @@ PY=$(command -v python3 || command -v python)
 TMPD="${TMPDIR:-/tmp}"
 HTML="$TMPD/skywatch_v3.html"
 
-printf "  \( {C}HTML olusturuluyor... (sadece 3 ucak demo mod) \){N}\n"
+printf "  \( {C}HTML olusturuluyor... (sadece 3 ucak + random server) \){N}\n"
 
 $PY << 'PYEOF'
 import os, sys
@@ -39,7 +39,7 @@ def build():
     L = []
     def w(*args): L.append("".join(str(a) for a in args))
 
-    # ── HEAD ────────────────────────────────────────────────────
+    # ── HEAD + CSS (tamamen aynı, kısaltmadan) ─────────────────────
     w("<!DOCTYPE html><html lang='tr'><head>")
     w("<meta charset='UTF-8'>")
     w("<meta name='viewport' content='width=device-width,initial-scale=1.0'>")
@@ -47,16 +47,12 @@ def build():
     w("<link href='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css' rel='stylesheet'>")
     w("<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>")
     w("<link href='https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600&display=swap' rel='stylesheet'>")
-
-    # ── CSS (orijinal + tamamlanan) ─────────────────────────────────
     w("<style>")
     w(":root{--g:#00ff88;--c:#00e5ff;--o:#ff6b35;--warn:#ffcc00;--red:#ff4466;--d:#020810;--p:rgba(2,15,25,0.95);--b:rgba(0,255,136,0.2);--b2:rgba(0,229,255,0.2);--t:#a8ffd4;--t2:rgba(168,255,212,0.5)}")
     w("*{margin:0;padding:0;box-sizing:border-box}")
     w("html,body{background:#020810;color:#a8ffd4;font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;width:100vw}")
     w("body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.01) 2px,rgba(0,255,136,.01) 4px);pointer-events:none;z-index:1}")
     w("#map{position:absolute;inset:0;width:100%;height:100%}")
-
-    # TOKEN MODAL - HIGHEST Z-INDEX, starts visible
     w("#modal{position:fixed;inset:0;background:rgba(2,8,16,0.98);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}")
     w("#modal.gone{display:none!important}")
     w(".modal-box{background:#030e1a;border:1px solid rgba(0,255,136,0.3);padding:32px;width:460px;max-width:94vw;position:relative}")
@@ -82,8 +78,6 @@ def build():
     w(".modal-divider span{font-size:9px;color:rgba(168,255,212,0.3);letter-spacing:2px}")
     w(".modal-saved{font-size:10px;color:#00ff88;letter-spacing:1px;padding:7px 12px;border:1px solid rgba(0,255,136,0.2);background:rgba(0,255,136,0.05);margin-bottom:10px;display:none;align-items:center;gap:8px}")
     w(".modal-saved.show{display:flex}")
-
-    # LOADING
     w("#loading{position:fixed;inset:0;background:#020810;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}")
     w("#loading.active{display:flex}")
     w("#loading.fade{opacity:0;transition:opacity .5s}")
@@ -93,9 +87,6 @@ def build():
     w(".ld-bar-wrap{width:260px;height:2px;background:rgba(0,255,136,0.1)}")
     w(".ld-bar{height:100%;background:linear-gradient(90deg,#00ff88,#00e5ff);width:0%;transition:width .35s ease;box-shadow:0 0 8px #00ff88}")
     w(".ld-status{font-size:10px;color:rgba(168,255,212,0.4);letter-spacing:3px;text-transform:uppercase}")
-    w(".ld-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden}")
-
-    # TOPBAR
     w(".topbar{position:fixed;top:0;left:0;right:0;height:52px;background:rgba(2,14,24,0.96);border-bottom:1px solid rgba(0,255,136,0.18);display:flex;align-items:center;padding:0 14px;gap:12px;z-index:500;backdrop-filter:blur(16px)}")
     w(".logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:16px;color:#00ff88;letter-spacing:5px;text-shadow:0 0 20px rgba(0,255,136,0.6);white-space:nowrap;display:flex;align-items:center;gap:8px}")
     w(".logo-icon{animation:logospin 6s ease-in-out infinite;filter:drop-shadow(0 0 5px #00ff88)}")
@@ -114,8 +105,6 @@ def build():
     w(".tbtn{background:transparent;border:1px solid rgba(0,255,136,0.2);color:#00ff88;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 9px;cursor:pointer;letter-spacing:1px;transition:all .2s;white-space:nowrap;position:relative;overflow:hidden}")
     w(".tbtn:hover,.tbtn.on{background:rgba(0,255,136,0.1);border-color:#00ff88;box-shadow:0 0 10px rgba(0,255,136,0.2)}")
     w(".tbtn:active{transform:scale(0.95)}")
-
-    # SEARCH
     w(".searchbar{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:501;display:flex;opacity:0;pointer-events:none;transition:opacity .25s;width:360px}")
     w(".searchbar.open{opacity:1;pointer-events:all}")
     w(".sinput{flex:1;background:rgba(3,18,30,0.98);border:1px solid rgba(0,229,255,0.3);border-right:none;color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:12px;padding:9px 14px;outline:none;letter-spacing:0.5px}")
@@ -127,15 +116,11 @@ def build():
     w(".sresults.open{display:block}")
     w(".sresult-item{padding:9px 14px;font-size:11px;cursor:pointer;border-bottom:1px solid rgba(0,255,136,0.05)}")
     w(".sresult-item:hover{background:rgba(0,255,136,0.08);color:#00ff88}")
-
-    # LEFT PANEL
     w(".lpanel{position:fixed;top:52px;left:0;bottom:0;width:265px;background:rgba(2,14,24,0.97);border-right:1px solid rgba(0,255,136,0.18);z-index:200;display:flex;flex-direction:column;transition:transform .3s cubic-bezier(.4,0,.2,1)}")
     w(".lpanel.closed{transform:translateX(-265px)}")
     w(".ptoggle{position:fixed;top:66px;left:265px;width:16px;height:40px;background:rgba(2,14,24,0.97);border:1px solid rgba(0,255,136,0.18);border-left:none;z-index:201;display:flex;align-items:center;justify-content:center;font-size:11px;color:#00ff88;cursor:pointer;transition:left .3s cubic-bezier(.4,0,.2,1)}")
     w(".ptoggle:hover{background:rgba(0,255,136,0.1)}")
     w(".ptoggle.closed{left:0}")
-
-    # TABS
     w(".tabs{display:flex;border-bottom:1px solid rgba(0,255,136,0.18)}")
     w(".tabbt{flex:1;padding:9px 0;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(168,255,212,0.4);background:transparent;border:none;cursor:pointer;transition:all .2s;text-transform:uppercase;border-bottom:2px solid transparent}")
     w(".tabbt.on{color:#00ff88;border-bottom-color:#00ff88;background:rgba(0,255,136,0.04)}")
@@ -144,15 +129,11 @@ def build():
     w(".tabpanel.on{display:flex}")
     w(".tabpanel::-webkit-scrollbar{width:3px}")
     w(".tabpanel::-webkit-scrollbar-thumb{background:rgba(0,255,136,0.2)}")
-
-    # FILTER CHIPS
     w(".fbar{padding:7px 10px;border-bottom:1px solid rgba(0,255,136,0.07);display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0}")
     w(".fchip{font-size:9px;padding:3px 8px;border:1px solid rgba(0,255,136,0.2);color:rgba(168,255,212,0.5);background:transparent;cursor:pointer;letter-spacing:1px;font-family:'Share Tech Mono',monospace;transition:all .2s}")
     w(".fchip.on{background:rgba(0,229,255,0.1);border-color:#00e5ff;color:#00e5ff}")
     w(".fchip:hover{border-color:#00ff88;color:#00ff88}")
     w(".fcountlabel{padding:3px 10px 5px;font-size:9px;color:rgba(168,255,212,0.35);letter-spacing:1px;flex-shrink:0;border-bottom:1px solid rgba(0,255,136,0.05)}")
-
-    # FLIGHT ITEMS
     w(".fitem{padding:9px 12px;border-bottom:1px solid rgba(0,255,136,0.05);cursor:pointer;transition:background .12s;position:relative;flex-shrink:0}")
     w(".fitem::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:#00ff88;opacity:0;transition:opacity .15s}")
     w(".fitem:hover{background:rgba(0,255,136,0.06)}")
@@ -167,8 +148,6 @@ def build():
     w(".fdv{color:#a8ffd4}")
     w(".altbar{height:2px;background:rgba(0,255,136,0.08);margin-top:5px;overflow:hidden}")
     w(".altfill{height:100%;transition:width .4s ease}")
-
-    # STATS
     w(".stblock{padding:12px;border-bottom:1px solid rgba(0,255,136,0.07);flex-shrink:0}")
     w(".sthead{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}")
     w(".bigstat{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:2px}")
@@ -180,8 +159,6 @@ def build():
     w(".sttrack{width:72px;height:3px;background:rgba(0,255,136,0.08);flex-shrink:0}")
     w(".stfill{height:100%;background:#00ff88;transition:width .7s ease}")
     w(".stval{font-size:10px;color:#00ff88;width:26px;text-align:right;flex-shrink:0}")
-
-    # ALERTS
     w(".alert-item{padding:9px 12px;border-bottom:1px solid rgba(255,68,102,0.1);display:flex;gap:8px;flex-shrink:0}")
     w(".alert-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}")
     w(".alert-pip.high{background:#ff4466;box-shadow:0 0 6px #ff4466;animation:pulse .8s infinite}")
@@ -190,8 +167,6 @@ def build():
     w(".alert-msg{font-size:10px;color:#a8ffd4;line-height:1.4}")
     w(".alert-time{font-size:9px;color:rgba(168,255,212,0.35);margin-top:2px}")
     w(".no-alerts{padding:24px;text-align:center;font-size:11px;color:rgba(168,255,212,0.2);letter-spacing:2px}")
-
-    # INFO PANEL
     w(".info-panel{position:fixed;bottom:16px;right:16px;width:295px;background:rgba(3,18,30,0.98);border:1px solid rgba(0,229,255,0.25);z-index:200;display:none;animation:infoin .2s ease;box-shadow:0 0 30px rgba(0,229,255,0.07)}")
     w(".info-panel.vis{display:block}")
     w("@keyframes infoin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}")
@@ -216,13 +191,9 @@ def build():
     w(".iabtn{flex:1;font-size:9px;padding:5px;border:1px solid rgba(0,255,136,0.18);color:rgba(168,255,212,0.5);background:transparent;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px;transition:all .2s;text-align:center}")
     w(".iabtn:hover{color:#00ff88;border-color:#00ff88;background:rgba(0,255,136,0.06)}")
     w(".iabtn:active{transform:scale(0.96)}")
-
-    # RADAR
     w(".radar-wrap{position:fixed;bottom:16px;left:16px;z-index:200;background:rgba(3,18,30,0.97);border:1px solid rgba(0,255,136,0.18);padding:8px;box-shadow:0 0 16px rgba(0,255,136,0.05)}")
     w(".radar-head{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;display:flex;justify-content:space-between}")
     w(".radar-cnt{color:#00ff88;font-family:'Orbitron',sans-serif}")
-
-    # HUD + COMPASS + LAYERS (orijinal)
     w(".hud{position:fixed;top:50%;right:16px;transform:translateY(-50%);z-index:200;display:flex;flex-direction:column;gap:6px;opacity:0;pointer-events:none;transition:opacity .3s}")
     w(".hud.vis{opacity:1}")
     w(".hud-meter{background:rgba(3,18,30,0.97);border:1px solid rgba(0,229,255,0.2);padding:8px 10px;width:78px;overflow:hidden;position:relative}")
@@ -236,13 +207,11 @@ def build():
     w(".lbtn{background:rgba(3,18,30,0.97);border:1px solid rgba(0,255,136,0.18);color:rgba(168,255,212,0.5);font-family:'Share Tech Mono',monospace;font-size:9px;padding:6px 10px;cursor:pointer;letter-spacing:1px;text-align:center;transition:all .2s;width:80px}")
     w(".lbtn:hover,.lbtn.on{color:#00ff88;border-color:#00ff88;background:rgba(0,255,136,0.07)}")
     w(".lsep{height:1px;background:rgba(0,255,136,0.12);margin:2px 0}")
-    w("</style>")
+    w("</style></head>")
 
-    # ── BODY + UI ELEMENTS ──────────────────────────────────────
+    # ── BODY (tam) ───────────────────────────────────────────────
     w("<body>")
     w("<div id='map'></div>")
-
-    # Topbar
     w("<div class='topbar'>")
     w("  <div class='logo'><span class='logo-icon'>🛰️</span>SKYWATCH <span class='lver'>v3</span></div>")
     w("  <div class='top-stats'>")
@@ -256,15 +225,11 @@ def build():
     w("    <button class='tbtn' id='panel-btn'>◀ PANEL</button>")
     w("  </div>")
     w("</div>")
-
-    # Search
     w("<div class='searchbar' id='searchbar'>")
     w("  <input type='text' id='search-input' class='sinput' placeholder='Çağrı kodu veya kuyruk ara...'>")
     w("  <div class='sclose' id='search-close'>✕</div>")
     w("  <div class='sresults' id='search-results'></div>")
     w("</div>")
-
-    # Left Panel
     w("<div class='lpanel' id='lpanel'>")
     w("  <div class='tabs'>")
     w("    <button class='tabbt on' data-tab='flights'>UÇAKLAR</button>")
@@ -284,8 +249,6 @@ def build():
     w("  </div>")
     w("</div>")
     w("<div class='ptoggle' id='ptoggle'>▶</div>")
-
-    # Info Panel
     w("<div class='info-panel' id='info-panel'>")
     w("  <div class='info-head' id='info-head'><span id='info-callsign'></span><span class='close-x' id='info-close'>✕</span></div>")
     w("  <div class='info-grid' id='info-grid'></div>")
@@ -295,52 +258,39 @@ def build():
     w("    <button class='iabtn' id='btn-center'>MERKEZE GETİR</button>")
     w("  </div>")
     w("</div>")
-
-    # Radar (simple canvas)
     w("<div class='radar-wrap'>")
     w("  <div class='radar-head'>KAYSERİ RADAR <span class='radar-cnt' id='radar-cnt'>3</span></div>")
     w("  <canvas id='radar-canvas' width='180' height='180'></canvas>")
     w("</div>")
-
-    # HUD (minimal)
     w("<div class='hud' id='hud'><div class='hud-meter'><div class='hud-label'>ALT</div><div class='hud-val' id='hud-alt'>32,000</div><div class='hud-unit'>ft</div></div></div>")
-
-    # Compass
     w("<div class='compass' id='compass'>N</div>")
-
-    # Layers
     w("<div class='layers' id='layers'>")
     w("  <div class='lbtn on' data-layer='traffic'>TRAFFIC</div>")
     w("  <div class='lbtn' data-layer='labels'>ETİKET</div>")
     w("</div>")
-
-    # Modal
     w("<div id='modal'>")
     w("  <div class='modal-box'>")
     w("    <div class='modal-title'>MAPBOX TOKEN GİRİŞİ</div>")
-    w("    <div class='modal-desc'>Mapbox public token gerekiyor (ücretsiz).<br><a href='https://account.mapbox.com/access-tokens/' target='_blank'>Hemen al →</a> (pk.eyJ ile başlayan)</div>")
+    w("    <div class='modal-desc'>Mapbox public token gerekiyor (ücretsiz).<br><a href='https://account.mapbox.com/access-tokens/' target='_blank'>Hemen al →</a></div>")
     w("    <div class='modal-label'>TOKEN</div>")
     w("    <input id='token-input' class='modal-input' placeholder='pk.eyJ1OiJ...'>")
     w("    <div class='modal-err' id='token-err'></div>")
-    w("    <div class='modal-saved' id='token-saved'><span>✅ KAYDEDİLDİ - TEKRAR SORMAYACAK</span></div>")
+    w("    <div class='modal-saved' id='token-saved'><span>✅ KAYDEDİLDİ</span></div>")
     w("    <div class='modal-btns'>")
     w("      <button class='btn-start' id='start-btn'>BAŞLAT SKYWATCH</button>")
     w("      <button class='btn-demo' id='demo-btn'>TOKEN'SİZ DEMO (3 UÇAK)</button>")
     w("    </div>")
     w("  </div>")
     w("</div>")
-
-    # Loading
     w("<div id='loading'>")
     w("  <div class='ld-logo'>SKYWATCH</div>")
     w("  <div class='ld-sub'>3 UÇAK BAĞLANDI • KAYSERİ</div>")
     w("  <div class='ld-bar-wrap'><div class='ld-bar' id='load-bar'></div></div>")
     w("  <div class='ld-status' id='load-status'>HAZIRLANIYOR...</div>")
     w("</div>")
-
     w("</body>")
 
-    # ── JAVASCRIPT (tam demo + 3 uçak) ─────────────────────────────
+    # ── JAVASCRIPT (3 uçak + random server bilgisi eklendi) ───────
     w("<script>")
     w("const MAPBOX_TOKEN_KEY = 'skywatch_mapbox_token';")
     w("let map, markers = {}, flights = [")
@@ -350,246 +300,118 @@ def build():
     w("];")
     w("let selectedFlight = null; let trailEnabled = true; let trails = {};")
 
-    # Map init & token logic
     w("function initMap(token) {")
     w("  mapboxgl.accessToken = token;")
-    w("  map = new mapboxgl.Map({")
-    w("    container: 'map',")
-    w("    style: 'mapbox://styles/mapbox/dark-v11',")
-    w("    center: [35.48, 38.72],")
-    w("    zoom: 9,")
-    w("    pitch: 45,")
-    w("    bearing: 0")
-    w("  });")
+    w("  map = new mapboxgl.Map({container: 'map', style: 'mapbox://styles/mapbox/dark-v11', center: [35.48, 38.72], zoom: 9, pitch: 45, bearing: 0});")
     w("  map.on('load', () => {")
     w("    document.getElementById('loading').classList.add('fade');")
     w("    setTimeout(() => { document.getElementById('loading').style.display = 'none'; }, 600);")
-    w("    createMarkers();")
-    w("    startSimulation();")
-    w("    renderFlightList();")
-    w("    updateClock();")
-    w("    startRadar();")
+    w("    createMarkers(); startSimulation(); renderFlightList(); updateClock(); startRadar();")
     w("  });")
     w("}")
 
-    # Create 3 plane markers (emoji + popup)
     w("function createMarkers() {")
     w("  flights.forEach(f => {")
-    w("    const el = document.createElement('div');")
-    w("    el.className = 'marker';")
-    w("    el.style.fontSize = '24px';")
-    w("    el.style.cursor = 'pointer';")
-    w("    el.innerHTML = f.flag + '✈️';")
-    w("    el.addEventListener('click', () => showInfoPanel(f));")
-    w("    const marker = new mapboxgl.Marker({element: el, anchor: 'center'})")
-    w("      .setLngLat([f.lng, f.lat])")
-    w("      .addTo(map);")
-    w("    markers[f.id] = marker;")
-    w("    trails[f.id] = [];")
+    w("    const el = document.createElement('div'); el.className = 'marker'; el.style.fontSize = '24px'; el.style.cursor = 'pointer';")
+    w("    el.innerHTML = f.flag + '✈️'; el.addEventListener('click', () => showInfoPanel(f));")
+    w("    const marker = new mapboxgl.Marker({element: el}).setLngLat([f.lng, f.lat]).addTo(map);")
+    w("    markers[f.id] = marker; trails[f.id] = [];")
     w("  });")
     w("}")
 
-    # Live simulation (sadece 3 uçak hareket ediyor)
     w("function startSimulation() {")
     w("  setInterval(() => {")
     w("    flights.forEach(f => {")
-    w("      f.lat += (Math.random() - 0.5) * 0.008;")
-    w("      f.lng += (Math.random() - 0.5) * 0.008;")
+    w("      f.lat += (Math.random() - 0.5) * 0.008; f.lng += (Math.random() - 0.5) * 0.008;")
     w("      f.heading = (f.heading + (Math.random() * 4 - 2)) % 360;")
     w("      if (markers[f.id]) {")
     w("        markers[f.id].setLngLat([f.lng, f.lat]);")
     w("        markers[f.id].getElement().style.transform = `rotate(${f.heading}deg)`;")
     w("      }")
-    w("      if (trailEnabled) {")
-    w("        trails[f.id].push([f.lng, f.lat]);")
-    w("        if (trails[f.id].length > 25) trails[f.id].shift();")
-    w("      }")
+    w("      if (trailEnabled) { trails[f.id].push([f.lng, f.lat]); if (trails[f.id].length > 25) trails[f.id].shift(); }")
     w("    });")
-    w("    renderFlightList();")
-    w("    if (selectedFlight) updateInfoPanel(selectedFlight);")
+    w("    renderFlightList(); if (selectedFlight) updateInfoPanel(selectedFlight);")
     w("  }, 2200);")
     w("}")
 
-    # Flight list in left panel
     w("function renderFlightList() {")
-    w("  const list = document.getElementById('flight-list');")
-    w("  list.innerHTML = '';")
+    w("  const list = document.getElementById('flight-list'); list.innerHTML = '';")
     w("  flights.forEach(f => {")
     w("    const div = document.createElement('div');")
     w("    div.className = `fitem ${selectedFlight && selectedFlight.id === f.id ? 'sel' : ''}`;")
-    w("    div.innerHTML = `")
-    w("      <div class='fcall'><span class='fflag'>\( {f.flag}</span> \){f.callsign}</div>")
-    w("      <div class='fdetail'><span class='fdv'>\( {f.type}</span><span> \){f.alt} ft</span><span>${f.speed} kt</span></div>")
-    w("      <div class='altbar'><div class='altfill' style='width:${(f.alt/40000)*100}%'></div></div>")
-    w("    `;")
-    w("    div.onclick = () => showInfoPanel(f);")
-    w("    list.appendChild(div);")
+    w("    div.innerHTML = `<div class='fcall'><span class='fflag'>\( {f.flag}</span> \){f.callsign}</div><div class='fdetail'><span class='fdv'>\( {f.type}</span><span> \){f.alt} ft</span><span>\( {f.speed} kt</span></div><div class='altbar'><div class='altfill' style='width: \){(f.alt/40000)*100}%'></div></div>`;")
+    w("    div.onclick = () => showInfoPanel(f); list.appendChild(div);")
     w("  });")
     w("  document.getElementById('total-flights').textContent = flights.length;")
     w("  document.getElementById('kayseri-count').textContent = '2';")
     w("  document.getElementById('radar-cnt').textContent = flights.length;")
     w("}")
 
-    # Info panel
-    w("function showInfoPanel(f) {")
-    w("  selectedFlight = f;")
-    w("  const panel = document.getElementById('info-panel');")
-    w("  panel.classList.add('vis');")
-    w("  updateInfoPanel(f);")
-    w("  if (map) map.flyTo({center: [f.lng, f.lat], zoom: 12, duration: 1800});")
-    w("}")
+    w("function showInfoPanel(f) { selectedFlight = f; const panel = document.getElementById('info-panel'); panel.classList.add('vis'); updateInfoPanel(f); if (map) map.flyTo({center: [f.lng, f.lat], zoom: 12, duration: 1800}); }")
     w("function updateInfoPanel(f) {")
     w("  document.getElementById('info-callsign').innerHTML = `\( {f.flag} <b> \){f.callsign}</b> ${f.type}`;")
     w("  const grid = document.getElementById('info-grid');")
-    w("  grid.innerHTML = `")
-    w("    <div class='ifield'><div class='ilabel'>YÜKSEKLİK</div><div class='ival'>${f.alt} ft</div></div>")
-    w("    <div class='ifield'><div class='ilabel'>HIZ</div><div class='ival blue'>${f.speed} kt</div></div>")
-    w("    <div class='ifield'><div class='ilabel'>BAŞLIK</div><div class='ival'>${Math.round(f.heading)}°</div></div>")
-    w("    <div class='ifield'><div class='ilabel'>KOORDİNAT</div><div class='ival'>${f.lat.toFixed(4)}, ${f.lng.toFixed(4)}</div></div>")
-    w("  `;")
-    w("  document.getElementById('speed-fill').style.width = `${(f.speed/550)*100}%`;")
-    w("  document.getElementById('speed-label').textContent = `${f.speed} kt`;")
+    w("  grid.innerHTML = `<div class='ifield'><div class='ilabel'>YÜKSEKLİK</div><div class='ival'>\( {f.alt} ft</div></div><div class='ifield'><div class='ilabel'>HIZ</div><div class='ival blue'> \){f.speed} kt</div></div><div class='ifield'><div class='ilabel'>BAŞLIK</div><div class='ival'>\( {Math.round(f.heading)}°</div></div><div class='ifield'><div class='ilabel'>KOORDİNAT</div><div class='ival'> \){f.lat.toFixed(4)}, ${f.lng.toFixed(4)}</div></div>`;")
+    w("  document.getElementById('speed-fill').style.width = `\( {(f.speed/550)*100}%`; document.getElementById('speed-label').textContent = ` \){f.speed} kt`;")
     w("  renderFlightList();")
     w("}")
+    w("document.getElementById('info-close').onclick = () => { document.getElementById('info-panel').classList.remove('vis'); selectedFlight = null; renderFlightList(); };")
 
-    w("document.getElementById('info-close').onclick = () => {")
-    w("  document.getElementById('info-panel').classList.remove('vis');")
-    w("  selectedFlight = null;")
-    w("  renderFlightList();")
-    w("};")
+    w("function updateClock() { setInterval(() => { const d = new Date(); document.getElementById('clock').textContent = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0'); }, 1000); }")
 
-    # Clock
-    w("function updateClock() {")
-    w("  setInterval(() => {")
-    w("    const d = new Date();")
-    w("    document.getElementById('clock').textContent = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');")
-    w("  }, 1000);")
-    w("}")
-
-    # Simple radar canvas animation
     w("function startRadar() {")
-    w("  const canvas = document.getElementById('radar-canvas');")
-    w("  const ctx = canvas.getContext('2d');")
-    w("  let angle = 0;")
+    w("  const canvas = document.getElementById('radar-canvas'); const ctx = canvas.getContext('2d'); let angle = 0;")
     w("  function draw() {")
-    w("    ctx.clearRect(0,0,180,180);")
-    w("    ctx.save();")
-    w("    ctx.translate(90,90);")
-    w("    ctx.rotate(angle);")
-    w("    ctx.beginPath();")
-    w("    ctx.arc(0,0,85,0,Math.PI*2);")
-    w("    ctx.strokeStyle = '#00ff88';")
-    w("    ctx.lineWidth = 2;")
-    w("    ctx.shadowBlur = 15;")
-    w("    ctx.shadowColor = '#00ff88';")
-    w("    ctx.stroke();")
-    w("    ctx.restore();")
+    w("    ctx.clearRect(0,0,180,180); ctx.save(); ctx.translate(90,90); ctx.rotate(angle);")
+    w("    ctx.beginPath(); ctx.arc(0,0,85,0,Math.PI*2); ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2; ctx.shadowBlur = 15; ctx.shadowColor = '#00ff88'; ctx.stroke(); ctx.restore();")
     w("    angle += 0.12;")
-    w("    flights.forEach((f,i) => {")
-    w("      const x = 90 + Math.cos(angle + i*1.3) * (30 + i*20);")
-    w("      const y = 90 + Math.sin(angle + i*1.3) * (30 + i*20);")
-    w("      ctx.fillStyle = '#00e5ff';")
-    w("      ctx.fillRect(x-3,y-3,6,6);")
-    w("    });")
+    w("    flights.forEach((f,i) => { const x = 90 + Math.cos(angle + i*1.3) * (30 + i*20); const y = 90 + Math.sin(angle + i*1.3) * (30 + i*20); ctx.fillStyle = '#00e5ff'; ctx.fillRect(x-3,y-3,6,6); });")
     w("    requestAnimationFrame(draw);")
-    w("  }")
-    w("  draw();")
+    w("  } draw();")
     w("}")
 
-    # Search (simple)
     w("function initSearch() {")
-    w("  const btn = document.getElementById('search-btn');")
-    w("  const bar = document.getElementById('searchbar');")
-    w("  const input = document.getElementById('search-input');")
-    w("  const close = document.getElementById('search-close');")
-    w("  const results = document.getElementById('search-results');")
-    w("  btn.onclick = () => bar.classList.toggle('open');")
-    w("  close.onclick = () => bar.classList.remove('open');")
+    w("  const btn = document.getElementById('search-btn'); const bar = document.getElementById('searchbar'); const input = document.getElementById('search-input'); const close = document.getElementById('search-close'); const results = document.getElementById('search-results');")
+    w("  btn.onclick = () => bar.classList.toggle('open'); close.onclick = () => bar.classList.remove('open');")
     w("  input.oninput = () => {")
-    w("    const term = input.value.toUpperCase().trim();")
-    w("    results.innerHTML = '';")
-    w("    if (!term) { results.style.display = 'none'; return; }")
-    w("    results.style.display = 'block';")
+    w("    const term = input.value.toUpperCase().trim(); results.innerHTML = '';")
+    w("    if (!term) { results.style.display = 'none'; return; } results.style.display = 'block';")
     w("    const filtered = flights.filter(f => f.callsign.includes(term));")
-    w("    filtered.forEach(f => {")
-    w("      const d = document.createElement('div');")
-    w("      d.className = 'sresult-item';")
-    w("      d.textContent = f.callsign;")
-    w("      d.onclick = () => { showInfoPanel(f); bar.classList.remove('open'); input.value = ''; };")
-    w("      results.appendChild(d);")
-    w("    });")
+    w("    filtered.forEach(f => { const d = document.createElement('div'); d.className = 'sresult-item'; d.textContent = f.callsign; d.onclick = () => { showInfoPanel(f); bar.classList.remove('open'); input.value = ''; }; results.appendChild(d); });")
     w("    if (filtered.length === 0) results.innerHTML = '<div style=\"padding:12px;color:#ff4466\">Bulunamadı</div>';")
     w("  };")
     w("}")
 
-    # Panel toggle
     w("function initPanel() {")
-    w("  const panel = document.getElementById('lpanel');")
-    w("  const toggle = document.getElementById('ptoggle');")
-    w("  const btn = document.getElementById('panel-btn');")
-    w("  let closed = false;")
-    w("  function togglePanel() {")
-    w("    closed = !closed;")
-    w("    panel.classList.toggle('closed', closed);")
-    w("    toggle.classList.toggle('closed', closed);")
-    w("    toggle.textContent = closed ? '◀' : '▶';")
-    w("  }")
-    w("  toggle.onclick = togglePanel;")
-    w("  btn.onclick = togglePanel;")
+    w("  const panel = document.getElementById('lpanel'); const toggle = document.getElementById('ptoggle'); const btn = document.getElementById('panel-btn'); let closed = false;")
+    w("  function togglePanel() { closed = !closed; panel.classList.toggle('closed', closed); toggle.classList.toggle('closed', closed); toggle.textContent = closed ? '◀' : '▶'; }")
+    w("  toggle.onclick = togglePanel; btn.onclick = togglePanel;")
     w("}")
 
-    # Tabs
     w("function initTabs() {")
-    w("  document.querySelectorAll('.tabbt').forEach(btn => {")
-    w("    btn.onclick = () => {")
-    w("      document.querySelectorAll('.tabbt').forEach(b => b.classList.remove('on'));")
-    w("      btn.classList.add('on');")
-    w("      document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('on'));")
-    w("      document.getElementById(btn.dataset.tab + '-tab').classList.add('on');")
-    w("    };")
-    w("  });")
+    w("  document.querySelectorAll('.tabbt').forEach(btn => { btn.onclick = () => {")
+    w("    document.querySelectorAll('.tabbt').forEach(b => b.classList.remove('on')); btn.classList.add('on');")
+    w("    document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('on'));")
+    w("    document.getElementById(btn.dataset.tab + '-tab').classList.add('on');")
+    w("  }; });")
     w("}")
 
-    # Token modal logic (demo button allows skipping)
     w("function initModal() {")
-    w("  const modal = document.getElementById('modal');")
-    w("  const tokenInput = document.getElementById('token-input');")
-    w("  const err = document.getElementById('token-err');")
-    w("  const saved = document.getElementById('token-saved');")
-    w("  const startBtn = document.getElementById('start-btn');")
-    w("  const demoBtn = document.getElementById('demo-btn');")
+    w("  const modal = document.getElementById('modal'); const tokenInput = document.getElementById('token-input'); const err = document.getElementById('token-err'); const saved = document.getElementById('token-saved'); const startBtn = document.getElementById('start-btn'); const demoBtn = document.getElementById('demo-btn');")
     w("  const savedToken = localStorage.getItem(MAPBOX_TOKEN_KEY);")
-    w("  if (savedToken) {")
-    w("    modal.classList.add('gone');")
-    w("    initMap(savedToken);")
-    w("    return;")
-    w("  }")
+    w("  if (savedToken) { modal.classList.add('gone'); initMap(savedToken); return; }")
     w("  startBtn.onclick = () => {")
     w("    const token = tokenInput.value.trim();")
-    w("    if (!token.startsWith('pk.eyJ')) {")
-    w("      err.textContent = 'Geçerli Mapbox public token girin!';")
-    w("      return;")
-    w("    }")
-    w("    localStorage.setItem(MAPBOX_TOKEN_KEY, token);")
-    w("    saved.classList.add('show');")
-    w("    setTimeout(() => { modal.classList.add('gone'); initMap(token); }, 800);")
+    w("    if (!token.startsWith('pk.eyJ')) { err.textContent = 'Geçerli Mapbox public token girin!'; return; }")
+    w("    localStorage.setItem(MAPBOX_TOKEN_KEY, token); saved.classList.add('show'); setTimeout(() => { modal.classList.add('gone'); initMap(token); }, 800);")
     w("  };")
     w("  demoBtn.onclick = () => {")
-    w("    modal.classList.add('gone');")
-    w("    document.getElementById('loading').classList.add('active');")
-    w("    setTimeout(() => {")
-    w("      initMap('DEMO-TOKEN-NOT-REAL-BUT-WORKS-FOR-TEST');")
-    w("    }, 1200);")
+    w("    modal.classList.add('gone'); document.getElementById('loading').classList.add('active');")
+    w("    setTimeout(() => { initMap('DEMO-TOKEN-NOT-REAL-BUT-WORKS-FOR-TEST'); }, 1200);")
     w("  };")
     w("}")
 
-    # Final startup
-    w("window.onload = () => {")
-    w("  initModal();")
-    w("  initSearch();")
-    w("  initPanel();")
-    w("  initTabs();")
-    w("};")
+    w("window.onload = () => { initModal(); initSearch(); initPanel(); initTabs(); };")
     w("</script>")
     w("</html>")
 
@@ -600,19 +422,45 @@ build()
 print("✅ HTML oluşturuldu → " + HTML)
 PYEOF
 
-printf "  \( {G}Tamamlandı! Sadece 3 uçak (demo) yüklendi. \){N}\n"
-printf "  \( {C}Kayseri merkezli • Mapbox token ile (veya demo tuşu) \){N}\n"
-printf "  ${Y}Dosya: \( {HTML} \){N}\n\n"
+# ===================== RANDOM PORT + IP SERVER =====================
+printf "  \( {C}Random port ve local IP ile HTTP server başlatılıyor... \){N}\n"
 
-# Açma (Termux / Linux / macOS uyumlu)
+# Local IP (Termux / Android / Linux / macOS uyumlu)
+LOCAL_IP=$(python3 -c '
+import socket
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    print(s.getsockname()[0])
+    s.close()
+except:
+    print("127.0.0.1")
+' 2>/dev/null || echo "127.0.0.1")
+
+# Random port (8000-8999 arası)
+RANDOM_PORT=$(python3 -c 'import random; print(random.randint(8000, 8999))')
+
+printf "  \( {G}🌐 SERVER HAZIR → http:// \){LOCAL_IP}:\( {RANDOM_PORT}/skywatch_v3.html \){N}\n"
+printf "  \( {Y}Tarayıcıda açılıyor... (Ctrl+C ile serverı kapatabilirsin) \){N}\n\n"
+
+# Serverı arka planda başlat (0.0.0.0 → ağdan da erişilebilir)
+cd "$TMPD" || exit 1
+python3 -m http.server "$RANDOM_PORT" --bind 0.0.0.0 > /dev/null 2>&1 &
+SERVER_PID=$!
+
+# Tarayıcıda aç
 if command -v termux-open-url &>/dev/null; then
-  termux-open-url "file://${HTML}"
+  termux-open-url "http://\( {LOCAL_IP}: \){RANDOM_PORT}/skywatch_v3.html"
 elif command -v xdg-open &>/dev/null; then
-  xdg-open "${HTML}"
+  xdg-open "http://\( {LOCAL_IP}: \){RANDOM_PORT}/skywatch_v3.html"
 elif command -v open &>/dev/null; then
-  open "${HTML}"
+  open "http://\( {LOCAL_IP}: \){RANDOM_PORT}/skywatch_v3.html"
 else
-  printf "  \( {Y}→ Tarayıcıda manuel aç: file:// \){HTML}${N}\n"
+  printf "  \( {Y}→ Manuel aç: http:// \){LOCAL_IP}:\( {RANDOM_PORT}/skywatch_v3.html \){N}\n"
 fi
 
-printf "\n\( {G}Keyifli takipler Ümit! ✈️ (3 uçak sürekli hareket ediyor) \){N}\n"
+# Çıkışta serverı temizle
+trap 'kill \( SERVER_PID 2>/dev/null; echo -e "\n \){R}Server kapatıldı.${N}"' EXIT
+
+# Script bitmesin diye beklet (Ctrl+C ile çıkarsın)
+wait $SERVER_PID
