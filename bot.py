@@ -1,97 +1,109 @@
-from flask import Flask, render_template_string, jsonify import random import threading import time import requests import math
+from flask import Flask, render_template_string, jsonify
+import random
+import threading
+import time
+import requests
+import math
 
-app = Flask(name)
+app = Flask(__name__)
 
------------------------------
+# -----------------------------
+# Weather store
+# -----------------------------
+data_store = {
+    "weather": {}
+}
 
-Weather store
+# -----------------------------
+# Weather fetch
+# -----------------------------
+def fetch_weather():
+    while True:
+        try:
+            url = "https://wttr.in/Kayseri?format=j1"
+            res = requests.get(url, timeout=5)
+            data = res.json()
 
------------------------------
+            current = data["current_condition"][0]
 
-data_store = { "weather": {} }
+            data_store["weather"] = {
+                "temp_C": current["temp_C"],
+                "feelslike_C": current["FeelsLikeC"],
+                "humidity": current["humidity"],
+                "description": current["weatherDesc"][0]["value"]
+            }
 
------------------------------
+        except Exception as e:
+            data_store["weather"] = {"error": str(e)}
 
-Weather fetch
-
------------------------------
-
-def fetch_weather(): while True: try: url = "https://wttr.in/Kayseri?format=j1" res = requests.get(url, timeout=5) data = res.json()
-
-current = data["current_condition"][0]
-
-        data_store["weather"] = {
-            "temp_C": current["temp_C"],
-            "feelslike_C": current["FeelsLikeC"],
-            "humidity": current["humidity"],
-            "description": current["weatherDesc"][0]["value"]
-        }
-
-    except Exception as e:
-        data_store["weather"] = {"error": str(e)}
-
-    time.sleep(60)
+        time.sleep(60)
 
 threading.Thread(target=fetch_weather, daemon=True).start()
 
------------------------------
-
-UI
-
------------------------------
-
+# -----------------------------
+# UI
+# -----------------------------
 HTML_PAGE = """
-
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html>
 <head>
-    <title>Termux Control Panel</title><script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+    <title>Termux Control Panel</title>
 
-<style>
-    body {
-        background: #0f172a;
-        color: #e2e8f0;
-        font-family: Arial;
-        margin: 0;
-        text-align: center;
-    }
-    .container {
-        padding: 20px;
-        display: grid;
-        gap: 20px;
-    }
-    .card {
-        background: #1e293b;
-        padding: 20px;
-        border-radius: 12px;
-    }
-    #map3d {
-        width: 100%;
-        height: 600px;
-    }
-    #popup {
-        position: absolute;
-        background: #020617;
-        padding: 10px;
-        border-radius: 8px;
-        display: none;
-        pointer-events: none;
-    }
-</style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
 
+    <style>
+        body {
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: Arial;
+            margin: 0;
+            text-align: center;
+        }
+        .container {
+            padding: 20px;
+            display: grid;
+            gap: 20px;
+        }
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+        }
+        #map3d {
+            width: 100%;
+            height: 600px;
+        }
+        #popup {
+            position: absolute;
+            background: #020617;
+            padding: 10px;
+            border-radius: 8px;
+            display: none;
+            pointer-events: none;
+        }
+    </style>
 </head>
-<body><h1>Termux Live Control Panel</h1><div class="container"><div class="card">
-    <h3>🌤️ Hava Durumu</h3>
-    <div id="weather">Yükleniyor...</div>
+<body>
+
+<h1>Termux Live Control Panel</h1>
+
+<div class="container">
+
+    <div class="card">
+        <h3>🌤️ Hava Durumu</h3>
+        <div id="weather">Yükleniyor...</div>
+    </div>
+
+    <div class="card">
+        <h3>🌍 Google Earth Style 3D Map</h3>
+        <div id="map3d"></div>
+        <div id="popup"></div>
+    </div>
+
 </div>
 
-<div class="card">
-    <h3>🌍 Google Earth Style 3D Map</h3>
-    <div id="map3d"></div>
-    <div id="popup"></div>
-</div>
-
-</div><script>
+<script>
     // ---------------- Weather ----------------
     async function fetchData() {
         const res = await fetch('/data');
@@ -124,7 +136,9 @@ HTML_PAGE = """
     const globe = new THREE.Mesh(
         new THREE.SphereGeometry(5, 64, 64),
         new THREE.MeshBasicMaterial({
-            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg')
+            map: new THREE.TextureLoader().load(
+                'https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg'
+            )
         })
     );
 
@@ -163,57 +177,33 @@ HTML_PAGE = """
         markers.push(marker);
     });
 
-    // ---------------- Fly To Animation ----------------
-    function flyTo(targetPosition) {
-        const duration = 1.2;
-        const start = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
-        const end = { x: targetPosition.x * 2.5, y: targetPosition.y * 2.5, z: targetPosition.z * 2.5 };
+    // ---------------- Fly To ----------------
+    function flyTo(target) {
+        const start = camera.position.clone();
+        const end = target.clone().multiplyScalar(2.5);
 
-        let startTime = null;
+        let t = 0;
 
-        function animateFly(timestamp) {
-            if (!startTime) startTime = timestamp;
-            const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
+        function animateFly() {
+            t += 0.02;
+            if (t > 1) t = 1;
 
-            camera.position.x = start.x + (end.x - start.x) * progress;
-            camera.position.y = start.y + (end.y - start.y) * progress;
-            camera.position.z = start.z + (end.z - start.z) * progress;
-
+            camera.position.lerpVectors(start, end, t);
             camera.lookAt(0, 0, 0);
 
-            if (progress < 1) {
-                requestAnimationFrame(animateFly);
-            }
+            if (t < 1) requestAnimationFrame(animateFly);
         }
 
-        requestAnimationFrame(animateFly);
+        animateFly();
     }
 
-    // ---------------- User Location ----------------
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-
-            const userMarker = new THREE.Mesh(
-                new THREE.SphereGeometry(0.1, 16, 16),
-                new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-            );
-
-            const position = latLonToVector3(lat, lon, 5);
-            userMarker.position.copy(position);
-            userMarker.userData = { name: "Senin Konumun" };
-            scene.add(userMarker);
-            markers.push(userMarker);
-        });
-    }
-
-    // ---------------- Click Handling ----------------
+    // ---------------- Click ----------------
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     const popup = document.getElementById("popup");
 
     window.addEventListener("click", (event) => {
+
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / 600) * 2 + 1;
 
@@ -225,13 +215,11 @@ HTML_PAGE = """
             const obj = intersects[0].object;
             const data = obj.userData;
 
-            // Popup
             popup.style.display = "block";
             popup.style.left = event.clientX + "px";
             popup.style.top = event.clientY + "px";
             popup.innerHTML = data.name;
 
-            // Fly to marker
             flyTo(obj.position);
         } else {
             popup.style.display = "none";
@@ -247,10 +235,21 @@ HTML_PAGE = """
     }
 
     animate();
-</script></body>
+</script>
+
+</body>
 </html>
-"""@app.route("/") def index(): return render_template_string(HTML_PAGE)
+"""
 
-@app.route("/data") def get_data(): return jsonify(data_store)
+@app.route("/")
+def index():
+    return render_template_string(HTML_PAGE)
 
-if name == "main": port = random.randint(5000, 9000) print(f"Server running on http://127.0.0.1:{port}") app.run(host="0.0.0.0", port=port)
+@app.route("/data")
+def get_data():
+    return jsonify(data_store)
+
+if __name__ == "__main__":
+    port = random.randint(5000, 9000)
+    print(f"Server running on http://127.0.0.1:{port}")
+    app.run(host="0.0.0.0", port=port)
