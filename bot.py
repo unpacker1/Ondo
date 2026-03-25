@@ -1,106 +1,140 @@
-import random
-import threading
-import time
-import numpy as np
-from flask import Flask, render_template_string
-from flask_socketio import SocketIO
+from flask import Flask, Response, render_template_string, jsonify import random import threading import time
 
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+app = Flask(name)
 
-PORT = random.randint(2000, 9000)
+-----------------------------
 
-# ---------------- DATA ----------------
-reactors = {
-    "RX1": {"temp": 120.0, "target": 150.0, "history": [120.0]*50},
-    "RX2": {"temp": 110.0, "target": 140.0, "history": [110.0]*50},
-}
+Simulated live data
 
-# ---------------- LOOP ----------------
-def loop():
-    while True:
-        for r in reactors:
-            d = reactors[r]
+-----------------------------
 
-            error = d["target"] - d["temp"]
-            d["temp"] += error * 0.05
-            d["temp"] += np.random.uniform(-0.5, 0.5)
+data_store = { "values": [] }
 
-            d["history"].append(float(d["temp"]))
-            if len(d["history"]) > 50:
-                d["history"].pop(0)
+def generate_data(): while True: new_value = random.randint(0, 100) if len(data_store["values"]) > 50: data_store["values"].pop(0) data_store["values"].append(new_value) time.sleep(1)
 
-        socketio.emit("update", reactors)
-        time.sleep(1)
+threading.Thread(target=generate_data, daemon=True).start()
 
-# ---------------- UI ----------------
-HTML = """<!DOCTYPE html>
-<html>
+-----------------------------
+
+UI (Single Page with Chart + 3D Map)
+
+-----------------------------
+
+HTML_PAGE = """
+
+<!DOCTYPE html><html>
 <head>
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Termux Control Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <style>
+        body {
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: Arial;
+            text-align: center;
+            margin: 0;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.4);
+        }
+        canvas {
+            max-width: 100%;
+        }
+        #map3d {
+            width: 100%;
+            height: 400px;
+        }
+    </style>
 </head>
+<body><h1>Termux Live Control Panel</h1><div class="container"><div class="card">
+    <canvas id="chart"></canvas>
+</div>
 
-<body style="background:black;color:cyan;font-family:Arial;">
+<div class="card">
+    <h3>3D Map</h3>
+    <div id="map3d"></div>
+</div>
 
-<h2>SCADA PANEL</h2>
+</div><script>
+    // ---------------- Chart ----------------
+    const ctx = document.getElementById('chart').getContext('2d');
 
-<select id="reactor" onchange="changeReactor()">
-  <option value="RX1">RX1</option>
-  <option value="RX2">RX2</option>
-</select>
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Live Data',
+                data: [],
+                borderWidth: 2,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            animation: false
+        }
+    });
 
-<p>Temp: <span id="temp">0</span></p>
-<p>Target: <span id="target">0</span></p>
+    async function fetchData() {
+        const res = await fetch('/data');
+        const json = await res.json();
 
-<canvas id="chart"></canvas>
-
-<script>
-const socket = io();
-let selected = "RX1";
-
-let ctx = document.getElementById("chart").getContext("2d");
-
-let chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: Array(50).fill(""),
-        datasets: [{
-            label: "Temp",
-            data: [],
-            borderColor: "cyan",
-            fill: false
-        }]
+        chart.data.labels = json.values.map((_, i) => i);
+        chart.data.datasets[0].data = json.values;
+        chart.update();
     }
-});
 
-function changeReactor(){
-    selected = document.getElementById("reactor").value;
-}
+    setInterval(fetchData, 1000);
 
-socket.on("update", (data)=>{
-    let d = data[selected];
+    // ---------------- 3D MAP (Three.js Globe) ----------------
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 400, 0.1, 1000);
 
-    if(!d) return;
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, 400);
+    document.getElementById("map3d").appendChild(renderer.domElement);
 
-    document.getElementById("temp").innerText = d.temp.toFixed(1);
-    document.getElementById("target").innerText = d.target.toFixed(1);
+    const geometry = new THREE.SphereGeometry(5, 32, 32);
+    const texture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg');
+    const material = new THREE.MeshBasicMaterial({ map: texture });
+    const sphere = new THREE.Mesh(geometry, material);
 
-    chart.data.datasets[0].data = d.history;
-    chart.update();
-});
-</script>
+    scene.add(sphere);
+    camera.position.z = 10;
 
-</body>
+    function animate() {
+        requestAnimationFrame(animate);
+        sphere.rotation.y += 0.002;
+        renderer.render(scene, camera);
+    }
+    animate();
+</script></body>
 </html>
-"""
+"""-----------------------------
 
-@app.route("/")
-def home():
-    return render_template_string(HTML)
+Routes
 
-# ---------------- START ----------------
-if __name__ == "__main__":
-    print(f"Running on http://127.0.0.1:{PORT}")
-    threading.Thread(target=loop, daemon=True).start()
-    socketio.run(app, host="0.0.0.0", port=PORT)
+-----------------------------
+
+@app.route("/") def index(): return render_template_string(HTML_PAGE)
+
+@app.route("/data") def get_data(): return jsonify(data_store)
+
+-----------------------------
+
+Run server with random port
+
+-----------------------------
+
+if name == "main": port = random.randint(5000, 9000) print(f"Server running on http://127.0.0.1:{port}") app.run(host="0.0.0.0", port=port)
