@@ -5,80 +5,87 @@ import math
 
 app = Flask(__name__)
 
-# ISS simulated data
-def get_iss_position():
-    t = time.time()
-    lat = 20 * math.sin(t / 5)
-    lon = (t * 10) % 360 - 180
-    return {"lat": lat, "lon": lon}
+# -----------------------------
+# Simulated satellites
+# -----------------------------
+satellites = [
+    {"id": "ISS", "speed": 1.0, "radius": 1.02},
+    {"id": "SAT-1", "speed": 0.8, "radius": 1.05},
+    {"id": "SAT-2", "speed": 1.3, "radius": 1.08},
+]
 
-# HTML PAGE
+def get_sat_positions():
+    t = time.time()
+    results = []
+
+    for sat in satellites:
+        lat = 25 * math.sin(t * sat["speed"])
+        lon = (t * 20 * sat["speed"]) % 360 - 180
+
+        results.append({
+            "id": sat["id"],
+            "lat": lat,
+            "lon": lon
+        })
+
+    return results
+
+# -----------------------------
+# HTML UI
+# -----------------------------
 HTML = """<!DOCTYPE html>
 <html>
 <head>
-    <title>3D Earth</title>
+    <title>Satellite Control Panel</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { margin: 0; overflow: hidden; background: black; }
+        body { margin:0; overflow:hidden; background:black; }
         #panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.6);
-            padding: 10px;
-            color: white;
-            font-family: Arial;
-            border-radius: 8px;
+            position:absolute;
+            top:10px;
+            left:10px;
+            background:rgba(0,0,0,0.6);
+            color:white;
+            padding:10px;
+            border-radius:8px;
+            font-family:Arial;
         }
-        button { margin: 3px; padding: 6px; }
+        button { margin:3px; padding:5px; }
     </style>
 </head>
 <body>
 
 <div id="panel">
-    <div>Controls</div>
-    <button onclick="focusISS()">Focus ISS</button>
-    <div id="status">Loading...</div>
+    <div>🛰️ Satellites</div>
+    <div id="satList"></div>
+    <div id="status"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
+// Scene
 const scene = new THREE.Scene();
 
+// Camera
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-camera.position.z = 2.5;
+camera.position.z = 3;
 
+// Renderer
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // Earth
-const geometry = new THREE.SphereGeometry(1, 64, 64);
-const texture = new THREE.TextureLoader().load("https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg");
-const material = new THREE.MeshBasicMaterial({map: texture});
-const earth = new THREE.Mesh(geometry, material);
+const earth = new THREE.Mesh(
+    new THREE.SphereGeometry(1,64,64),
+    new THREE.MeshBasicMaterial({
+        map: new THREE.TextureLoader().load("https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg")
+    })
+);
 scene.add(earth);
 
-// ISS marker
-const issGeometry = new THREE.SphereGeometry(0.02, 16, 16);
-const issMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
-const iss = new THREE.Mesh(issGeometry, issMaterial);
-scene.add(iss);
-
-// Convert lat/lon
-function latLonToVector3(lat, lon, radius=1.01) {
-    const phi = (90 - lat) * Math.PI / 180;
-    const theta = (lon + 180) * Math.PI / 180;
-
-    return new THREE.Vector3(
-        -radius * Math.sin(phi) * Math.cos(theta),
-        radius * Math.cos(phi),
-        radius * Math.sin(phi) * Math.sin(theta)
-    );
-}
-
-// Mouse rotate
+// Controls (improved)
 let isDragging = false;
 let prevX = 0;
 let prevY = 0;
@@ -88,81 +95,131 @@ document.addEventListener("mouseup", () => isDragging = false);
 
 document.addEventListener("mousemove", (e) => {
     if (isDragging) {
-        earth.rotation.y += (e.clientX - prevX) * 0.005;
-        earth.rotation.x += (e.clientY - prevY) * 0.005;
+        earth.rotation.y += (e.clientX - prevX) * 0.003;
+        earth.rotation.x += (e.clientY - prevY) * 0.003;
     }
     prevX = e.clientX;
     prevY = e.clientY;
 });
 
-// Zoom (mouse)
+// Zoom
 document.addEventListener("wheel", (e) => {
-    camera.position.z += e.deltaY * 0.001;
-    camera.position.z = Math.max(1.5, Math.min(6, camera.position.z));
+    camera.position.z += e.deltaY * 0.002;
+    camera.position.z = Math.max(1.5, Math.min(8, camera.position.z));
 });
 
-// Mobile pinch zoom
+// Touch pinch zoom
 let lastTouchDistance = null;
 
-function getTouchDistance(touches) {
+function getTouchDistance(touches){
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx*dx + dy*dy);
 }
 
-document.addEventListener("touchstart", (e) => {
-    if (e.touches.length === 2) {
+document.addEventListener("touchstart", (e)=>{
+    if(e.touches.length===2){
         lastTouchDistance = getTouchDistance(e.touches);
     }
 });
 
-document.addEventListener("touchmove", (e) => {
-    if (e.touches.length === 2) {
-        const currentDistance = getTouchDistance(e.touches);
-
-        if (lastTouchDistance) {
-            const delta = currentDistance - lastTouchDistance;
-            camera.position.z -= delta * 0.005;
-            camera.position.z = Math.max(1.2, Math.min(6, camera.position.z));
+document.addEventListener("touchmove",(e)=>{
+    if(e.touches.length===2){
+        const d = getTouchDistance(e.touches);
+        if(lastTouchDistance){
+            const delta = d - lastTouchDistance;
+            camera.position.z -= delta * 0.004;
+            camera.position.z = Math.max(1.5, Math.min(8, camera.position.z));
         }
-
-        lastTouchDistance = currentDistance;
-    }
-
-    if (e.touches.length === 1) {
-        const t = e.touches[0];
-        earth.rotation.y += t.clientX * 0.0001;
-        earth.rotation.x += t.clientY * 0.0001;
+        lastTouchDistance = d;
     }
 });
 
-// ISS focus
-function focusISS() {
-    camera.position.z = 1.5;
+// Satellite objects
+const satMeshes = {};
+const orbitLines = {};
+const orbitPoints = {};
+let selectedSat = null;
+
+function latLonToVec(lat, lon, r=1.02){
+    const phi = (90-lat)*Math.PI/180;
+    const theta = (lon+180)*Math.PI/180;
+
+    return new THREE.Vector3(
+        -r * Math.sin(phi)*Math.cos(theta),
+        r * Math.cos(phi),
+        r * Math.sin(phi)*Math.sin(theta)
+    );
 }
 
-// Fetch ISS
-let issData = null;
+// Create satellites dynamically
+function createSat(id){
+    const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.02,16,16),
+        new THREE.MeshBasicMaterial({color:0xff0000})
+    );
+    scene.add(mesh);
 
-async function updateISS() {
-    const res = await fetch('/iss');
-    issData = await res.json();
+    satMeshes[id] = mesh;
+    orbitPoints[id] = [];
 
-    document.getElementById("status").innerText =
-        "Lat: " + issData.lat.toFixed(2) + " Lon: " + issData.lon.toFixed(2);
+    const lineGeo = new THREE.BufferGeometry();
+    const lineMat = new THREE.LineBasicMaterial({color:0x00ffcc});
+    const line = new THREE.Line(lineGeo, lineMat);
+
+    orbitLines[id] = line;
+    scene.add(line);
 }
 
-setInterval(updateISS, 2000);
+// UI list
+function updateUI(sats){
+    const list = document.getElementById("satList");
+    list.innerHTML = "";
 
-// Render
-function animate() {
+    sats.forEach(s=>{
+        if(!satMeshes[s.id]) createSat(s.id);
+
+        const btn = document.createElement("button");
+        btn.innerText = "Track " + s.id;
+        btn.onclick = ()=> selectedSat = s.id;
+        list.appendChild(btn);
+    });
+}
+
+// Fetch data
+let satData = [];
+
+async function fetchData(){
+    const res = await fetch('/sats');
+    satData = await res.json();
+    updateUI(satData);
+}
+
+setInterval(fetchData, 2000);
+
+// Render loop
+function animate(){
     requestAnimationFrame(animate);
 
     earth.rotation.y += 0.001;
 
-    if (issData) {
-        const pos = latLonToVector3(issData.lat, issData.lon);
-        iss.position.copy(pos);
+    satData.forEach(s=>{
+        const pos = latLonToVec(s.lat, s.lon);
+
+        satMeshes[s.id].position.copy(pos);
+
+        orbitPoints[s.id].push(pos.clone());
+        if(orbitPoints[s.id].length>150){
+            orbitPoints[s.id].shift();
+        }
+
+        orbitLines[s.id].geometry.setFromPoints(orbitPoints[s.id]);
+    });
+
+    // follow selected satellite
+    if(selectedSat){
+        const p = satMeshes[selectedSat].position;
+        camera.lookAt(p);
     }
 
     renderer.render(scene, camera);
@@ -179,12 +236,9 @@ animate();
 def index():
     return render_template_string(HTML)
 
-@app.route("/iss")
-def iss():
-    t = time.time()
-    lat = 20 * math.sin(t / 5)
-    lon = (t * 10) % 360 - 180
-    return jsonify({"lat": lat, "lon": lon})
+@app.route("/sats")
+def sats():
+    return jsonify(get_sat_positions())
 
 if __name__ == "__main__":
     port = random.randint(5000, 9000)
