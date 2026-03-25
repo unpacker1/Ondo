@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, jsonify
+from flask import Flask,render_template_string,jsonify
 import random
 import time
 import math
