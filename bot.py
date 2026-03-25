@@ -1,146 +1,102 @@
-from flask import Flask, render_template_string, jsonify
-import random
-import threading
-import time
-import requests
+from flask import Flask, render_template_string, jsonify import random import threading import time import requests import math
 
-app = Flask(__name__)
+app = Flask(name)
 
-# -----------------------------
-# Live data store
-# -----------------------------
-data_store = {
-    "values": [],
-    "weather": {}
-}
+-----------------------------
 
-# -----------------------------
-# Random chart data generator
-# -----------------------------
-def generate_data():
-    while True:
-        new_value = random.randint(0, 100)
-        if len(data_store["values"]) > 50:
-            data_store["values"].pop(0)
-        data_store["values"].append(new_value)
-        time.sleep(1)
+Weather store
 
-# -----------------------------
-# Live weather fetch
-# -----------------------------
-def fetch_weather():
-    while True:
-        try:
-            url = "https://wttr.in/Kayseri?format=j1"
-            res = requests.get(url, timeout=5)
-            data = res.json()
+-----------------------------
 
-            current = data["current_condition"][0]
+data_store = { "weather": {} }
 
-            data_store["weather"] = {
-                "temp_C": current["temp_C"],
-                "feelslike_C": current["FeelsLikeC"],
-                "humidity": current["humidity"],
-                "description": current["weatherDesc"][0]["value"]
-            }
+-----------------------------
 
-        except Exception as e:
-            data_store["weather"] = {"error": str(e)}
+Weather fetch
 
-        time.sleep(60)
+-----------------------------
 
+def fetch_weather(): while True: try: url = "https://wttr.in/Kayseri?format=j1" res = requests.get(url, timeout=5) data = res.json()
 
-threading.Thread(target=generate_data, daemon=True).start()
+current = data["current_condition"][0]
+
+        data_store["weather"] = {
+            "temp_C": current["temp_C"],
+            "feelslike_C": current["FeelsLikeC"],
+            "humidity": current["humidity"],
+            "description": current["weatherDesc"][0]["value"]
+        }
+
+    except Exception as e:
+        data_store["weather"] = {"error": str(e)}
+
+    time.sleep(60)
+
 threading.Thread(target=fetch_weather, daemon=True).start()
 
-# -----------------------------
-# UI
-# -----------------------------
+-----------------------------
+
+UI
+
+-----------------------------
+
 HTML_PAGE = """
-<!DOCTYPE html>
-<html>
+
+<!DOCTYPE html><html>
 <head>
-    <title>Termux Control Panel</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <title>Termux Control Panel</title><script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
 
-    <style>
-        body {
-            background: #0f172a;
-            color: #e2e8f0;
-            font-family: Arial;
-            text-align: center;
-            margin: 0;
-        }
-        .container {
-            display: grid;
-            gap: 20px;
-            padding: 20px;
-        }
-        .card {
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 12px;
-        }
-        #map3d {
-            width: 100%;
-            height: 400px;
-        }
-    </style>
+<style>
+    body {
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: Arial;
+        margin: 0;
+        text-align: center;
+    }
+    .container {
+        padding: 20px;
+        display: grid;
+        gap: 20px;
+    }
+    .card {
+        background: #1e293b;
+        padding: 20px;
+        border-radius: 12px;
+    }
+    #map3d {
+        width: 100%;
+        height: 600px;
+    }
+    #popup {
+        position: absolute;
+        background: #020617;
+        padding: 10px;
+        border-radius: 8px;
+        display: none;
+        pointer-events: none;
+    }
+</style>
+
 </head>
-<body>
-
-<h1>Termux Live Control Panel</h1>
-
-<div class="container">
-
-    <div class="card">
-        <h3>Canlı Grafik</h3>
-        <canvas id="chart"></canvas>
-    </div>
-
-    <div class="card">
-        <h3>🌤️ Hava Durumu</h3>
-        <div id="weather">Yükleniyor...</div>
-    </div>
-
-    <div class="card">
-        <h3>3D Map</h3>
-        <div id="map3d"></div>
-    </div>
-
+<body><h1>Termux Live Control Panel</h1><div class="container"><div class="card">
+    <h3>🌤️ Hava Durumu</h3>
+    <div id="weather">Yükleniyor...</div>
 </div>
 
-<script>
-    const ctx = document.getElementById('chart').getContext('2d');
+<div class="card">
+    <h3>🌍 Google Earth Style 3D Map</h3>
+    <div id="map3d"></div>
+    <div id="popup"></div>
+</div>
 
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Live Data',
-                data: [],
-                borderWidth: 2,
-                fill: false
-            }]
-        },
-        options: {
-            responsive: true,
-            animation: false
-        }
-    });
-
+</div><script>
+    // ---------------- Weather ----------------
     async function fetchData() {
         const res = await fetch('/data');
         const json = await res.json();
 
-        // chart update
-        chart.data.labels = json.values.map((_, i) => i);
-        chart.data.datasets[0].data = json.values;
-        chart.update();
-
-        // weather update
         const w = json.weather;
         if (w && !w.error) {
             document.getElementById("weather").innerHTML =
@@ -148,50 +104,153 @@ HTML_PAGE = """
                 "Hissedilen: " + w.feelslike_C + "°C<br>" +
                 "Nem: " + w.humidity + "%<br>" +
                 "Durum: " + w.description;
-        } else if (w.error) {
-            document.getElementById("weather").innerText = "Hata: " + w.error;
+        } else {
+            document.getElementById("weather").innerText = "Hata";
         }
     }
-
     setInterval(fetchData, 5000);
 
-    // ---------------- 3D Globe ----------------
+    // ---------------- THREE JS ----------------
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 400, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 600, 0.1, 1000);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, 400);
+    renderer.setSize(window.innerWidth, 600);
     document.getElementById("map3d").appendChild(renderer.domElement);
 
-    const geometry = new THREE.SphereGeometry(5, 32, 32);
-    const texture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg');
-    const material = new THREE.MeshBasicMaterial({ map: texture });
-    const sphere = new THREE.Mesh(geometry, material);
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
 
-    scene.add(sphere);
-    camera.position.z = 10;
+    const globe = new THREE.Mesh(
+        new THREE.SphereGeometry(5, 64, 64),
+        new THREE.MeshBasicMaterial({
+            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg')
+        })
+    );
 
+    scene.add(globe);
+    camera.position.z = 12;
+
+    // ---------------- Marker Utils ----------------
+    function latLonToVector3(lat, lon, radius) {
+        const phi = (90 - lat) * Math.PI / 180;
+        const theta = (lon + 180) * Math.PI / 180;
+
+        return new THREE.Vector3(
+            -radius * Math.sin(phi) * Math.cos(theta),
+            radius * Math.cos(phi),
+            radius * Math.sin(phi) * Math.sin(theta)
+        );
+    }
+
+    // ---------------- Cities ----------------
+    const cities = [
+        { name: "Kayseri", lat: 38.7205, lon: 35.4826 },
+        { name: "Istanbul", lat: 41.0082, lon: 28.9784 },
+        { name: "Ankara", lat: 39.9334, lon: 32.8597 }
+    ];
+
+    const markers = [];
+
+    const markerGeometry = new THREE.SphereGeometry(0.08, 16, 16);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+    cities.forEach(city => {
+        const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+        marker.position.copy(latLonToVector3(city.lat, city.lon, 5));
+        marker.userData = city;
+        scene.add(marker);
+        markers.push(marker);
+    });
+
+    // ---------------- Fly To Animation ----------------
+    function flyTo(targetPosition) {
+        const duration = 1.2;
+        const start = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+        const end = { x: targetPosition.x * 2.5, y: targetPosition.y * 2.5, z: targetPosition.z * 2.5 };
+
+        let startTime = null;
+
+        function animateFly(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
+
+            camera.position.x = start.x + (end.x - start.x) * progress;
+            camera.position.y = start.y + (end.y - start.y) * progress;
+            camera.position.z = start.z + (end.z - start.z) * progress;
+
+            camera.lookAt(0, 0, 0);
+
+            if (progress < 1) {
+                requestAnimationFrame(animateFly);
+            }
+        }
+
+        requestAnimationFrame(animateFly);
+    }
+
+    // ---------------- User Location ----------------
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+
+            const userMarker = new THREE.Mesh(
+                new THREE.SphereGeometry(0.1, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+            );
+
+            const position = latLonToVector3(lat, lon, 5);
+            userMarker.position.copy(position);
+            userMarker.userData = { name: "Senin Konumun" };
+            scene.add(userMarker);
+            markers.push(userMarker);
+        });
+    }
+
+    // ---------------- Click Handling ----------------
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const popup = document.getElementById("popup");
+
+    window.addEventListener("click", (event) => {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / 600) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersects = raycaster.intersectObjects(markers);
+
+        if (intersects.length > 0) {
+            const obj = intersects[0].object;
+            const data = obj.userData;
+
+            // Popup
+            popup.style.display = "block";
+            popup.style.left = event.clientX + "px";
+            popup.style.top = event.clientY + "px";
+            popup.innerHTML = data.name;
+
+            // Fly to marker
+            flyTo(obj.position);
+        } else {
+            popup.style.display = "none";
+        }
+    });
+
+    // ---------------- Animate ----------------
     function animate() {
         requestAnimationFrame(animate);
-        sphere.rotation.y += 0.002;
+        globe.rotation.y += 0.001;
+        controls.update();
         renderer.render(scene, camera);
     }
+
     animate();
-</script>
-
-</body>
+</script></body>
 </html>
-"""
+"""@app.route("/") def index(): return render_template_string(HTML_PAGE)
 
-@app.route("/")
-def index():
-    return render_template_string(HTML_PAGE)
+@app.route("/data") def get_data(): return jsonify(data_store)
 
-@app.route("/data")
-def get_data():
-    return jsonify(data_store)
-
-if __name__ == "__main__":
-    port = random.randint(5000, 9000)
-    print(f"Server running on http://127.0.0.1:{port}")
-    app.run(host="0.0.0.0", port=port)
+if name == "main": port = random.randint(5000, 9000) print(f"Server running on http://127.0.0.1:{port}") app.run(host="0.0.0.0", port=port)
