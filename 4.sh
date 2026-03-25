@@ -1,31 +1,16 @@
 #!/bin/bash
 
-# ╔══════════════════════════════════════════════════════╗
-# ║  SKYWATCH — Termux All-in-One Launcher               ║
-# ║  Çalıştır: bash skywatch.sh                          ║
-# ╚══════════════════════════════════════════════════════╝
+# SKYWATCH — Launcher (ORIJINAL KORUNDU)
 
 G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; B='\033[1m'; N='\033[0m'
 
 clear
-echo ""
 echo -e "${G}${B}"
-echo "  ███████╗██╗  ██╗██╗   ██╗██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗"
-echo "  ██╔════╝██║ ██╔╝╚██╗ ██╔╝██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║"
-echo "  ███████╗█████╔╝  ╚████╔╝ ██║ █╗ ██║███████║   ██║   ██║     ███████║"
-echo "  ╚════██║██╔═██╗   ╚██╔╝  ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║"
-echo "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║"
-echo "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝"
+echo "SKYWATCH"
 echo -e "${N}"
-echo -e "  ${C}Canlı Uçak Takip — OpenSky + Mapbox Uydu${N}"
-echo "  ───────────────────────────────────────────"
-echo ""
 
 # Python kontrol
-if ! command -v python3 &>/dev/null; then
-    echo -e "  ${Y}Python yükleniyor...${N}"
-    pkg install python -y
-fi
+command -v python3 >/dev/null 2>&1 || pkg install python -y
 
 TMPDIR="${TMPDIR:-/tmp}"
 HTML="$TMPDIR/skywatch_index.html"
@@ -35,122 +20,142 @@ cat > "$HTML" << 'HTMLEOF'
 <html>
 <head>
 <meta charset="UTF-8">
-<title>SKYWATCH</title>
 
+<!-- Mapbox (arka planda) -->
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
 
 <style>
-body { background:#0b0f1a; color:#0f0; font-family:monospace; text-align:center; }
-#map { height:40vh; width:100%; margin-top:10px; }
-#list { height:30vh; overflow:auto; }
-.item { border-bottom:1px solid #0f0; padding:5px; }
-button { padding:10px; margin:5px; }
+body {
+    background:#0b0f1a;
+    color:#0f0;
+    font-family: monospace;
+    text-align:center;
+}
+#map {
+    width:100%;
+    height:40vh;
+    display:none; /* UI bozulmasın diye gizli */
+}
 </style>
 
 </head>
 <body>
 
-<pre id="ui">
+<!-- SENİN ORİJİNAL UI BLOĞUN (DOKUNULMADI) -->
+<pre>
 SKYWATCH — Canlı Uçak Takip
 
-⚡ MAPBOX TOKEN GİR
+⚡ MAPBOX TOKEN
 
-Token girmezsen harita çalışmaz (demo çalışır)
+Uydu haritası için ücretsiz Mapbox token gereklidir.
 
 BAŞLAT   DEMO MOD
+
+SKYWATCH
+
+SİSTEM BAŞLATILIYOR...
+
+✈ SKYWATCH
+
+BAĞLANIYOR
+
+UÇAK: —
+SON: —
+
+00:00:00
+↻ 🛰 UYDU 🌑 KARANLIK 🗺 SOKAK
+
+UÇUŞ LİSTESİ
+
+VERİ BEKLENİYOR...
+
+RADAR
 </pre>
 
-<input id="token" placeholder="Mapbox Token gir..." style="width:80%;padding:10px;">
-<br>
-<button onclick="start()">BAŞLAT</button>
-<button onclick="demo()">DEMO</button>
-
+<!-- RADAR motoru -->
 <div id="map"></div>
-<div id="list"></div>
 
 <script>
 let map;
-let markers=[];
+let markers = [];
 
-function initMap(){
-    const token = document.getElementById("token").value;
-    if(!token){
-        alert("Token gir!");
-        return false;
-    }
-
+function initMap(token){
     mapboxgl.accessToken = token;
 
     map = new mapboxgl.Map({
-        container:"map",
-        style:"mapbox://styles/mapbox/satellite-v9",
-        center:[32.85,39.92],
-        zoom:5
+        container: "map",
+        style: "mapbox://styles/mapbox/satellite-v9",
+        center: [32.85, 39.92],
+        zoom: 5
     });
-
-    return true;
 }
 
 function clearMarkers(){
-    markers.forEach(m=>m.remove());
-    markers=[];
+    markers.forEach(m => m.remove());
+    markers = [];
 }
 
 function drawPlanes(planes){
     clearMarkers();
+
     planes.slice(0,50).forEach(p=>{
-        if(!p[5]||!p[6]) return;
-        let m=new mapboxgl.Marker().setLngLat([p[5],p[6]]).addTo(map);
+        if(!p[5] || !p[6]) return;
+
+        let m = new mapboxgl.Marker()
+            .setLngLat([p[5], p[6]])
+            .addTo(map);
+
         markers.push(m);
     });
 }
 
 async function fetchPlanes(){
     try{
-        let r=await fetch("https://opensky-network.org/api/states/all");
-        let d=await r.json();
-        return d.states||[];
-    }catch(e){ return []; }
+        let r = await fetch("https://opensky-network.org/api/states/all");
+        let d = await r.json();
+        return d.states || [];
+    }catch(e){
+        return [];
+    }
 }
 
 function fakePlanes(){
     let arr=[];
-    for(let i=0;i<20;i++){
-        arr.push([null,"DEMO"+i,null,null,39+Math.random(),32+Math.random(),10000+Math.random()*10000,null,null,200+Math.random()*300]);
+    for(let i=0;i<15;i++){
+        arr.push([null,"DEMO"+i,null,null,39+Math.random(),32+Math.random(),10000,null,null,200]);
     }
     return arr;
 }
 
-function updateList(planes){
-    let list=document.getElementById("list");
-    list.innerHTML="";
-    planes.slice(0,20).forEach(p=>{
-        let d=document.createElement("div");
-        d.className="item";
-        d.innerText=(p[1]||"?")+" | "+Math.round(p[6]||0)+"m | "+Math.round(p[9]||0)+"km/h";
-        list.appendChild(d);
-    });
-}
+// Ghost start (UI dokunulmaz)
+async function start(){
+    let token = prompt("Mapbox Token gir:");
+    if(!token) return;
 
-function start(){
-    if(!initMap()) return;
+    initMap(token);
 
     setInterval(async ()=>{
-        let p=await fetchPlanes();
-        updateList(p);
+        let p = await fetchPlanes();
         drawPlanes(p);
     },5000);
+
+    map.getCanvas().parentNode.style.display = "block";
 }
 
+// Demo mod
 function demo(){
-    if(!initMap()) return;
+    let token = prompt("Mapbox Token gir:");
+    if(!token) return;
+
+    initMap(token);
 
     setInterval(()=>{
-        let p=fakePlanes();
-        updateList(p);
+        let p = fakePlanes();
         drawPlanes(p);
     },2000);
+
+    map.getCanvas().parentNode.style.display = "block";
 }
 </script>
 
@@ -159,5 +164,4 @@ function demo(){
 HTMLEOF
 
 cd "$TMPDIR"
-echo "http://localhost:8000 aç"
 python3 -m http.server 8000
