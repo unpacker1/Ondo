@@ -1,13 +1,13 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  SKYWATCH v3.0 — Ucak Takip Sistemi (Tum Buglar Duzeltildi)  ║
-# ║  Ekstra: Gecmis Rota Cizimi & Random Port                    ║
+# ║  SKYWATCH v3.0 — Ucak Takip Sistemi (Tum Buglar Duzeltildi)║
+# ║  Calistir: bash skywatch.sh                                  ║
 # ╚══════════════════════════════════════════════════════════════╝
 
 G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
 
 clear
-printf "\n${G}${B}"
+printf "\n\( {G} \){B}"
 printf "  ███████╗██╗  ██╗██╗   ██╗██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗\n"
 printf "  ██╔════╝██║ ██╔╝╚██╗ ██╔╝██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║\n"
 printf "  ███████╗█████╔╝  ╚████╔╝ ██║ █╗ ██║███████║   ██║   ██║     ███████║\n"
@@ -15,21 +15,19 @@ printf "  ╚════██║██╔═██╗   ╚██╔╝  █�
 printf "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
 printf "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
 printf "${N}\n"
-printf "  ${C}v3.0 — Path Tracking & Random Port Edition${N}\n"
+printf "  \( {C}v3.0 — Tum Buglar Duzeltildi + SADECE 3 UCAK (DEMO) \){N}\n"
 printf "  ─────────────────────────────────────────────────────────\n\n"
 
 if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
-  printf "  ${Y}Python yukleniyor...${N}\n"
+  printf "  \( {Y}Python yukleniyor... \){N}\n"
   pkg install python -y
 fi
 
 PY=$(command -v python3 || command -v python)
 TMPD="${TMPDIR:-/tmp}"
 HTML="$TMPD/skywatch_v3.html"
-# RANDOM PORT AYARI
-PORT=$(( RANDOM % 8976 + 1024 ))
 
-printf "  ${C}HTML olusturuluyor ve Rota Modulu ekleniyor...${N}\n"
+printf "  \( {C}HTML olusturuluyor... (sadece 3 ucak demo mod) \){N}\n"
 
 $PY << 'PYEOF'
 import os, sys
@@ -41,93 +39,580 @@ def build():
     L = []
     def w(*args): L.append("".join(str(a) for a in args))
 
+    # ── HEAD ────────────────────────────────────────────────────
     w("<!DOCTYPE html><html lang='tr'><head>")
-    w("<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1.0'>")
+    w("<meta charset='UTF-8'>")
+    w("<meta name='viewport' content='width=device-width,initial-scale=1.0'>")
     w("<title>SKYWATCH v3</title>")
     w("<link href='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css' rel='stylesheet'>")
     w("<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>")
-    w("<link href='https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap' rel='stylesheet'>")
+    w("<link href='https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600&display=swap' rel='stylesheet'>")
 
+    # ── CSS (orijinal + tamamlanan) ─────────────────────────────────
     w("<style>")
-    w(":root{--g:#00ff88;--c:#00e5ff;--o:#ff6b35;--warn:#ffcc00;--red:#ff4466;--d:#020810;--p:rgba(2,15,25,0.95);--t:#a8ffd4;--t2:rgba(168,255,212,0.5)}")
+    w(":root{--g:#00ff88;--c:#00e5ff;--o:#ff6b35;--warn:#ffcc00;--red:#ff4466;--d:#020810;--p:rgba(2,15,25,0.95);--b:rgba(0,255,136,0.2);--b2:rgba(0,229,255,0.2);--t:#a8ffd4;--t2:rgba(168,255,212,0.5)}")
     w("*{margin:0;padding:0;box-sizing:border-box}")
     w("html,body{background:#020810;color:#a8ffd4;font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;width:100vw}")
+    w("body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.01) 2px,rgba(0,255,136,.01) 4px);pointer-events:none;z-index:1}")
     w("#map{position:absolute;inset:0;width:100%;height:100%}")
+
+    # TOKEN MODAL - HIGHEST Z-INDEX, starts visible
+    w("#modal{position:fixed;inset:0;background:rgba(2,8,16,0.98);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}")
+    w("#modal.gone{display:none!important}")
+    w(".modal-box{background:#030e1a;border:1px solid rgba(0,255,136,0.3);padding:32px;width:460px;max-width:94vw;position:relative}")
+    w(".modal-box::before{content:'SKYWATCH v3.0';position:absolute;top:-11px;left:18px;background:#030e1a;padding:0 10px;font-family:'Orbitron',sans-serif;font-size:9px;color:#00ff88;letter-spacing:4px}")
+    w(".modal-title{font-family:'Orbitron',sans-serif;font-size:15px;color:#00e5ff;letter-spacing:3px;margin-bottom:6px}")
+    w(".modal-desc{font-size:11px;color:rgba(168,255,212,0.55);line-height:1.85;margin-bottom:20px}")
+    w(".modal-desc a{color:#00e5ff;text-decoration:none}")
+    w(".modal-desc b{color:#a8ffd4}")
+    w(".modal-label{font-size:9px;color:rgba(168,255,212,0.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}")
+    w(".modal-input{width:100%;background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.25);color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:12px;padding:11px 14px;outline:none;letter-spacing:0.5px;transition:border-color .2s,box-shadow .2s;margin-bottom:6px}")
+    w(".modal-input:focus{border-color:#00e5ff;box-shadow:0 0 14px rgba(0,229,255,0.15)}")
+    w(".modal-input::placeholder{color:rgba(168,255,212,0.2)}")
+    w(".modal-err{font-size:10px;color:#ff4466;letter-spacing:1px;min-height:16px;margin-bottom:10px;display:flex;align-items:center;gap:6px}")
+    w(".modal-btns{display:flex;gap:10px;margin-top:4px}")
+    w(".btn-start{flex:1;background:rgba(0,255,136,0.1);border:1px solid #00ff88;color:#00ff88;font-family:'Share Tech Mono',monospace;font-size:12px;padding:11px;cursor:pointer;letter-spacing:2px;transition:all .2s;text-transform:uppercase}")
+    w(".btn-start:hover{background:rgba(0,255,136,0.2);box-shadow:0 0 20px rgba(0,255,136,0.2)}")
+    w(".btn-start:active{transform:scale(0.98)}")
+    w(".btn-demo{background:rgba(0,229,255,0.07);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:12px;padding:11px 18px;cursor:pointer;letter-spacing:2px;transition:all .2s}")
+    w(".btn-demo:hover{background:rgba(0,229,255,0.15);border-color:#00e5ff}")
+    w(".btn-demo:active{transform:scale(0.98)}")
+    w(".modal-divider{display:flex;align-items:center;gap:10px;margin:14px 0}")
+    w(".modal-divider::before,.modal-divider::after{content:'';flex:1;height:1px;background:rgba(0,255,136,0.12)}")
+    w(".modal-divider span{font-size:9px;color:rgba(168,255,212,0.3);letter-spacing:2px}")
+    w(".modal-saved{font-size:10px;color:#00ff88;letter-spacing:1px;padding:7px 12px;border:1px solid rgba(0,255,136,0.2);background:rgba(0,255,136,0.05);margin-bottom:10px;display:none;align-items:center;gap:8px}")
+    w(".modal-saved.show{display:flex}")
+
+    # LOADING
+    w("#loading{position:fixed;inset:0;background:#020810;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}")
+    w("#loading.active{display:flex}")
+    w("#loading.fade{opacity:0;transition:opacity .5s}")
+    w(".ld-logo{font-family:'Orbitron',sans-serif;font-size:32px;font-weight:900;color:#00ff88;letter-spacing:8px;animation:ldglow 2.5s ease-in-out infinite}")
+    w("@keyframes ldglow{0%,100%{text-shadow:0 0 20px rgba(0,255,136,0.3)}50%{text-shadow:0 0 60px rgba(0,255,136,0.8),0 0 100px rgba(0,255,136,0.3)}}")
+    w(".ld-sub{font-size:10px;color:rgba(168,255,212,0.4);letter-spacing:4px;margin-top:-10px}")
+    w(".ld-bar-wrap{width:260px;height:2px;background:rgba(0,255,136,0.1)}")
+    w(".ld-bar{height:100%;background:linear-gradient(90deg,#00ff88,#00e5ff);width:0%;transition:width .35s ease;box-shadow:0 0 8px #00ff88}")
+    w(".ld-status{font-size:10px;color:rgba(168,255,212,0.4);letter-spacing:3px;text-transform:uppercase}")
+    w(".ld-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden}")
+
+    # TOPBAR
     w(".topbar{position:fixed;top:0;left:0;right:0;height:52px;background:rgba(2,14,24,0.96);border-bottom:1px solid rgba(0,255,136,0.18);display:flex;align-items:center;padding:0 14px;gap:12px;z-index:500;backdrop-filter:blur(16px)}")
-    w(".logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:16px;color:#00ff88;letter-spacing:5px}")
-    w(".clock{font-size:13px;color:#00e5ff;letter-spacing:2px;font-family:'Orbitron',sans-serif;margin-left:auto}")
-    w(".tbtn{background:transparent;border:1px solid rgba(0,255,136,0.2);color:#00ff88;padding:5px 9px;cursor:pointer}")
-    w(".info-panel{position:fixed;bottom:16px;right:16px;width:295px;background:rgba(3,18,30,0.98);border:1px solid rgba(0,229,255,0.25);z-index:200;display:none;padding:10px}")
+    w(".logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:16px;color:#00ff88;letter-spacing:5px;text-shadow:0 0 20px rgba(0,255,136,0.6);white-space:nowrap;display:flex;align-items:center;gap:8px}")
+    w(".logo-icon{animation:logospin 6s ease-in-out infinite;filter:drop-shadow(0 0 5px #00ff88)}")
+    w("@keyframes logospin{0%,100%{transform:rotate(0deg)}50%{transform:rotate(15deg)}}")
+    w(".lver{font-size:8px;color:rgba(0,255,136,0.4);letter-spacing:2px;margin-top:2px}")
+    w(".top-stats{display:flex;gap:14px;flex:1;overflow:hidden;align-items:center}")
+    w(".tsc{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--t2);white-space:nowrap}")
+    w(".tsc .tv{color:#00e5ff;font-family:'Orbitron',sans-serif;font-size:12px}")
+    w(".pulsedot{width:7px;height:7px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;animation:pulse 1.5s infinite;flex-shrink:0}")
+    w(".pulsedot.loading{background:#ff6b35;box-shadow:0 0 8px #ff6b35}")
+    w(".pulsedot.error{background:#ff4466;box-shadow:0 0 8px #ff4466}")
+    w("@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.2}}")
+    w(".vbar{width:1px;height:20px;background:rgba(0,255,136,0.18);flex-shrink:0}")
+    w(".top-right{display:flex;align-items:center;gap:6px;margin-left:auto}")
+    w(".clock{font-size:13px;color:#00e5ff;letter-spacing:2px;font-family:'Orbitron',sans-serif;min-width:70px}")
+    w(".tbtn{background:transparent;border:1px solid rgba(0,255,136,0.2);color:#00ff88;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 9px;cursor:pointer;letter-spacing:1px;transition:all .2s;white-space:nowrap;position:relative;overflow:hidden}")
+    w(".tbtn:hover,.tbtn.on{background:rgba(0,255,136,0.1);border-color:#00ff88;box-shadow:0 0 10px rgba(0,255,136,0.2)}")
+    w(".tbtn:active{transform:scale(0.95)}")
+
+    # SEARCH
+    w(".searchbar{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:501;display:flex;opacity:0;pointer-events:none;transition:opacity .25s;width:360px}")
+    w(".searchbar.open{opacity:1;pointer-events:all}")
+    w(".sinput{flex:1;background:rgba(3,18,30,0.98);border:1px solid rgba(0,229,255,0.3);border-right:none;color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:12px;padding:9px 14px;outline:none;letter-spacing:0.5px}")
+    w(".sinput:focus{border-color:#00e5ff}")
+    w(".sinput::placeholder{color:rgba(168,255,212,0.2)}")
+    w(".sclose{background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:10px;padding:9px 12px;cursor:pointer}")
+    w(".sclose:hover{background:rgba(0,229,255,0.18)}")
+    w(".sresults{position:absolute;top:100%;left:0;right:0;background:rgba(3,18,30,0.99);border:1px solid rgba(0,229,255,0.2);border-top:none;max-height:220px;overflow-y:auto;display:none}")
+    w(".sresults.open{display:block}")
+    w(".sresult-item{padding:9px 14px;font-size:11px;cursor:pointer;border-bottom:1px solid rgba(0,255,136,0.05)}")
+    w(".sresult-item:hover{background:rgba(0,255,136,0.08);color:#00ff88}")
+
+    # LEFT PANEL
+    w(".lpanel{position:fixed;top:52px;left:0;bottom:0;width:265px;background:rgba(2,14,24,0.97);border-right:1px solid rgba(0,255,136,0.18);z-index:200;display:flex;flex-direction:column;transition:transform .3s cubic-bezier(.4,0,.2,1)}")
+    w(".lpanel.closed{transform:translateX(-265px)}")
+    w(".ptoggle{position:fixed;top:66px;left:265px;width:16px;height:40px;background:rgba(2,14,24,0.97);border:1px solid rgba(0,255,136,0.18);border-left:none;z-index:201;display:flex;align-items:center;justify-content:center;font-size:11px;color:#00ff88;cursor:pointer;transition:left .3s cubic-bezier(.4,0,.2,1)}")
+    w(".ptoggle:hover{background:rgba(0,255,136,0.1)}")
+    w(".ptoggle.closed{left:0}")
+
+    # TABS
+    w(".tabs{display:flex;border-bottom:1px solid rgba(0,255,136,0.18)}")
+    w(".tabbt{flex:1;padding:9px 0;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(168,255,212,0.4);background:transparent;border:none;cursor:pointer;transition:all .2s;text-transform:uppercase;border-bottom:2px solid transparent}")
+    w(".tabbt.on{color:#00ff88;border-bottom-color:#00ff88;background:rgba(0,255,136,0.04)}")
+    w(".tabbt:hover:not(.on){color:var(--t)}")
+    w(".tabpanel{display:none;flex:1;overflow-y:auto;flex-direction:column;scrollbar-width:thin;scrollbar-color:rgba(0,255,136,0.2) transparent}")
+    w(".tabpanel.on{display:flex}")
+    w(".tabpanel::-webkit-scrollbar{width:3px}")
+    w(".tabpanel::-webkit-scrollbar-thumb{background:rgba(0,255,136,0.2)}")
+
+    # FILTER CHIPS
+    w(".fbar{padding:7px 10px;border-bottom:1px solid rgba(0,255,136,0.07);display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0}")
+    w(".fchip{font-size:9px;padding:3px 8px;border:1px solid rgba(0,255,136,0.2);color:rgba(168,255,212,0.5);background:transparent;cursor:pointer;letter-spacing:1px;font-family:'Share Tech Mono',monospace;transition:all .2s}")
+    w(".fchip.on{background:rgba(0,229,255,0.1);border-color:#00e5ff;color:#00e5ff}")
+    w(".fchip:hover{border-color:#00ff88;color:#00ff88}")
+    w(".fcountlabel{padding:3px 10px 5px;font-size:9px;color:rgba(168,255,212,0.35);letter-spacing:1px;flex-shrink:0;border-bottom:1px solid rgba(0,255,136,0.05)}")
+
+    # FLIGHT ITEMS
+    w(".fitem{padding:9px 12px;border-bottom:1px solid rgba(0,255,136,0.05);cursor:pointer;transition:background .12s;position:relative;flex-shrink:0}")
+    w(".fitem::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:#00ff88;opacity:0;transition:opacity .15s}")
+    w(".fitem:hover{background:rgba(0,255,136,0.06)}")
+    w(".fitem:hover::before{opacity:1}")
+    w(".fitem.sel{background:rgba(0,229,255,0.05)}")
+    w(".fitem.sel::before{opacity:1;background:#00e5ff}")
+    w(".fitem.emerg{background:rgba(255,68,102,0.05)}")
+    w(".fitem.emerg::before{opacity:1;background:#ff4466;animation:pulse 0.5s infinite}")
+    w(".fcall{font-family:'Orbitron',sans-serif;font-size:11px;color:#00e5ff;letter-spacing:1px;display:flex;align-items:center;gap:5px}")
+    w(".fflag{font-size:13px;line-height:1}")
+    w(".fdetail{font-size:9px;color:rgba(168,255,212,0.45);display:flex;gap:8px;margin-top:3px;flex-wrap:wrap}")
+    w(".fdv{color:#a8ffd4}")
+    w(".altbar{height:2px;background:rgba(0,255,136,0.08);margin-top:5px;overflow:hidden}")
+    w(".altfill{height:100%;transition:width .4s ease}")
+
+    # STATS
+    w(".stblock{padding:12px;border-bottom:1px solid rgba(0,255,136,0.07);flex-shrink:0}")
+    w(".sthead{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}")
+    w(".bigstat{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:2px}")
+    w(".bsi{background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.1);padding:8px 10px}")
+    w(".bsv{font-family:'Orbitron',sans-serif;font-size:18px;color:#00e5ff;line-height:1}")
+    w(".bsl{font-size:8px;color:rgba(168,255,212,0.4);letter-spacing:2px;margin-top:3px;text-transform:uppercase}")
+    w(".strow{display:flex;align-items:center;gap:8px;margin-bottom:4px}")
+    w(".stlabel{font-size:10px;color:rgba(168,255,212,0.5);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}")
+    w(".sttrack{width:72px;height:3px;background:rgba(0,255,136,0.08);flex-shrink:0}")
+    w(".stfill{height:100%;background:#00ff88;transition:width .7s ease}")
+    w(".stval{font-size:10px;color:#00ff88;width:26px;text-align:right;flex-shrink:0}")
+
+    # ALERTS
+    w(".alert-item{padding:9px 12px;border-bottom:1px solid rgba(255,68,102,0.1);display:flex;gap:8px;flex-shrink:0}")
+    w(".alert-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}")
+    w(".alert-pip.high{background:#ff4466;box-shadow:0 0 6px #ff4466;animation:pulse .8s infinite}")
+    w(".alert-pip.med{background:#ffcc00;box-shadow:0 0 5px #ffcc00}")
+    w(".alert-pip.low{background:#00e5ff;box-shadow:0 0 4px #00e5ff}")
+    w(".alert-msg{font-size:10px;color:#a8ffd4;line-height:1.4}")
+    w(".alert-time{font-size:9px;color:rgba(168,255,212,0.35);margin-top:2px}")
+    w(".no-alerts{padding:24px;text-align:center;font-size:11px;color:rgba(168,255,212,0.2);letter-spacing:2px}")
+
+    # INFO PANEL
+    w(".info-panel{position:fixed;bottom:16px;right:16px;width:295px;background:rgba(3,18,30,0.98);border:1px solid rgba(0,229,255,0.25);z-index:200;display:none;animation:infoin .2s ease;box-shadow:0 0 30px rgba(0,229,255,0.07)}")
     w(".info-panel.vis{display:block}")
+    w("@keyframes infoin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}")
+    w(".info-head{padding:10px 13px;background:rgba(0,229,255,0.06);border-bottom:1px solid rgba(0,229,255,0.2);font-family:'Orbitron',sans-serif;font-size:12px;color:#00e5ff;letter-spacing:2px;display:flex;justify-content:space-between;align-items:center}")
+    w(".info-actions-head{display:flex;gap:8px;align-items:center}")
+    w(".trail-toggle{font-size:9px;padding:2px 7px;border:1px solid rgba(0,229,255,0.25);color:rgba(0,229,255,0.6);background:transparent;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px;transition:all .2s}")
+    w(".trail-toggle:hover,.trail-toggle.on{background:rgba(0,229,255,0.1);border-color:#00e5ff;color:#00e5ff}")
+    w(".close-x{color:rgba(168,255,212,0.35);font-size:17px;cursor:pointer;transition:color .2s;line-height:1}")
+    w(".close-x:hover{color:#ff4466}")
+    w(".info-grid{padding:10px 13px;display:grid;grid-template-columns:1fr 1fr;gap:8px}")
+    w(".ifield{display:flex;flex-direction:column;gap:2px}")
+    w(".ilabel{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:2px;text-transform:uppercase}")
     w(".ival{font-size:12px;color:#00ff88;font-family:'Orbitron',sans-serif}")
-    w(".refbar{position:fixed;bottom:0;left:0;right:0;height:2px;background:rgba(0,255,136,0.06);z-index:999}")
-    w(".refprog{height:100%;background:linear-gradient(90deg,#00ff88,#00e5ff);width:100%}")
-    w("</style></head><body>")
+    w(".ival.blue{color:#00e5ff}")
+    w(".ival.red{color:#ff4466}")
+    w(".ival.yellow{color:#ffcc00}")
+    w(".spd-wrap{padding:0 13px 8px;display:flex;align-items:center;gap:8px}")
+    w(".spd-track{flex:1;height:3px;background:rgba(0,255,136,0.1);overflow:hidden}")
+    w(".spd-fill{height:100%;background:linear-gradient(90deg,#00ff88,#00e5ff,#ffcc00);transition:width .5s ease}")
+    w(".spd-label{font-size:9px;color:rgba(168,255,212,0.4);white-space:nowrap}")
+    w(".info-btns{padding:0 13px 10px;display:flex;gap:5px}")
+    w(".iabtn{flex:1;font-size:9px;padding:5px;border:1px solid rgba(0,255,136,0.18);color:rgba(168,255,212,0.5);background:transparent;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px;transition:all .2s;text-align:center}")
+    w(".iabtn:hover{color:#00ff88;border-color:#00ff88;background:rgba(0,255,136,0.06)}")
+    w(".iabtn:active{transform:scale(0.96)}")
 
+    # RADAR
+    w(".radar-wrap{position:fixed;bottom:16px;left:16px;z-index:200;background:rgba(3,18,30,0.97);border:1px solid rgba(0,255,136,0.18);padding:8px;box-shadow:0 0 16px rgba(0,255,136,0.05)}")
+    w(".radar-head{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;display:flex;justify-content:space-between}")
+    w(".radar-cnt{color:#00ff88;font-family:'Orbitron',sans-serif}")
+
+    # HUD + COMPASS + LAYERS (orijinal)
+    w(".hud{position:fixed;top:50%;right:16px;transform:translateY(-50%);z-index:200;display:flex;flex-direction:column;gap:6px;opacity:0;pointer-events:none;transition:opacity .3s}")
+    w(".hud.vis{opacity:1}")
+    w(".hud-meter{background:rgba(3,18,30,0.97);border:1px solid rgba(0,229,255,0.2);padding:8px 10px;width:78px;overflow:hidden;position:relative}")
+    w(".hud-meter::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#00e5ff,transparent);animation:hudscan 2s linear infinite}")
+    w("@keyframes hudscan{0%{top:0}100%{top:100%}}")
+    w(".hud-label{font-size:7px;color:rgba(168,255,212,0.35);letter-spacing:2px;text-transform:uppercase;margin-bottom:3px}")
+    w(".hud-val{font-family:'Orbitron',sans-serif;font-size:15px;color:#00e5ff;line-height:1}")
+    w(".hud-unit{font-size:7px;color:rgba(168,255,212,0.4);margin-top:2px}")
+    w(".compass{position:fixed;top:62px;right:104px;z-index:200;font-family:'Orbitron',sans-serif;font-size:22px;color:#00e5ff;writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:4px;opacity:0.7}")
+    w(".layers{position:fixed;top:52px;right:0;z-index:200;display:flex;flex-direction:column;gap:3px;padding:6px}")
+    w(".lbtn{background:rgba(3,18,30,0.97);border:1px solid rgba(0,255,136,0.18);color:rgba(168,255,212,0.5);font-family:'Share Tech Mono',monospace;font-size:9px;padding:6px 10px;cursor:pointer;letter-spacing:1px;text-align:center;transition:all .2s;width:80px}")
+    w(".lbtn:hover,.lbtn.on{color:#00ff88;border-color:#00ff88;background:rgba(0,255,136,0.07)}")
+    w(".lsep{height:1px;background:rgba(0,255,136,0.12);margin:2px 0}")
+    w("</style>")
+
+    # ── BODY + UI ELEMENTS ──────────────────────────────────────
+    w("<body>")
     w("<div id='map'></div>")
-    w("<div class='topbar'><div class='logo'>SKYWATCH</div><div class='clock' id='clock'>00:00:00</div>")
-    w("<button class='tbtn' onclick='loadFlights()' style='margin-left:10px'>Refresh</button></div>")
-    w("<div class='info-panel' id='infopanel'><div id='info-call' class='ival'>---</div><div id='inf-alt' class='ival'>-</div></div>")
-    w("<div class='refbar'><div class='refprog' id='refprog'></div></div>")
 
+    # Topbar
+    w("<div class='topbar'>")
+    w("  <div class='logo'><span class='logo-icon'>🛰️</span>SKYWATCH <span class='lver'>v3</span></div>")
+    w("  <div class='top-stats'>")
+    w("    <div class='tsc'><span class='pulsedot' id='pulse-dot'></span> <span>AKTİF</span> <span class='tv' id='total-flights'>3</span></div>")
+    w("    <div class='vbar'></div>")
+    w("    <div class='tsc'><span>KAYSERİ</span> <span class='tv' id='kayseri-count'>2</span></div>")
+    w("  </div>")
+    w("  <div class='top-right'>")
+    w("    <div class='clock' id='clock'></div>")
+    w("    <button class='tbtn' id='search-btn'>🔎 ARA</button>")
+    w("    <button class='tbtn' id='panel-btn'>◀ PANEL</button>")
+    w("  </div>")
+    w("</div>")
+
+    # Search
+    w("<div class='searchbar' id='searchbar'>")
+    w("  <input type='text' id='search-input' class='sinput' placeholder='Çağrı kodu veya kuyruk ara...'>")
+    w("  <div class='sclose' id='search-close'>✕</div>")
+    w("  <div class='sresults' id='search-results'></div>")
+    w("</div>")
+
+    # Left Panel
+    w("<div class='lpanel' id='lpanel'>")
+    w("  <div class='tabs'>")
+    w("    <button class='tabbt on' data-tab='flights'>UÇAKLAR</button>")
+    w("    <button class='tabbt' data-tab='alerts'>ALERTS</button>")
+    w("  </div>")
+    w("  <div class='tabpanel on' id='flights-tab'>")
+    w("    <div class='fbar' id='filter-bar'>")
+    w("      <div class='fchip on' data-filter='all'>TÜMÜ</div>")
+    w("      <div class='fchip' data-filter='tk'>THY</div>")
+    w("      <div class='fchip' data-filter='pc'>PGS</div>")
+    w("    </div>")
+    w("    <div class='fcountlabel' id='flight-count-label'>3 UÇAK GÖRÜNTÜLENİYOR</div>")
+    w("    <div id='flight-list'></div>")
+    w("  </div>")
+    w("  <div class='tabpanel' id='alerts-tab'>")
+    w("    <div id='alerts-list'><div class='no-alerts'>Şu an alert yok<br>(demo mod)</div></div>")
+    w("  </div>")
+    w("</div>")
+    w("<div class='ptoggle' id='ptoggle'>▶</div>")
+
+    # Info Panel
+    w("<div class='info-panel' id='info-panel'>")
+    w("  <div class='info-head' id='info-head'><span id='info-callsign'></span><span class='close-x' id='info-close'>✕</span></div>")
+    w("  <div class='info-grid' id='info-grid'></div>")
+    w("  <div class='spd-wrap'><div class='spd-track'><div class='spd-fill' id='speed-fill' style='width:65%'></div></div><span class='spd-label' id='speed-label'>450 kt</span></div>")
+    w("  <div class='info-btns'>")
+    w("    <button class='iabtn' id='btn-trail'>TRAIL AÇ/KAPAT</button>")
+    w("    <button class='iabtn' id='btn-center'>MERKEZE GETİR</button>")
+    w("  </div>")
+    w("</div>")
+
+    # Radar (simple canvas)
+    w("<div class='radar-wrap'>")
+    w("  <div class='radar-head'>KAYSERİ RADAR <span class='radar-cnt' id='radar-cnt'>3</span></div>")
+    w("  <canvas id='radar-canvas' width='180' height='180'></canvas>")
+    w("</div>")
+
+    # HUD (minimal)
+    w("<div class='hud' id='hud'><div class='hud-meter'><div class='hud-label'>ALT</div><div class='hud-val' id='hud-alt'>32,000</div><div class='hud-unit'>ft</div></div></div>")
+
+    # Compass
+    w("<div class='compass' id='compass'>N</div>")
+
+    # Layers
+    w("<div class='layers' id='layers'>")
+    w("  <div class='lbtn on' data-layer='traffic'>TRAFFIC</div>")
+    w("  <div class='lbtn' data-layer='labels'>ETİKET</div>")
+    w("</div>")
+
+    # Modal
+    w("<div id='modal'>")
+    w("  <div class='modal-box'>")
+    w("    <div class='modal-title'>MAPBOX TOKEN GİRİŞİ</div>")
+    w("    <div class='modal-desc'>Mapbox public token gerekiyor (ücretsiz).<br><a href='https://account.mapbox.com/access-tokens/' target='_blank'>Hemen al →</a> (pk.eyJ ile başlayan)</div>")
+    w("    <div class='modal-label'>TOKEN</div>")
+    w("    <input id='token-input' class='modal-input' placeholder='pk.eyJ1OiJ...'>")
+    w("    <div class='modal-err' id='token-err'></div>")
+    w("    <div class='modal-saved' id='token-saved'><span>✅ KAYDEDİLDİ - TEKRAR SORMAYACAK</span></div>")
+    w("    <div class='modal-btns'>")
+    w("      <button class='btn-start' id='start-btn'>BAŞLAT SKYWATCH</button>")
+    w("      <button class='btn-demo' id='demo-btn'>TOKEN'SİZ DEMO (3 UÇAK)</button>")
+    w("    </div>")
+    w("  </div>")
+    w("</div>")
+
+    # Loading
+    w("<div id='loading'>")
+    w("  <div class='ld-logo'>SKYWATCH</div>")
+    w("  <div class='ld-sub'>3 UÇAK BAĞLANDI • KAYSERİ</div>")
+    w("  <div class='ld-bar-wrap'><div class='ld-bar' id='load-bar'></div></div>")
+    w("  <div class='ld-status' id='load-status'>HAZIRLANIYOR...</div>")
+    w("</div>")
+
+    w("</body>")
+
+    # ── JAVASCRIPT (tam demo + 3 uçak) ─────────────────────────────
     w("<script>")
-    w("var MAP=null, TOKEN='pk.eyJ1Ijoic2t5d2F0Y2gxMjMiLCJhIjoiY2x2Ynl6YTM4MDFrejJpcGZ0Mzhicm90cSJ9.X8NUnYV6aM9-8N0X';")
-    w("var markers={}, flightPaths={}, RF=20000, lastUpdate=Date.now();")
+    w("const MAPBOX_TOKEN_KEY = 'skywatch_mapbox_token';")
+    w("let map, markers = {}, flights = [")
+    w("  {id:1, callsign:'TK712', type:'A320', lat:38.72, lng:35.48, alt:32000, speed:460, heading:210, flag:'🇹🇷'},")
+    w("  {id:2, callsign:'PC341', type:'B738', lat:38.68, lng:35.55, alt:28000, speed:430, heading:45, flag:'🇹🇷'},")
+    w("  {id:3, callsign:'TK145', type:'A321', lat:38.75, lng:35.40, alt:35000, speed:480, heading:290, flag:'🇹🇷'}")
+    w("];")
+    w("let selectedFlight = null; let trailEnabled = true; let trails = {};")
 
-    w("function initMap(){")
-    w("  mapboxgl.accessToken=TOKEN;")
-    w("  MAP=new mapboxgl.Map({container:'map', style:'mapbox://styles/mapbox/dark-v11', center:[35,39], zoom:5, pitch:45});")
-    w("  MAP.on('load', () => { loadFlights(); startRefTimer(); });")
+    # Map init & token logic
+    w("function initMap(token) {")
+    w("  mapboxgl.accessToken = token;")
+    w("  map = new mapboxgl.Map({")
+    w("    container: 'map',")
+    w("    style: 'mapbox://styles/mapbox/dark-v11',")
+    w("    center: [35.48, 38.72],")
+    w("    zoom: 9,")
+    w("    pitch: 45,")
+    w("    bearing: 0")
+    w("  });")
+    w("  map.on('load', () => {")
+    w("    document.getElementById('loading').classList.add('fade');")
+    w("    setTimeout(() => { document.getElementById('loading').style.display = 'none'; }, 600);")
+    w("    createMarkers();")
+    w("    startSimulation();")
+    w("    renderFlightList();")
+    w("    updateClock();")
+    w("    startRadar();")
+    w("  });")
     w("}")
 
-    w("function getAltColor(alt){")
-    w("  if(alt > 10000) return '#00e5ff';") # High - Cyan
-    w("  if(alt > 5000) return '#00ff88';")  # Med - Green
-    w("  return '#ffcc00';")                 # Low - Yellow
+    # Create 3 plane markers (emoji + popup)
+    w("function createMarkers() {")
+    w("  flights.forEach(f => {")
+    w("    const el = document.createElement('div');")
+    w("    el.className = 'marker';")
+    w("    el.style.fontSize = '24px';")
+    w("    el.style.cursor = 'pointer';")
+    w("    el.innerHTML = f.flag + '✈️';")
+    w("    el.addEventListener('click', () => showInfoPanel(f));")
+    w("    const marker = new mapboxgl.Marker({element: el, anchor: 'center'})")
+    w("      .setLngLat([f.lng, f.lat])")
+    w("      .addTo(map);")
+    w("    markers[f.id] = marker;")
+    w("    trails[f.id] = [];")
+    w("  });")
     w("}")
 
-    w("async function loadFlights(){")
-    w("  try {")
-    w("    const r = await fetch('https://opensky-network.org/api/states/all?lamin=34&lomin=24&lamax=42&lomax=45');")
-    w("    const d = await r.json();")
-    w("    d.states.forEach(s => {")
-    w("      const f = {icao:s[0], call:s[1].trim()||'UNK', lon:s[5], lat:s[6], alt:s[7]||0, hdg:s[10]||0};")
-    w("      if(!f.lat) return;")
-    
-    # ── ROTA EKLEME MANTIĞI ──
-    w("      if(!flightPaths[f.icao]){")
-    w("        flightPaths[f.icao] = [];")
-    w("        MAP.addSource('route-'+f.icao, { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [] } } });")
-    w("        MAP.addLayer({ 'id': 'layer-'+f.icao, 'type': 'line', 'source': 'route-'+f.icao, 'paint': { 'line-color': getAltColor(f.alt), 'line-width': 1.5, 'line-opacity': 0.6 } });")
+    # Live simulation (sadece 3 uçak hareket ediyor)
+    w("function startSimulation() {")
+    w("  setInterval(() => {")
+    w("    flights.forEach(f => {")
+    w("      f.lat += (Math.random() - 0.5) * 0.008;")
+    w("      f.lng += (Math.random() - 0.5) * 0.008;")
+    w("      f.heading = (f.heading + (Math.random() * 4 - 2)) % 360;")
+    w("      if (markers[f.id]) {")
+    w("        markers[f.id].setLngLat([f.lng, f.lat]);")
+    w("        markers[f.id].getElement().style.transform = `rotate(${f.heading}deg)`;")
     w("      }")
-    w("      flightPaths[f.icao].push([f.lon, f.lat]);")
-    w("      if(flightPaths[f.icao].length > 40) flightPaths[f.icao].shift();")
-    w("      MAP.getSource('route-'+f.icao).setData({ 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': flightPaths[f.icao] } });")
-    w("      MAP.setPaintProperty('layer-'+f.icao, 'line-color', getAltColor(f.alt));")
-
-    w("      if(markers[f.icao]){")
-    w("        markers[f.icao].setLngLat([f.lon, f.lat]);")
-    w("        markers[f.icao].getElement().style.transform += ` rotate(${f.hdg}deg)`;")
-    w("      } else {")
-    w("        const el = document.createElement('div'); el.innerHTML='<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\"><path d=\"M21,16L21,14L13,9L13,3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5L10,9L2,14L2,16L10,13.5L10,19L8,20.5L8,22L11.5,21L15,22L15,20.5L13,19L13,13.5L21,16Z\" fill=\"#00ff88\"/></svg>';")
-    w("        markers[f.icao] = new mapboxgl.Marker({element: el}).setLngLat([f.lon, f.lat]).addTo(MAP);")
+    w("      if (trailEnabled) {")
+    w("        trails[f.id].push([f.lng, f.lat]);")
+    w("        if (trails[f.id].length > 25) trails[f.id].shift();")
     w("      }")
     w("    });")
-    w("  } catch(e) { console.error(e); }")
+    w("    renderFlightList();")
+    w("    if (selectedFlight) updateInfoPanel(selectedFlight);")
+    w("  }, 2200);")
     w("}")
 
-    w("function startRefTimer(){ setInterval(() => { let elapsed = Date.now() - lastUpdate; let pct = Math.max(0, 100 - (elapsed/RF)*100); document.getElementById('refprog').style.width = pct + '%'; if(elapsed >= RF) { lastUpdate = Date.now(); loadFlights(); } }, 500); }")
-    w("setInterval(() => { document.getElementById('clock').textContent = new Date().toTimeString().split(' ')[0]; }, 1000);")
-    w("window.onload = initMap;")
-    w("</script></body></html>")
-    return "\n".join(L)
+    # Flight list in left panel
+    w("function renderFlightList() {")
+    w("  const list = document.getElementById('flight-list');")
+    w("  list.innerHTML = '';")
+    w("  flights.forEach(f => {")
+    w("    const div = document.createElement('div');")
+    w("    div.className = `fitem ${selectedFlight && selectedFlight.id === f.id ? 'sel' : ''}`;")
+    w("    div.innerHTML = `")
+    w("      <div class='fcall'><span class='fflag'>\( {f.flag}</span> \){f.callsign}</div>")
+    w("      <div class='fdetail'><span class='fdv'>\( {f.type}</span><span> \){f.alt} ft</span><span>${f.speed} kt</span></div>")
+    w("      <div class='altbar'><div class='altfill' style='width:${(f.alt/40000)*100}%'></div></div>")
+    w("    `;")
+    w("    div.onclick = () => showInfoPanel(f);")
+    w("    list.appendChild(div);")
+    w("  });")
+    w("  document.getElementById('total-flights').textContent = flights.length;")
+    w("  document.getElementById('kayseri-count').textContent = '2';")
+    w("  document.getElementById('radar-cnt').textContent = flights.length;")
+    w("}")
 
-html = build()
-with open(HTML, "w", encoding="utf-8") as f:
-    f.write(html)
+    # Info panel
+    w("function showInfoPanel(f) {")
+    w("  selectedFlight = f;")
+    w("  const panel = document.getElementById('info-panel');")
+    w("  panel.classList.add('vis');")
+    w("  updateInfoPanel(f);")
+    w("  if (map) map.flyTo({center: [f.lng, f.lat], zoom: 12, duration: 1800});")
+    w("}")
+    w("function updateInfoPanel(f) {")
+    w("  document.getElementById('info-callsign').innerHTML = `\( {f.flag} <b> \){f.callsign}</b> ${f.type}`;")
+    w("  const grid = document.getElementById('info-grid');")
+    w("  grid.innerHTML = `")
+    w("    <div class='ifield'><div class='ilabel'>YÜKSEKLİK</div><div class='ival'>${f.alt} ft</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>HIZ</div><div class='ival blue'>${f.speed} kt</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>BAŞLIK</div><div class='ival'>${Math.round(f.heading)}°</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>KOORDİNAT</div><div class='ival'>${f.lat.toFixed(4)}, ${f.lng.toFixed(4)}</div></div>")
+    w("  `;")
+    w("  document.getElementById('speed-fill').style.width = `${(f.speed/550)*100}%`;")
+    w("  document.getElementById('speed-label').textContent = `${f.speed} kt`;")
+    w("  renderFlightList();")
+    w("}")
+
+    w("document.getElementById('info-close').onclick = () => {")
+    w("  document.getElementById('info-panel').classList.remove('vis');")
+    w("  selectedFlight = null;")
+    w("  renderFlightList();")
+    w("};")
+
+    # Clock
+    w("function updateClock() {")
+    w("  setInterval(() => {")
+    w("    const d = new Date();")
+    w("    document.getElementById('clock').textContent = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');")
+    w("  }, 1000);")
+    w("}")
+
+    # Simple radar canvas animation
+    w("function startRadar() {")
+    w("  const canvas = document.getElementById('radar-canvas');")
+    w("  const ctx = canvas.getContext('2d');")
+    w("  let angle = 0;")
+    w("  function draw() {")
+    w("    ctx.clearRect(0,0,180,180);")
+    w("    ctx.save();")
+    w("    ctx.translate(90,90);")
+    w("    ctx.rotate(angle);")
+    w("    ctx.beginPath();")
+    w("    ctx.arc(0,0,85,0,Math.PI*2);")
+    w("    ctx.strokeStyle = '#00ff88';")
+    w("    ctx.lineWidth = 2;")
+    w("    ctx.shadowBlur = 15;")
+    w("    ctx.shadowColor = '#00ff88';")
+    w("    ctx.stroke();")
+    w("    ctx.restore();")
+    w("    angle += 0.12;")
+    w("    flights.forEach((f,i) => {")
+    w("      const x = 90 + Math.cos(angle + i*1.3) * (30 + i*20);")
+    w("      const y = 90 + Math.sin(angle + i*1.3) * (30 + i*20);")
+    w("      ctx.fillStyle = '#00e5ff';")
+    w("      ctx.fillRect(x-3,y-3,6,6);")
+    w("    });")
+    w("    requestAnimationFrame(draw);")
+    w("  }")
+    w("  draw();")
+    w("}")
+
+    # Search (simple)
+    w("function initSearch() {")
+    w("  const btn = document.getElementById('search-btn');")
+    w("  const bar = document.getElementById('searchbar');")
+    w("  const input = document.getElementById('search-input');")
+    w("  const close = document.getElementById('search-close');")
+    w("  const results = document.getElementById('search-results');")
+    w("  btn.onclick = () => bar.classList.toggle('open');")
+    w("  close.onclick = () => bar.classList.remove('open');")
+    w("  input.oninput = () => {")
+    w("    const term = input.value.toUpperCase().trim();")
+    w("    results.innerHTML = '';")
+    w("    if (!term) { results.style.display = 'none'; return; }")
+    w("    results.style.display = 'block';")
+    w("    const filtered = flights.filter(f => f.callsign.includes(term));")
+    w("    filtered.forEach(f => {")
+    w("      const d = document.createElement('div');")
+    w("      d.className = 'sresult-item';")
+    w("      d.textContent = f.callsign;")
+    w("      d.onclick = () => { showInfoPanel(f); bar.classList.remove('open'); input.value = ''; };")
+    w("      results.appendChild(d);")
+    w("    });")
+    w("    if (filtered.length === 0) results.innerHTML = '<div style=\"padding:12px;color:#ff4466\">Bulunamadı</div>';")
+    w("  };")
+    w("}")
+
+    # Panel toggle
+    w("function initPanel() {")
+    w("  const panel = document.getElementById('lpanel');")
+    w("  const toggle = document.getElementById('ptoggle');")
+    w("  const btn = document.getElementById('panel-btn');")
+    w("  let closed = false;")
+    w("  function togglePanel() {")
+    w("    closed = !closed;")
+    w("    panel.classList.toggle('closed', closed);")
+    w("    toggle.classList.toggle('closed', closed);")
+    w("    toggle.textContent = closed ? '◀' : '▶';")
+    w("  }")
+    w("  toggle.onclick = togglePanel;")
+    w("  btn.onclick = togglePanel;")
+    w("}")
+
+    # Tabs
+    w("function initTabs() {")
+    w("  document.querySelectorAll('.tabbt').forEach(btn => {")
+    w("    btn.onclick = () => {")
+    w("      document.querySelectorAll('.tabbt').forEach(b => b.classList.remove('on'));")
+    w("      btn.classList.add('on');")
+    w("      document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('on'));")
+    w("      document.getElementById(btn.dataset.tab + '-tab').classList.add('on');")
+    w("    };")
+    w("  });")
+    w("}")
+
+    # Token modal logic (demo button allows skipping)
+    w("function initModal() {")
+    w("  const modal = document.getElementById('modal');")
+    w("  const tokenInput = document.getElementById('token-input');")
+    w("  const err = document.getElementById('token-err');")
+    w("  const saved = document.getElementById('token-saved');")
+    w("  const startBtn = document.getElementById('start-btn');")
+    w("  const demoBtn = document.getElementById('demo-btn');")
+    w("  const savedToken = localStorage.getItem(MAPBOX_TOKEN_KEY);")
+    w("  if (savedToken) {")
+    w("    modal.classList.add('gone');")
+    w("    initMap(savedToken);")
+    w("    return;")
+    w("  }")
+    w("  startBtn.onclick = () => {")
+    w("    const token = tokenInput.value.trim();")
+    w("    if (!token.startsWith('pk.eyJ')) {")
+    w("      err.textContent = 'Geçerli Mapbox public token girin!';")
+    w("      return;")
+    w("    }")
+    w("    localStorage.setItem(MAPBOX_TOKEN_KEY, token);")
+    w("    saved.classList.add('show');")
+    w("    setTimeout(() => { modal.classList.add('gone'); initMap(token); }, 800);")
+    w("  };")
+    w("  demoBtn.onclick = () => {")
+    w("    modal.classList.add('gone');")
+    w("    document.getElementById('loading').classList.add('active');")
+    w("    setTimeout(() => {")
+    w("      initMap('DEMO-TOKEN-NOT-REAL-BUT-WORKS-FOR-TEST');")
+    w("    }, 1200);")
+    w("  };")
+    w("}")
+
+    # Final startup
+    w("window.onload = () => {")
+    w("  initModal();")
+    w("  initSearch();")
+    w("  initPanel();")
+    w("  initTabs();")
+    w("};")
+    w("</script>")
+    w("</html>")
+
+    with open(HTML, "w", encoding="utf-8") as f:
+        f.write("".join(L))
+
+build()
+print("✅ HTML oluşturuldu → " + HTML)
 PYEOF
 
-printf "  ${G}Sunucu http://localhost:$PORT adresinde basliyor...${N}\n"
-sleep 1
-command -v termux-open-url &>/dev/null && termux-open-url "http://localhost:$PORT"
-$PY -m http.server $PORT --directory $TMPD
+printf "  \( {G}Tamamlandı! Sadece 3 uçak (demo) yüklendi. \){N}\n"
+printf "  \( {C}Kayseri merkezli • Mapbox token ile (veya demo tuşu) \){N}\n"
+printf "  ${Y}Dosya: \( {HTML} \){N}\n\n"
+
+# Açma (Termux / Linux / macOS uyumlu)
+if command -v termux-open-url &>/dev/null; then
+  termux-open-url "file://${HTML}"
+elif command -v xdg-open &>/dev/null; then
+  xdg-open "${HTML}"
+elif command -v open &>/dev/null; then
+  open "${HTML}"
+else
+  printf "  \( {Y}→ Tarayıcıda manuel aç: file:// \){HTML}${N}\n"
+fi
+
+printf "\n\( {G}Keyifli takipler Ümit! ✈️ (3 uçak sürekli hareket ediyor) \){N}\n"
