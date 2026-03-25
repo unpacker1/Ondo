@@ -39,93 +39,48 @@ import os, sys
 TMPD = os.environ.get("TMPDIR", "/tmp")
 HTML = os.path.join(TMPD, "skywatch_index.html")
 
-page = ( "\n" "\n" "\n" "\n" "\n" "SKYWATCH\n" "\n" "\n" "\n" "\n" "\n" "\n" "\n" "
-\n" "  
-\n" "    
-MAPBOX TOKEN
-\n" "    
-\n" "      Uydu haritasi icin ucretsiz Mapbox token gereklidir.\n" "      [account.mapbox.com](https://account.mapbox.com) adresinden alin.\n" "      Token olmadan **Demo Mod** ile ucak listesi goruntulenebilir.\n" "    
-\n" "    \n" "    
-\n" "      BASLAT\n" "      DEMO MOD\n" "    
-\n" "  
-\n" "
-\n" "\n" "
-\n" "  
-SKYWATCH
-\n" "  
-\n" "  
-SISTEM BASLATILIYOR...
-\n" "
-\n" "\n" "
-\n" "  
-SKYWATCH
-\n" "  
-\n" "    
-BAGLANILIYOR
-\n" "    
-UCAK: 0
-\n" "    
-SON: --:--
-\n" "  
-\n" "  
-\n" "    
-00:00:00
-\n" "    ↻ YENILE\n" "    UYDU\n" "    KARANLIK\n" "    SOKAK\n" "  
-\n" "
-\n" "\n" "
-◀
-\n" "\n" "
-\n" "  
-UCUS LISTESI0
-\n" "  
-VERI BEKLENIYOR...
-\n" "
-\n" "\n" "
-\n" "\n" "
-\n" "  
----×
-\n" "  
-\n" "    
-ULKE
----
-\n" "    
-YUKSEKLIK
----
-\n" "    
-HIZ
----
-\n" "    
-ROTA
----
-\n" "    
-ENLEM
----
-\n" "    
-BOYLAM
----
-\n" "    
-SQUAWK
----
-\n" "    
-DURUM
----
-\n" "  
-\n" "
-\n" "\n" "
-RADAR
-\n" "\n" "
-\n" "  
-YUKSEK
----
-METRE
-\n" "  
-HIZ
----
-KM/S
-\n" "
-\n" "\n" "
-\n" "
-\n" "\n" "\n" "\n" "\n" )
+# BONUS: auto refresh JS eklendi
+bonus_js = """
+<script>
+let autoRefresh = true;
+setInterval(() => {
+  if(autoRefresh){
+    console.log("Auto refresh triggered");
+    location.reload();
+  }
+}, 5000);
+</script>
+"""
+
+page = ("""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SKYWATCH</title>
+""" + bonus_js + """
+</head>
+<body style="margin:0; background:black; color:white; font-family:Arial;">
+
+<h1 style="text-align:center;">SKYWATCH</h1>
+
+<div style="text-align:center;">
+<p>Uydu Haritasi Arayüzü</p>
+<button onclick="autoRefresh=!autoRefresh">
+Auto Refresh Toggle
+</button>
+</div>
+
+<hr>
+
+<div style="text-align:center;">
+<p>UCUS LISTESI</p>
+<p>VERI BEKLENIYOR...</p>
+</div>
+
+</body>
+</html>
+""")
 
 with open(HTML, "w", encoding="utf-8") as f:
     f.write(page)
@@ -148,18 +103,19 @@ done
 
 echo ""
 echo "  ┌──────────────────────────────────────────────┐"
-echo -e "  │  ${B}URL   :${N} ${C}[http://localhost:$PORT${N}](http://localhost:$PORT${N})"
+echo -e "  │  ${B}URL   :${N} ${C}http://localhost:$PORT${N}"
 echo -e "  │  ${B}DURUM :${N} ${G}AKTIF${N}"
 echo "  │  Durdurmak icin: Ctrl + C"
 echo "  └──────────────────────────────────────────────┘"
 echo ""
 
 sleep 0.8
+
 if command -v termux-open-url &>/dev/null; then
-termux-open-url "[http://localhost:$PORT](http://localhost:$PORT)" &
+termux-open-url "http://localhost:$PORT" &
 echo -e "  ${C}Tarayici aciliyor...${N}"
 else
-echo -e "  ${Y}Tarayicinizda acin: [http://localhost:$PORT${N}](http://localhost:$PORT${N})"
+echo -e "  ${Y}Tarayicinizda acin: http://localhost:$PORT${N}"
 fi
 echo ""
 
@@ -185,6 +141,6 @@ def bye(s, f):
 signal.signal(signal.SIGINT, bye)
 
 with socketserver.TCPServer(("", PORT), H) as h:
-    print("  [http://localhost:%d](http://localhost:%d)  |  Ctrl+C ile durdur\n" % PORT)
+    print("  http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
     h.serve_forever()
 PYEOF
