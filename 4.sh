@@ -33,12 +33,8 @@ HTML="skywatch.html"
 
 echo -e "  \( {C}HTML dosyası oluşturuluyor... \){N}"
 
-python3 << 'PYEOF'
-import os
-
-HTML = "skywatch.html"
-
-page = """<!DOCTYPE html>
+cat > "$HTML" << 'EOF'
+<!DOCTYPE html>
 <html lang='tr'>
 <head>
 <meta charset='UTF-8'>
@@ -128,7 +124,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 </style>
 </head>
 <body>
-
+<!-- Tüm HTML ve JavaScript içeriği (önceki versiyondan aynı) -->
 <div id='tm'>
   <div class='mb'>
     <div class='mt2'>MAPBOX TOKEN</div>
@@ -225,12 +221,10 @@ function parseS(s){
 function genDemo(){
   var al=['TK','LH','BA','AF','EK','QR','SU','PC','FR','W6'],
       co=['Turkey','Germany','UK','France','UAE','Qatar','Russia','USA','Spain'];
-  return Array.from({length:80},function(_,i){
-    return['dm'+i,al[i%al.length]+(100+i),co[i%co.length],null,null,
-      15+Math.random()*45,33+Math.random()*28,2000+Math.random()*11000,
-      false,200+Math.random()*700,Math.random()*360,null,null,null,
-      Math.floor(1000+Math.random()*8999)];
-  });
+  return Array.from({length:80},(_,i)=>['dm'+i,al[i%al.length]+(100+i),co[i%co.length],null,null,
+    15+Math.random()*45,33+Math.random()*28,2000+Math.random()*11000,
+    false,200+Math.random()*700,Math.random()*360,null,null,null,
+    Math.floor(1000+Math.random()*8999)]);
 }
 
 function initWithToken(){
@@ -246,38 +240,28 @@ function initDemo(){demoMode=true;document.getElementById('tm').classList.add('h
 async function boot(demo){
   var lb=document.getElementById('lb'),lt=document.getElementById('lt');
   var steps=[[20,'OPENSKY BAĞLANTISI...'],[50,'HARİTA YÜKLENİYOR...'],[75,'VERİ ALINIYOR...'],[95,'RADAR BAŞLATILIYOR...'],[100,'HAZIR']];
-  for(var i=0;i<steps.length;i++){
+  for(let i=0;i<steps.length;i++){
     lb.style.width=steps[i][0]+'%';lt.textContent=steps[i][1];
-    await new Promise(function(r){setTimeout(r,380);});
+    await new Promise(r=>setTimeout(r,380));
   }
-  await new Promise(function(r){setTimeout(r,250);});
+  await new Promise(r=>setTimeout(r,250));
   document.getElementById('ld').classList.add('hide');
   if(demo)initNoMap();else initMap();
   startRadar();startClock();loadFlights();startRfTimer();
 }
 
-function startClock(){
-  setInterval(function(){document.getElementById('clk').textContent=new Date().toTimeString().slice(0,8);},1000);
-}
+function startClock(){setInterval(()=>{document.getElementById('clk').textContent=new Date().toTimeString().slice(0,8);},1000);}
 
 function initMap(){
   mapboxgl.accessToken=mbToken;
-  map=new mapboxgl.Map({container:'map',style:'mapbox://styles/mapbox/standard-satellite',center:[35,40],zoom:4,antialias:true});
-  map.addControl(new mapboxgl.NavigationControl({showCompass:true}),'top-right');
-  map.on('load',function(){document.getElementById('sd').classList.remove('L');document.getElementById('st').textContent='CANLI';});
-  map.on('error',function(e){showNtf('Harita hatası',true);});
+  map=new mapboxgl.Map({container:'map',style:'mapbox://styles/mapbox/standard-satellite',center:[35,40],zoom:4});
+  map.addControl(new mapboxgl.NavigationControl(),'top-right');
+  map.on('load',()=>{document.getElementById('sd').classList.remove('L');document.getElementById('st').textContent='CANLI';});
 }
 
 function initNoMap(){
   var m=document.getElementById('map');
   m.style.background='radial-gradient(ellipse at 50% 50%,#020d1a 0%,#020810 100%)';
-  var c=document.createElement('canvas');
-  c.style.cssText='position:absolute;inset:0;width:100%;height:100%';
-  m.appendChild(c);
-  var ctx=c.getContext('2d');c.width=window.innerWidth;c.height=window.innerHeight;
-  ctx.strokeStyle='rgba(0,255,136,.05)';ctx.lineWidth=1;
-  for(var x=0;x<c.width;x+=55){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke();}
-  for(var y=0;y<c.height;y+=55){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke();}
   document.getElementById('sd').classList.remove('L');document.getElementById('st').textContent='DEMO';
 }
 
@@ -285,16 +269,16 @@ var LS={satellite:'mapbox://styles/mapbox/standard-satellite',dark:'mapbox://sty
 
 function setLayer(l){
   if(demoMode||!map)return;
-  ['satellite','dark','street'].forEach(function(x){document.getElementById('l'+x[0]+'b').classList.toggle('A',x===l);});
+  ['satellite','dark','street'].forEach(x=>document.getElementById('l'+x[0]+'b').classList.toggle('A',x===l));
   map.setStyle(LS[l]);
-  map.once('style.load',function(){renderMarkers();});
+  map.once('style.load',()=>renderMarkers());
   showNtf(l.toUpperCase()+' KATMANI');
 }
 
 async function loadFlights(){
   document.getElementById('sd').classList.add('L');
   var raw=await fetchOpenSky();
-  flights=raw.map(parseS).filter(function(f){return f.lat&&f.lon&&!f.ground;});
+  flights=raw.map(parseS).filter(f=>f.lat&&f.lon&&!f.ground);
   document.getElementById('pc').textContent=flights.length;
   document.getElementById('lu').textContent=new Date().toTimeString().slice(0,5);
   document.getElementById('pct').textContent=flights.length;
@@ -307,29 +291,29 @@ function refreshData(){resetRfTimer();loadFlights();showNtf('VERİ YENİLENDİ')
 
 function renderList(){
   var fl=document.getElementById('fl');fl.innerHTML='';
-  flights.slice(0,150).forEach(function(f){
+  flights.slice(0,150).forEach(f=>{
     var d=document.createElement('div');
     d.className='fi'+(f.icao24===selIcao?' sel':'');
-    d.innerHTML='<div class=\"fc\">'+f.callsign+'</div><div class=\"fd\"><span>'+f.country+'</span><span>'+(f.alt?f.alt+'m':'--')+'</span><span>'+(f.vel?f.vel+'km/s':'--')+'</span></div>';
-    d.onclick=function(){selectFlight(f);};
+    d.innerHTML=`<div class="fc">\( {f.callsign}</div><div class="fd"><span> \){f.country}</span><span>\( {f.alt?f.alt+'m':'--'}</span><span> \){f.vel?f.vel+'km/s':'--'}</span></div>`;
+    d.onclick=()=>selectFlight(f);
     fl.appendChild(d);
   });
 }
 
 function createEl(hdg,sel){
   var el=document.createElement('div');
-  el.style.cssText='width:'+(sel?18:13)+'px;height:'+(sel?18:13)+'px;cursor:pointer;filter:'+(sel?'drop-shadow(0 0 5px #00e5ff)':'drop-shadow(0 0 3px #00ff88)');
-  el.innerHTML='<svg viewBox=\"0 0 24 24\" fill=\"none\" style=\"transform:rotate('+(hdg||0)+'deg);width:100%;height:100%\"><path d=\"M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z\" fill=\"'+(sel?'#00e5ff':'#00ff88')+'\" opacity=\".9\"/></svg>';
+  el.style.cssText=`width:\( {sel?18:13}px;height: \){sel?18:13}px;cursor:pointer;filter:${sel?'drop-shadow(0 0 5px #00e5ff)':'drop-shadow(0 0 3px #00ff88)'}`;
+  el.innerHTML=`<svg viewBox="0 0 24 24" fill="none" style="transform:rotate(\( {hdg||0}deg);width:100%;height:100%"><path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill=" \){sel?'#00e5ff':'#00ff88'}" opacity=".9"/></svg>`;
   return el;
 }
 
 function renderMarkers(){
   if(!map)return;
-  Object.values(markers).forEach(function(m){m.remove();});markers={};
-  flights.forEach(function(f){
+  Object.values(markers).forEach(m=>m.remove());markers={};
+  flights.forEach(f=>{
     var el=createEl(f.hdg,f.icao24===selIcao);
     var m=new mapboxgl.Marker({element:el}).setLngLat([f.lon,f.lat]).addTo(map);
-    el.addEventListener('click',function(){selectFlight(f);});
+    el.addEventListener('click',()=>selectFlight(f));
     markers[f.icao24]=m;
   });
 }
@@ -346,8 +330,8 @@ function selectFlight(f){
   document.getElementById('isq').textContent=f.sqk||'---';
   document.getElementById('ign').textContent=f.ground?'Yerde':'Havada';
   document.getElementById('ip').classList.add('vis');
-  document.getElementById('ha').textContent=f.alt?f.alt:'---';
-  document.getElementById('hs').textContent=f.vel?f.vel:'---';
+  document.getElementById('ha').textContent=f.alt||'---';
+  document.getElementById('hs').textContent=f.vel||'---';
   renderList();
   if(map)renderMarkers();
 }
@@ -370,12 +354,12 @@ function showNtf(txt,err=false){
   n.textContent=txt;
   n.classList.add('sh');
   if(err)n.classList.add('er');
-  setTimeout(function(){n.classList.remove('sh','er');},2800);
+  setTimeout(()=>{n.classList.remove('sh','er');},2800);
 }
 
 function startRfTimer(){
   if(rfInt)clearInterval(rfInt);
-  rfInt=setInterval(function(){loadFlights();},RF);
+  rfInt=setInterval(()=>loadFlights(),RF);
 }
 
 function resetRfTimer(){
@@ -386,33 +370,24 @@ function resetRfTimer(){
 function startRadar(){
   var canvas=document.getElementById('rv');
   var ctx=canvas.getContext('2d');
-  var w=canvas.width,h=canvas.height;
+  var w=canvas.width, h=canvas.height;
   function draw(){
     ctx.clearRect(0,0,w,h);
     ctx.strokeStyle='rgba(0,255,136,0.15)';
-    ctx.lineWidth=1;
     for(let i=1;i<5;i++){
-      ctx.beginPath();
-      ctx.arc(w/2,h/2,i*18,0,Math.PI*2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(w/2,h/2,i*18,0,Math.PI*2); ctx.stroke();
     }
     radarA=(radarA+4)%360;
     ctx.save();
     ctx.translate(w/2,h/2);
     ctx.rotate(radarA*Math.PI/180);
-    ctx.strokeStyle='#00ff88';
-    ctx.lineWidth=2;
-    ctx.shadowBlur=15;
-    ctx.shadowColor='#00ff88';
-    ctx.beginPath();
-    ctx.moveTo(0,0);
-    ctx.lineTo(0,-h/2+5);
-    ctx.stroke();
+    ctx.strokeStyle='#00ff88'; ctx.lineWidth=2; ctx.shadowBlur=15; ctx.shadowColor='#00ff88';
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-h/2+5); ctx.stroke();
     ctx.restore();
     ctx.fillStyle='#00e5ff';
     for(let i=0;i<6;i++){
       let a=(radarA+i*60)*Math.PI/180;
-      ctx.fillRect(w/2+Math.cos(a)*35,h/2+Math.sin(a)*35,3,3);
+      ctx.fillRect(w/2+Math.cos(a)*35, h/2+Math.sin(a)*35, 3, 3);
     }
     requestAnimationFrame(draw);
   }
@@ -421,35 +396,29 @@ function startRadar(){
 
 window.onload=function(){
   var saved=localStorage.getItem('mbt');
-  if(saved&&saved.startsWith('pk.')){
+  if(saved && saved.startsWith('pk.')){
     mbToken=saved;
     document.getElementById('tm').classList.add('hide');
     boot(false);
-  }else{
+  } else {
     document.getElementById('tm').style.display='flex';
   }
 }
 </script>
 </body>
 </html>
-"""
+EOF
 
-with open(HTML, 'w', encoding='utf-8') as f:
-    f.write(page)
+echo -e "  ${G}HTML oluşturuldu: \( {HTML} \){N}\n"
 
-print("HTML oluşturuldu:", HTML)
-PYEOF
+# IP bul
+IP=$(ip -4 addr | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n1)
+[ -z "$IP" ] && IP="127.0.0.1"
 
-echo -e "\n\( {G}Sunucu başlatılıyor... \){N}"
-IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n1)
-if [ -z "$IP" ]; then
-  IP="127.0.0.1 (WiFi bağlı değilse yerel)"
-fi
-
+echo -e "\( {G}Sunucu başlatılıyor... \){N}"
 echo -e "\( {C}Aynı ağdaki cihazlardan erişim: \){N}"
 echo -e "   \( {Y}http:// \){IP}:\( {PORT} \){N}"
-echo -e "   http://127.0.0.1:${PORT}  (bu cihazdan)"
-echo ""
-echo -e "\( {Y}Sunucuyu durdurmak için → Ctrl + C \){N}"
+echo -e "   http://127.0.0.1:${PORT}   (bu cihazdan)\n"
+echo -e "\( {Y}Durdurmak için → Ctrl + C \){N}"
 
-python3 -m http.server "\( PORT" --bind 0.0.0.0 --directory " \)(pwd)"
+python3 -m http.server "$PORT" --bind 0.0.0.0
