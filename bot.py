@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, jsonify import random import threading import time import requests import xml.etree.ElementTree as ET
+from flask import Flask,render_template_string,jsonify import random import threading import time import requests import xml.etree.ElementTree as ET
 
 app = Flask(name)
 
