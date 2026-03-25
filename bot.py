@@ -1,28 +1,33 @@
-from flask import Flask, Response, render_template_string, jsonify import random import threading import time
+from flask import Flask, Response, render_template_string, jsonify
+import random
+import threading
+import time
 
-app = Flask(name)
+app = Flask(__name__)
 
------------------------------
+# -----------------------------
+# Simulated live data
+# -----------------------------
+data_store = {
+    "values": []
+}
 
-Simulated live data
-
------------------------------
-
-data_store = { "values": [] }
-
-def generate_data(): while True: new_value = random.randint(0, 100) if len(data_store["values"]) > 50: data_store["values"].pop(0) data_store["values"].append(new_value) time.sleep(1)
+def generate_data():
+    while True:
+        new_value = random.randint(0, 100)
+        if len(data_store["values"]) > 50:
+            data_store["values"].pop(0)
+        data_store["values"].append(new_value)
+        time.sleep(1)
 
 threading.Thread(target=generate_data, daemon=True).start()
 
------------------------------
-
-UI (Single Page with Chart + 3D Map)
-
------------------------------
-
+# -----------------------------
+# UI (Single Page with Chart + 3D Map)
+# -----------------------------
 HTML_PAGE = """
-
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html>
 <head>
     <title>Termux Control Panel</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -47,26 +52,30 @@ HTML_PAGE = """
             border-radius: 12px;
             box-shadow: 0 0 20px rgba(0,0,0,0.4);
         }
-        canvas {
-            max-width: 100%;
-        }
         #map3d {
             width: 100%;
             height: 400px;
         }
     </style>
 </head>
-<body><h1>Termux Live Control Panel</h1><div class="container"><div class="card">
-    <canvas id="chart"></canvas>
+<body>
+
+<h1>Termux Live Control Panel</h1>
+
+<div class="container">
+
+    <div class="card">
+        <canvas id="chart"></canvas>
+    </div>
+
+    <div class="card">
+        <h3>3D Map</h3>
+        <div id="map3d"></div>
+    </div>
+
 </div>
 
-<div class="card">
-    <h3>3D Map</h3>
-    <div id="map3d"></div>
-</div>
-
-</div><script>
-    // ---------------- Chart ----------------
+<script>
     const ctx = document.getElementById('chart').getContext('2d');
 
     const chart = new Chart(ctx, {
@@ -97,7 +106,7 @@ HTML_PAGE = """
 
     setInterval(fetchData, 1000);
 
-    // ---------------- 3D MAP (Three.js Globe) ----------------
+    // ---------------- 3D MAP ----------------
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 400, 0.1, 1000);
 
@@ -119,22 +128,21 @@ HTML_PAGE = """
         renderer.render(scene, camera);
     }
     animate();
-</script></body>
+</script>
+
+</body>
 </html>
-"""-----------------------------
+"""
 
-Routes
+@app.route("/")
+def index():
+    return render_template_string(HTML_PAGE)
 
------------------------------
+@app.route("/data")
+def get_data():
+    return jsonify(data_store)
 
-@app.route("/") def index(): return render_template_string(HTML_PAGE)
-
-@app.route("/data") def get_data(): return jsonify(data_store)
-
------------------------------
-
-Run server with random port
-
------------------------------
-
-if name == "main": port = random.randint(5000, 9000) print(f"Server running on http://127.0.0.1:{port}") app.run(host="0.0.0.0", port=port)
+if __name__ == "__main__":
+    port = random.randint(5000, 9000)
+    print(f"Server running on http://127.0.0.1:{port}")
+    app.run(host="0.0.0.0", port=port)
