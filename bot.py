@@ -12,11 +12,13 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 PORT = random.randint(2000, 9000)
 
+# -------------------------
+# REACTORS
+# -------------------------
 reactors = {
     f"RX{i}": {
         "temperature": np.random.uniform(100, 140),
         "target": np.random.uniform(140, 180),
-        "auto": True,
         "stability": 0,
         "energy": 0,
         "history": []
@@ -28,7 +30,7 @@ prev_error = {r: 0 for r in reactors}
 integral = {r: 0 for r in reactors}
 
 # -------------------------
-# LOOP
+# SIMULATION LOOP
 # -------------------------
 def loop():
     while True:
@@ -36,21 +38,19 @@ def loop():
 
             error = d["target"] - d["temperature"]
 
-            if d["auto"]:
-                Kp = 0.9
-                Ki = 0.01
-                Kd = 0.4
+            Kp = 0.9
+            Ki = 0.01
+            Kd = 0.4
 
-                integral[r] += error
-                derivative = error - prev_error[r]
+            integral[r] += error
+            derivative = error - prev_error[r]
 
-                control = (Kp * error) + (Ki * integral[r]) + (Kd * derivative)
+            control = (Kp * error) + (Ki * integral[r]) + (Kd * derivative)
 
-                d["temperature"] += control * 0.05
+            d["temperature"] += control * 0.05
+            prev_error[r] = error
 
-                prev_error[r] = error
-
-            d["temperature"] += np.random.uniform(-1, 1)
+            d["temperature"] += np.random.uniform(-1.2, 1.2)
 
             d["stability"] = max(0, 100 - abs(d["temperature"] - d["target"]))
             d["energy"] = d["temperature"] * d["stability"] / 100
@@ -59,8 +59,8 @@ def loop():
             if len(d["history"]) > 60:
                 d["history"].pop(0)
 
-            if d["stability"] < 30:
-                logs.append(f"{datetime.now().strftime('%H:%M:%S')} {r} WARNING")
+            if d["stability"] < 35:
+                logs.append(f"{datetime.now().strftime('%H:%M:%S')} ⚠ {r} instability")
 
         if len(logs) > 100:
             logs.pop(0)
@@ -69,13 +69,13 @@ def loop():
         time.sleep(1)
 
 # -------------------------
-# NASA UI
+# UI
 # -------------------------
 HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-<title>NASA Mission Control</title>
+<title>NASA SCADA</title>
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -88,7 +88,6 @@ body{
     font-family:Arial;
 }
 
-/* header */
 .header{
     text-align:center;
     padding:10px;
@@ -96,12 +95,10 @@ body{
     border-bottom:2px solid #00f0ff;
 }
 
-/* layout */
 .container{
     display:flex;
 }
 
-/* sidebar */
 .sidebar{
     width:180px;
     background:#001219;
@@ -116,16 +113,13 @@ body{
     background:#00f0ff;
     border:none;
     cursor:pointer;
-    font-weight:bold;
 }
 
-/* main */
 .main{
     flex:1;
     padding:10px;
 }
 
-/* cards */
 .grid{
     display:grid;
     grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
@@ -139,22 +133,29 @@ body{
     background:#001219;
 }
 
-/* metrics */
 .metric{
     font-size:22px;
     font-weight:bold;
 }
 
-/* alarms */
-.ok{color:lime;}
-.warn{color:orange;}
+#status{
+    text-align:center;
+    padding:5px;
+    color:lime;
+}
+
+canvas{
+    margin-top:10px;
+}
+
 </style>
 </head>
 
 <body>
 
 <div class="header">
-<h2>🚀 NASA MISSION CONTROL</h2>
+<h2>🚀 NASA MISSION CONTROL SCADA</h2>
+<div id="status">Connecting...</div>
 </div>
 
 <div class="container">
@@ -170,26 +171,15 @@ body{
 
 <div class="grid">
 
-<div class="card">
-Temperature
-<div class="metric" id="temp"></div>
+<div class="card">Temperature <div class="metric" id="temp">0</div></div>
+<div class="card">Target <div class="metric" id="target">0</div></div>
+<div class="card">Stability <div class="metric" id="stab">0</div></div>
+<div class="card">Energy <div class="metric" id="energy">0</div></div>
+
 </div>
 
 <div class="card">
-Target
-<div class="metric" id="target"></div>
-</div>
-
-<div class="card">
-Stability
-<div class="metric" id="stab"></div>
-</div>
-
-<div class="card">
-Energy
-<div class="metric" id="energy"></div>
-</div>
-
+<canvas id="reactorCanvas" width="400" height="200"></canvas>
 </div>
 
 <canvas id="chart"></canvas>
@@ -208,9 +198,59 @@ const socket = io();
 let selected = "RX1";
 let chartData = [];
 
+// UI status
+socket.on("connect", ()=>{
+    document.getElementById("status").innerText = "CONNECTED";
+});
+
+socket.on("disconnect", ()=>{
+    document.getElementById("status").innerText = "DISCONNECTED";
+});
+
 function select(r){
     selected = r;
     document.getElementById("selected").innerText = r;
+}
+
+// canvas reactor animation
+let canvas = document.getElementById("reactorCanvas");
+let ctx = canvas.getContext("2d");
+let particles = [];
+
+function createParticles(temp){
+    particles = [];
+    let count = Math.floor(temp / 5);
+    for(let i=0;i<count;i++){
+        particles.push({
+            x: Math.random()*400,
+            y: Math.random()*200,
+            dx: (Math.random()-0.5)*2,
+            dy: (Math.random()-0.5)*2
+        });
+    }
+}
+
+function draw(temp){
+    ctx.clearRect(0,0,400,200);
+
+    let glow = Math.min(1, temp/200);
+
+    ctx.fillStyle = "rgba(0,255,255,"+glow+")";
+    ctx.beginPath();
+    ctx.arc(200,100,30+glow*25,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = "#00f0ff";
+
+    particles.forEach(p=>{
+        p.x += p.dx;
+        p.y += p.dy;
+
+        if(p.x<0||p.x>400) p.dx*=-1;
+        if(p.y<0||p.y>200) p.dy*=-1;
+
+        ctx.fillRect(p.x,p.y,2,2);
+    });
 }
 
 socket.on("update",(data)=>{
@@ -231,6 +271,9 @@ socket.on("update",(data)=>{
         document.getElementById("energy").innerText = d.energy.toFixed(1);
 
         chartData = d.history;
+
+        createParticles(d.temperature);
+        draw(d.temperature);
     }
 
     document.getElementById("log").innerHTML = data.logs.join("<br>");
@@ -239,9 +282,9 @@ socket.on("update",(data)=>{
     chart.update();
 });
 
-let ctx = document.getElementById("chart").getContext("2d");
+let ctx2 = document.getElementById("chart").getContext("2d");
 
-let chart = new Chart(ctx,{
+let chart = new Chart(ctx2,{
     type:'line',
     data:{
         labels:Array(60).fill(""),
@@ -265,9 +308,9 @@ def home():
     return render_template_string(HTML)
 
 # -------------------------
-# LOOP START
+# START
 # -------------------------
 if __name__ == "__main__":
-    print(f"NASA UI running on http://127.0.0.1:{PORT}")
+    print(f"SCADA running on http://127.0.0.1:{PORT}")
     threading.Thread(target=loop, daemon=True).start()
     socketio.run(app, host="0.0.0.0", port=PORT)
