@@ -1,144 +1,405 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════╗
-# ║  SKYWATCH ULTIMATE — All Improvements Included       ║
-# ║  OpenSky OAuth2 + ADS-B Exchange + Follow + Cache    ║
+# ║  SKYWATCH — Termux All-in-One Launcher (Sade + Fix)  ║
+# ║  Calistir: bash skywatch.sh                          ║
 # ╚══════════════════════════════════════════════════════╝
 
 G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
 
 clear
 echo ""
-echo -e "\( {G} \){B}  SKYWATCH ULTIMATE 2026${N}"
-echo -e "  Tüm Geliştirmeler Dahil — OAuth2 + Yedek API + Follow"
-echo "  ──────────────────────────────────────────────────────"
+echo -e "\( {G} \){B}"
+echo "  ███████╗██╗  ██╗██╗   ██╗██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗"
+echo "  ██╔════╝██║ ██╔╝╚██╗ ██╔╝██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║"
+echo "  ███████╗█████╔╝  ╚████╔╝ ██║ █╗ ██║███████║   ██║   ██║     ███████║"
+echo "  ╚════██║██╔═██╗   ╚██╔╝  ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║"
+echo "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║"
+echo "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝"
+echo -e "${N}"
+echo -e "  \( {C}Canli Ucak Takip — OpenSky + Mapbox Uydu (Sade Fix) \){N}"
+echo "  ───────────────────────────────────────────"
 echo ""
 
-PY=$(command -v python3 || command -v python)
-if [ -z "$PY" ]; then
-  echo -e "  \( {Y}Python kuruluyor... \){N}"
+# Python kontrol
+if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
+  echo -e "  \( {Y}Python yukleniyor... \){N}"
   pkg install python -y
-  PY=$(command -v python3 || command -v python)
 fi
 
+PY=$(command -v python3 || command -v python)
 TMPD="${TMPDIR:-/tmp}"
-HTML="$TMPD/skywatch_ultimate.html"
+HTML="$TMPD/skywatch_index.html"
 
-# Dinamik port
+# Dinamik port bul
 PORT=8080
-while ss -tuln | grep -q ":$PORT "; do ((PORT++)); done
+while ss -tuln | grep -q ":$PORT " 2>/dev/null; do
+  ((PORT++))
+done
 
-echo -e "  \( {C}Gelişmiş HTML oluşturuluyor... \){N}"
+echo -e "  \( {C}HTML olusturuluyor... \){N}"
 
 $PY << 'PYEOF'
 import os
 TMPD = os.environ.get("TMPDIR", "/tmp")
-HTML = os.path.join(TMPD, "skywatch_ultimate.html")
+HTML = os.path.join(TMPD, "skywatch_index.html")
 
-page = """<!DOCTYPE html>
-<html lang="tr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SKYWATCH ULTIMATE</title>
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-:root{--g:#00ff88;--c:#00e5ff;--o:#ff6b35;--d:#020810;--p:rgba(2,15,25,0.95);--b:rgba(0,255,136,0.25)}
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--d);color:var(--c);font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh}
-#map{position:absolute;inset:0}
-.topbar,.lp,.ip{position:fixed;background:var(--p);border:1px solid var(--b);backdrop-filter:blur(12px);z-index:100}
-.filterbar,.settings{padding:8px 14px;border-bottom:1px solid var(--b)}
-.fbtn,.btn{background:rgba(0,255,136,.1);border:1px solid var(--b);color:var(--g);padding:5px 10px;cursor:pointer;font-size:10px}
-.fbtn.active,.btn.active{background:var(--g);color:#000}
-.search{width:100%;padding:8px;background:rgba(0,229,255,.1);border:1px solid var(--b);color:var(--c);margin:4px 0}
-.mapboxgl-popup-content{background:var(--p);border:1px solid var(--b);color:var(--c)}
-</style>
-</head>
-<body>
-
-<div id="tm"> <!-- Token & Ayarlar Ekranı -->
-  <div style="position:fixed;inset:0;background:rgba(2,8,16,.96);display:flex;align-items:center;justify-content:center;z-index:300">
-    <div style="background:var(--p);padding:30px;width:420px;max-width:95vw;border:1px solid var(--b)">
-      <h2 style="color:var(--g);font-family:Orbitron">SKYWATCH ULTIMATE</h2>
-      <p>OpenSky OAuth2 Client ID & Secret girin (https://opensky-network.org/my-opensky/account)</p>
-      <input id="clientid" placeholder="Client ID" style="width:100%;padding:10px;margin:8px 0;background:rgba(0,229,255,.1);border:1px solid var(--b);color:var(--c)">
-      <input id="clientsecret" type="password" placeholder="Client Secret" style="width:100%;padding:10px;margin:8px 0;background:rgba(0,229,255,.1);border:1px solid var(--b);color:var(--c)">
-      <button onclick="saveTokens()" class="btn" style="width:100%;padding:12px;margin-top:10px">Token Kaydet ve Başlat</button>
-      <button onclick="startWithDemo()" class="btn" style="width:100%;padding:12px;margin-top:8px;background:rgba(255,107,53,.2)">Demo Mod (Hemen Başla)</button>
-      <div id="tokenstatus" style="margin-top:10px;font-size:11px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Diğer UI elementleri (topbar, lp, map, ip, radar vb.) orijinal + yeni filtreler, ayarlar butonu ile aynı şekilde devam eder -->
-<!-- Tam HTML çok uzun olduğu için burada özetledim. Gerçek kodda tüm orijinal HTML + yeni JS fonksiyonları tam olarak yer alır. -->
-
-<script>
-// === ANA JS ===
-let map, accessToken = '', useOAuth = false, clientId = '', clientSecret = '';
-let flights = [], selIcao = null, trails = {}, followMode = false;
-let currentSource = 'opensky'; // 'opensky' or 'adsbexchange'
-
-async function getOAuthToken() {
-  if (!clientId || !clientSecret) return null;
-  try {
-    const res = await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: `grant_type=client_credentials&client_id=\( {clientId}&client_secret= \){clientSecret}`
-    });
-    const data = await res.json();
-    return data.access_token;
-  } catch(e) { return null; }
-}
-
-async function fetchWithAuth(url) {
-  let token = await getOAuthToken();
-  if (token) {
-    const res = await fetch(url, {headers: {Authorization: `Bearer ${token}`}});
-    if (res.ok) return res.json();
-  }
-  // Yedek: ADS-B Exchange
-  currentSource = 'adsbexchange';
-  showNtf('OpenSky başarısız → ADS-B Exchange kullanıyor', true);
-  const res = await fetch('https://adsbexchange.com/api/aircraft/');
-  return res.json();
-}
-
-// Diğer tüm fonksiyonlar (loadFlights, renderMarkers, followAircraft, cache sistemi, bildirimler, cluster vs.) buraya eklenmiştir.
-// Trail fade, uçak renkleri (callsign bazlı), follow modu, ayarlar paneli tam çalışır durumdadır.
-
-function saveTokens() {
-  clientId = document.getElementById('clientid').value.trim();
-  clientSecret = document.getElementById('clientsecret').value.trim();
-  localStorage.setItem('osClientId', clientId);
-  localStorage.setItem('osClientSecret', clientSecret);
-  document.getElementById('tm').style.display = 'none';
-  boot();
-}
-
-function startWithDemo() {
-  document.getElementById('tm').style.display = 'none';
-  boot(true);
-}
-
-// boot, initMap, initLayers, renderMarkers, selectFlight, follow toggle, cache save/load vb. tüm fonksiyonlar geliştirilmiş halde.
-
-</script>
-</body>
-</html>""";
+page = (
+"<!DOCTYPE html>\n"
+"<html lang='tr'>\n"
+"<head>\n"
+"<meta charset='UTF-8'>\n"
+"<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n"
+"<title>SKYWATCH</title>\n"
+"<link href='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css' rel='stylesheet'>\n"
+"<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>\n"
+"<link href='https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap' rel='stylesheet'>\n"
+"<style>\n"
+":root{--g:#00ff88;--c:#00e5ff;--o:#ff6b35;--d:#020810;--p:rgba(2,15,25,0.92);--b:rgba(0,255,136,0.25);--t:#a8ffd4}\n"
+"*{margin:0;padding:0;box-sizing:border-box}\n"
+"body{background:var(--d);color:var(--t);font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;width:100vw}\n"
+"body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.015) 2px,rgba(0,255,136,.015) 4px);pointer-events:none;z-index:9999}\n"
+"#map{position:absolute;top:0;left:0;width:100%;height:100%}\n"
+".topbar{position:fixed;top:0;left:0;right:0;height:54px;background:var(--p);border-bottom:1px solid var(--b);display:flex;align-items:center;padding:0 16px;gap:14px;z-index:100;backdrop-filter:blur(12px)}\n"
+".logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:17px;color:var(--g);letter-spacing:4px;text-shadow:0 0 20px rgba(0,255,136,.6);white-space:nowrap}\n"
+".stats{display:flex;gap:14px;flex:1;overflow:hidden}\n"
+".sc{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(168,255,212,.65);white-space:nowrap}\n"
+".sc .v{color:var(--c);font-size:13px}\n"
+".dot{width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 8px var(--g);animation:pulse 1.5s infinite}\n"
+".dot.L{background:var(--o);box-shadow:0 0 8px var(--o)}\n"
+"@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}\n"
+".tr{display:flex;align-items:center;gap:7px;margin-left:auto}\n"
+".clk{font-size:12px;color:var(--c);letter-spacing:2px}\n"
+".btn{background:transparent;border:1px solid var(--b);color:var(--g);font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 9px;cursor:pointer;letter-spacing:1px;transition:all .2s;white-space:nowrap}\n"
+".btn:hover,.btn.A{background:rgba(0,255,136,.1);border-color:var(--g);box-shadow:0 0 10px rgba(0,255,136,.2)}\n"
+".lp{position:fixed;top:54px;left:0;bottom:0;width:255px;background:var(--p);border-right:1px solid var(--b);backdrop-filter:blur(12px);z-index:100;display:flex;flex-direction:column;transition:transform .3s}\n"
+".lp.hide{transform:translateX(-255px)}\n"
+".ph{padding:11px 14px;border-bottom:1px solid var(--b);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;color:var(--g);display:flex;justify-content:space-between}\n"
+".fl{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--b) transparent}\n"
+".fi{padding:9px 14px;border-bottom:1px solid rgba(0,255,136,.07);cursor:pointer;transition:background .15s}\n"
+".fi:hover,.fi.sel{background:rgba(0,255,136,.08)}\n"
+".fc{font-family:'Orbitron',sans-serif;font-size:12px;color:var(--c);letter-spacing:1px}\n"
+".fd{font-size:10px;color:rgba(168,255,212,.5);display:flex;gap:10px;margin-top:3px}\n"
+".ptg{position:fixed;top:68px;left:255px;width:18px;height:36px;background:var(--p);border:1px solid var(--b);border-left:none;z-index:101;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:var(--g);transition:left .3s}\n"
+".ptg:hover{background:rgba(0,255,136,.1)}\n"
+".ptg.hide{left:0}\n"
+".ip{position:fixed;bottom:18px;right:18px;width:285px;background:var(--p);border:1px solid var(--b);backdrop-filter:blur(16px);z-index:100;display:none}\n"
+".ip.vis{display:block}\n"
+".ih{padding:10px 14px;background:rgba(0,255,136,.07);border-bottom:1px solid var(--b);font-family:'Orbitron',sans-serif;font-size:13px;color:var(--c);letter-spacing:2px;display:flex;justify-content:space-between;align-items:center}\n"
+".ix{cursor:pointer;color:rgba(168,255,212,.45);font-size:17px}\n"
+".ix:hover{color:var(--o)}\n"
+".ib{padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}\n"
+".ifd{display:flex;flex-direction:column;gap:3px}\n"
+".il{font-size:9px;color:rgba(168,255,212,.4);letter-spacing:2px;text-transform:uppercase}\n"
+".iv{font-size:13px;color:var(--g);font-family:'Orbitron',sans-serif}\n"
+".iv.h{color:var(--c)}\n"
+".rc{position:fixed;bottom:18px;left:18px;z-index:100;background:var(--p);border:1px solid var(--b);padding:8px;backdrop-filter:blur(12px)}\n"
+".rl{font-size:9px;color:rgba(168,255,212,.4);letter-spacing:2px;margin-bottom:5px;text-transform:uppercase}\n"
+".hm{position:fixed;top:50%;right:18px;transform:translateY(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;opacity:0;transition:opacity .3s;pointer-events:none}\n"
+".hm.vis{opacity:1}\n"
+".mt{background:var(--p);border:1px solid var(--b);padding:9px 11px;width:82px;backdrop-filter:blur(12px)}\n"
+".mla{font-size:8px;color:rgba(168,255,212,.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:3px}\n"
+".mv{font-family:'Orbitron',sans-serif;font-size:17px;color:var(--c);line-height:1}\n"
+".mu{font-size:8px;color:rgba(168,255,212,.45);margin-top:2px}\n"
+".ntf{position:fixed;top:68px;right:18px;background:var(--p);border:1px solid var(--b);padding:9px 14px;font-size:11px;color:var(--c);z-index:150;transform:translateX(120%);transition:transform .3s;letter-spacing:1px}\n"
+".ntf.sh{transform:translateX(0)}\n"
+".ntf.er{color:var(--o);border-color:rgba(255,107,53,.4)}\n"
+".rb{position:fixed;bottom:0;left:0;right:0;height:2px;background:rgba(0,255,136,.07);z-index:100}\n"
+".rp{height:100%;background:var(--g);box-shadow:0 0 8px var(--g);width:100%}\n"
+".mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right{display:none!important}\n"
+".mapboxgl-popup-content{background:var(--p)!important;border:1px solid var(--b)!important;color:var(--t)!important;font-family:'Share Tech Mono',monospace!important;font-size:11px!important;padding:9px 13px!important;border-radius:0!important}\n"
+".mapboxgl-popup-tip{display:none!important}\n"
+"#ld{position:fixed;inset:0;background:var(--d);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .5s}\n"
+"#ld.hide{opacity:0;pointer-events:none}\n"
+".ll{font-family:'Orbitron',sans-serif;font-size:34px;font-weight:900;color:var(--g);letter-spacing:8px;animation:glow 2s infinite}\n"
+"@keyframes glow{0%,100%{text-shadow:0 0 20px rgba(0,255,136,.4)}50%{text-shadow:0 0 60px rgba(0,255,136,.9)}}\n"
+".lbw{width:280px;height:2px;background:rgba(0,255,136,.12);overflow:hidden}\n"
+".lb{height:100%;background:var(--g);box-shadow:0 0 10px var(--g);width:0%;transition:width .4s}\n"
+".lt{font-size:11px;color:rgba(168,255,212,.45);letter-spacing:3px;text-transform:uppercase}\n"
+"#tm{position:fixed;inset:0;background:rgba(2,8,16,.96);z-index:300;display:flex;align-items:center;justify-content:center}\n"
+"#tm.hide{display:none}\n"
+".mb{background:var(--p);border:1px solid var(--b);padding:28px;width:440px;max-width:95vw}\n"
+".mt2{font-family:'Orbitron',sans-serif;font-size:15px;color:var(--c);letter-spacing:3px;margin-bottom:8px}\n"
+".md{font-size:11px;color:rgba(168,255,212,.55);line-height:1.75;margin-bottom:18px}\n"
+".md a{color:var(--c);text-decoration:none}\n"
+".ti{width:100%;background:rgba(0,229,255,.05);border:1px solid var(--b);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:12px;padding:10px 13px;outline:none;margin-bottom:12px}\n"
+".ti:focus{border-color:var(--c)}\n"
+".ma{display:flex;gap:10px}\n"
+".bp{flex:1;background:rgba(0,255,136,.1);border:1px solid var(--g);color:var(--g);font-family:'Share Tech Mono',monospace;font-size:11px;padding:10px;cursor:pointer;letter-spacing:2px}\n"
+".bp:hover{background:rgba(0,255,136,.2)}\n"
+".bd{background:rgba(0,229,255,.07);border:1px solid rgba(0,229,255,.28);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:11px;padding:10px;cursor:pointer;letter-spacing:2px}\n"
+".bd:hover{background:rgba(0,229,255,.14)}\n"
+".fl::-webkit-scrollbar{width:3px}\n"
+".fl::-webkit-scrollbar-thumb{background:var(--b)}\n"
+"@media(max-width:600px){.lp{width:220px}.ptg{left:220px}.ptg.hide{left:0}.rc{display:none}.ip{right:8px;bottom:8px;width:calc(100vw - 16px)}}\n"
+"</style>\n"
+"</head>\n"
+"<body>\n"
+"\n"
+"<div id='tm'>\n"
+"  <div class='mb'>\n"
+"    <div class='mt2'>MAPBOX TOKEN</div>\n"
+"    <p class='md'>\n"
+"      Uydu haritasi icin ucretsiz Mapbox token gereklidir.<br>\n"
+"      <a href='https://account.mapbox.com' target='_blank'>account.mapbox.com</a> adresinden alin.<br><br>\n"
+"      Token olmadan <b>Demo Mod</b> ile ucak listesi goruntulenebilir.\n"
+"    </p>\n"
+"    <input class='ti' id='ti' type='text' placeholder='pk.eyJ1IjoiLi4uIiwiYSI6Ii4uLiJ9...'>\n"
+"    <div class='ma'>\n"
+"      <button class='bp' onclick='initWithToken()'>BASLAT</button>\n"
+"      <button class='bd' onclick='initDemo()'>DEMO MOD</button>\n"
+"    </div>\n"
+"  </div>\n"
+"</div>\n"
+"\n"
+"<div id='ld'>\n"
+"  <div class='ll'>SKYWATCH</div>\n"
+"  <div class='lbw'><div class='lb' id='lb'></div></div>\n"
+"  <div class='lt' id='lt'>SISTEM BASLATILIYOR...</div>\n"
+"</div>\n"
+"\n"
+"<div class='topbar'>\n"
+"  <div class='logo'>SKYWATCH</div>\n"
+"  <div class='stats'>\n"
+"    <div class='sc'><div class='dot L' id='sd'></div><span id='st'>BAGLANILIYOR</span></div>\n"
+"    <div class='sc'>UCAK: <span class='v' id='pc'>0</span></div>\n"
+"    <div class='sc'>TR: <span class='v' id='trc'>0</span></div>\n"
+"    <div class='sc'>SON: <span class='v' id='lu'>--:--</span></div>\n"
+"  </div>\n"
+"  <div class='tr'>\n"
+"    <div class='clk' id='clk'>00:00:00</div>\n"
+"    <button class='btn' onclick='refreshData()'>&#8635; YENILE</button>\n"
+"    <button class='btn A' id='lsb' onclick='setLayer(\"satellite\")'>UYDU</button>\n"
+"    <button class='btn' id='ldb' onclick='setLayer(\"dark\")'>KARANLIK</button>\n"
+"    <button class='btn' id='lrb' onclick='setLayer(\"street\")'>SOKAK</button>\n"
+"  </div>\n"
+"</div>\n"
+"\n"
+"<div class='ptg' id='ptg' onclick='togglePanel()'>&#9664;</div>\n"
+"\n"
+"<div class='lp' id='lp'>\n"
+"  <div class='ph'><span>UCUS LISTESI</span><span id='pct' style='color:var(--c)'>0</span></div>\n"
+"  <div class='fl' id='fl'><div style='padding:20px;text-align:center;color:rgba(168,255,212,.3);font-size:11px;letter-spacing:2px'>VERI BEKLENIYOR...</div></div>\n"
+"</div>\n"
+"\n"
+"<div id='map'></div>\n"
+"\n"
+"<div class='ip' id='ip'>\n"
+"  <div class='ih'><span id='ics'>---</span><span class='ix' onclick='closeInfo()'>&#215;</span></div>\n"
+"  <div class='ib'>\n"
+"    <div class='ifd'><div class='il'>ULKE</div><div class='iv' id='ico'>---</div></div>\n"
+"    <div class='ifd'><div class='il'>YUKSEKLIK</div><div class='iv h' id='ial'>---</div></div>\n"
+"    <div class='ifd'><div class='il'>HIZ</div><div class='iv' id='isp'>---</div></div>\n"
+"    <div class='ifd'><div class='il'>ROTA</div><div class='iv' id='ihe'>---</div></div>\n"
+"    <div class='ifd'><div class='il'>ENLEM</div><div class='iv' id='ila'>---</div></div>\n"
+"    <div class='ifd'><div class='il'>BOYLAM</div><div class='iv' id='ilo'>---</div></div>\n"
+"    <div class='ifd'><div class='il'>SQUAWK</div><div class='iv' id='isq'>---</div></div>\n"
+"    <div class='ifd'><div class='il'>DURUM</div><div class='iv' id='ign'>---</div></div>\n"
+"  </div>\n"
+"</div>\n"
+"\n"
+"<div class='rc'><div class='rl'>RADAR</div><canvas id='rv' width='96' height='96'></canvas></div>\n"
+"\n"
+"<div class='hm' id='hm'>\n"
+"  <div class='mt'><div class='mla'>YUKSEK</div><div class='mv' id='ha'>---</div><div class='mu'>METRE</div></div>\n"
+"  <div class='mt'><div class='mla'>HIZ</div><div class='mv' id='hs'>---</div><div class='mu'>KM/S</div></div>\n"
+"</div>\n"
+"\n"
+"<div class='ntf' id='ntf'></div>\n"
+"<div class='rb'><div class='rp' id='rp'></div></div>\n"
+"\n"
+"<script>\n"
+"var map=null, mbToken='', demoMode=false, flights=[], selIcao=null, panelOn=true, markers={}, rfInt=null, radarA=0, RF=25000;\n"
+"var trails = {}; // Basit trail sistemi\n"
+"\n"
+"async function fetchOpenSky(){\n"
+"  try{\n"
+"    var r=await fetch('https://opensky-network.org/api/states/all?lamin=35.5&lomin=25.5&lamax=42.5&lomax=45.5',{signal:AbortSignal.timeout(12000)});\n"
+"    if(!r.ok) throw 0;\n"
+"    var d=await r.json(); return d.states||[];\n"
+"  }catch(e){\n"
+"    showNtf('OpenSky baglanamadi → Demo mod aktif', true);\n"
+"    return genDemo();\n"
+"  }\n"
+"}\n"
+"\n"
+"function parseS(s){\n"
+"  return{icao24:s[0],callsign:(s[1]||'').trim()||s[0],country:s[2]||'?',lon:s[5],lat:s[6],\n"
+"    alt:s[7]?Math.round(s[7]):null,ground:s[8],vel:s[9]?Math.round(s[9]*3.6):null,\n"
+"    hdg:s[10]?Math.round(s[10]):null,sqk:s[14]||'?'};}\n"
+"\n"
+"function genDemo(){\n"
+"  var al=['TK','LH','BA','AF','EK','QR','SU','PC','FR','W6'],\n"
+"      co=['Turkey','Germany','UK','France','UAE','Qatar','Russia','USA','Spain'];\n"
+"  return Array.from({length:60},(_,i)=>['dm'+i,al[i%al.length]+(100+i),co[i%co.length],null,null,\n"
+"    28+Math.random()*35,33+Math.random()*12,3000+Math.random()*9000,false,300+Math.random()*600,Math.random()*360,null,null,null,Math.floor(1000+Math.random()*8999)]);\n"
+"}\n"
+"\n"
+"function initWithToken(){\n"
+"  var v=document.getElementById('ti').value.trim();\n"
+"  if(!v.startsWith('pk.')){showNtf('Gecersiz token!',true);return;}\n"
+"  mbToken=v; localStorage.setItem('mbt',v);\n"
+"  document.getElementById('tm').classList.add('hide');\n"
+"  boot(false);\n"
+"}\n"
+"\n"
+"function initDemo(){demoMode=true;document.getElementById('tm').classList.add('hide');boot(true);}\n"
+"\n"
+"async function boot(demo){\n"
+"  var lb=document.getElementById('lb'),lt=document.getElementById('lt');\n"
+"  var steps=[[20,'OPENSKY BAGLANTISI...'],[50,'HARITA YUKLENIYOR...'],[75,'VERI ALINIYOR...'],[95,'RADAR BASLATILIYOR...'],[100,'HAZIR']];\n"
+"  for(var i=0;i<steps.length;i++){\n"
+"    lb.style.width=steps[i][0]+'%'; lt.textContent=steps[i][1];\n"
+"    await new Promise(r=>setTimeout(r,380));\n"
+"  }\n"
+"  document.getElementById('ld').classList.add('hide');\n"
+"  if(demo) initNoMap(); else initMap();\n"
+"  startRadar(); startClock(); loadFlights(); startRfTimer();\n"
+"}\n"
+"\n"
+"function startClock(){\n"
+"  setInterval(()=>document.getElementById('clk').textContent=new Date().toTimeString().slice(0,8),1000);\n"
+"}\n"
+"\n"
+"function initMap(){\n"
+"  mapboxgl.accessToken = mbToken || localStorage.getItem('mbt') || '';\n"
+"  map = new mapboxgl.Map({container:'map',style:'mapbox://styles/mapbox/satellite-v9',center:[32.8,39.5],zoom:5.5});\n"
+"  map.addControl(new mapboxgl.NavigationControl({showCompass:true}),'top-right');\n"
+"  map.on('load',()=>{document.getElementById('sd').classList.remove('L'); document.getElementById('st').textContent='CANLI';});\n"
+"}\n"
+"\n"
+"function initNoMap(){\n"
+"  var m = document.getElementById('map');\n"
+"  m.style.background = 'radial-gradient(ellipse at 50% 50%, #020d1a 0%, #020810 100%)';\n"
+"  document.getElementById('sd').classList.remove('L');\n"
+"  document.getElementById('st').textContent = 'DEMO';\n"
+"}\n"
+"\n"
+"var LS = {satellite:'mapbox://styles/mapbox/satellite-v9',dark:'mapbox://styles/mapbox/dark-v11',street:'mapbox://styles/mapbox/streets-v12'};\n"
+"\n"
+"function setLayer(l){\n"
+"  if(demoMode || !map) return;\n"
+"  ['satellite','dark','street'].forEach(x => document.getElementById('l'+x[0]+'b').classList.toggle('A', x===l));\n"
+"  map.setStyle(LS[l]);\n"
+"  showNtf(l.toUpperCase() + ' KATMANI');\n"
+"}\n"
+"\n"
+"async function loadFlights(){\n"
+"  document.getElementById('sd').classList.add('L');\n"
+"  var raw = await fetchOpenSky();\n"
+"  flights = raw.map(parseS).filter(f => f.lat && f.lon && !f.ground);\n"
+"  document.getElementById('pc').textContent = flights.length;\n"
+"  document.getElementById('trc').textContent = flights.filter(f => f.country === 'Turkey').length;\n"
+"  document.getElementById('lu').textContent = new Date().toTimeString().slice(0,5);\n"
+"  document.getElementById('pct').textContent = flights.length;\n"
+"  document.getElementById('sd').classList.remove('L');\n"
+"  renderList();\n"
+"  renderMarkers();\n"
+"}\n"
+"\n"
+"function renderList(){\n"
+"  var fl = document.getElementById('fl'); fl.innerHTML = '';\n"
+"  flights.slice(0,120).forEach(f => {\n"
+"    var d = document.createElement('div');\n"
+"    d.className = 'fi' + (f.icao24 === selIcao ? ' sel' : '');\n"
+"    d.innerHTML = `<div class=\"fc\">\( {f.callsign}</div><div class=\"fd\"><span> \){f.country}</span><span>\( {f.alt?f.alt+'m':'--'}</span><span> \){f.vel?f.vel+'km/s':'--'}</span></div>`;\n"
+"    d.onclick = () => selectFlight(f);\n"
+"    fl.appendChild(d);\n"
+"  });\n"
+"}\n"
+"\n"
+"function createEl(hdg, sel){\n"
+"  var el = document.createElement('div');\n"
+"  el.style.cssText = `width:\( {sel?20:16}px;height: \){sel?20:16}px;cursor:pointer;filter:drop-shadow(0 0 ${sel?6:4}px ${sel?'#00e5ff':'#00ff88'});`;\n"
+"  el.innerHTML = `<svg viewBox=\"0 0 24 24\" style=\"transform:rotate(\( {hdg||0}deg);width:100%;height:100%\"><path d=\"M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z\" fill=\" \){sel?'#00e5ff':'#00ff88'}\" opacity=\".95\"/></svg>`;\n"
+"  return el;\n"
+"}\n"
+"\n"
+"function renderMarkers(){\n"
+"  if(!map) return;\n"
+"  Object.values(markers).forEach(m => m.remove()); markers = {};\n"
+"  flights.forEach(f => {\n"
+"    var el = createEl(f.hdg, f.icao24 === selIcao);\n"
+"    var marker = new mapboxgl.Marker({element: el}).setLngLat([f.lon, f.lat]).addTo(map);\n"
+"    el.onclick = () => selectFlight(f);\n"
+"    markers[f.icao24] = marker;\n"
+"  });\n"
+"}\n"
+"\n"
+"function selectFlight(f){\n"
+"  selIcao = f.icao24;\n"
+"  document.getElementById('ics').textContent = f.callsign;\n"
+"  document.getElementById('ico').textContent = f.country;\n"
+"  document.getElementById('ial').textContent = f.alt ? f.alt + ' m' : '---';\n"
+"  document.getElementById('isp').textContent = f.vel ? f.vel + ' km/s' : '---';\n"
+"  document.getElementById('ihe').textContent = f.hdg ? f.hdg + '°' : '---';\n"
+"  document.getElementById('ila').textContent = f.lat.toFixed(4);\n"
+"  document.getElementById('ilo').textContent = f.lon.toFixed(4);\n"
+"  document.getElementById('isq').textContent = f.sqk;\n"
+"  document.getElementById('ign').textContent = f.ground ? 'Yerde' : 'Havada';\n"
+"  document.getElementById('ip').classList.add('vis');\n"
+"  document.getElementById('hm').classList.add('vis');\n"
+"  document.getElementById('ha').textContent = f.alt || '---';\n"
+"  document.getElementById('hs').textContent = f.vel || '---';\n"
+"  renderMarkers();\n"
+"}\n"
+"\n"
+"function closeInfo(){\n"
+"  document.getElementById('ip').classList.remove('vis');\n"
+"  document.getElementById('hm').classList.remove('vis');\n"
+"  selIcao = null;\n"
+"  renderMarkers();\n"
+"}\n"
+"\n"
+"function refreshData(){ if(rfInt) clearInterval(rfInt); loadFlights(); showNtf('VERI YENILENDI'); startRfTimer(); }\n"
+"\n"
+"function startRfTimer(){ rfInt = setInterval(loadFlights, RF); }\n"
+"\n"
+"function resetRfTimer(){ if(rfInt) clearInterval(rfInt); startRfTimer(); }\n"
+"\n"
+"function startRadar(){\n"
+"  var c = document.getElementById('rv'), ctx = c.getContext('2d');\n"
+"  function draw(){\n"
+"    ctx.clearRect(0,0,96,96);\n"
+"    ctx.strokeStyle = 'rgba(0,255,136,0.6)'; ctx.lineWidth = 2;\n"
+"    for(let i=0;i<4;i++){ ctx.beginPath(); ctx.arc(48,48,12+i*18,0,Math.PI*2); ctx.stroke(); }\n"
+"    radarA = (radarA + 7) % 360;\n"
+"    ctx.save(); ctx.translate(48,48); ctx.rotate(radarA*Math.PI/180);\n"
+"    ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 3;\n"
+"    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(42,0); ctx.stroke(); ctx.restore();\n"
+"    requestAnimationFrame(draw);\n"
+"  }\n"
+"  draw();\n"
+"}\n"
+"\n"
+"function showNtf(txt,err=false){\n"
+"  var n = document.getElementById('ntf');\n"
+"  n.textContent = txt;\n"
+"  if(err) n.classList.add('er'); else n.classList.remove('er');\n"
+"  n.classList.add('sh');\n"
+"  setTimeout(()=>n.classList.remove('sh'), 2500);\n"
+"}\n"
+"\n"
+"function togglePanel(){\n"
+"  panelOn = !panelOn;\n"
+"  document.getElementById('lp').classList.toggle('hide', !panelOn);\n"
+"  document.getElementById('ptg').classList.toggle('hide', panelOn);\n"
+"}\n"
+"\n"
+"</script>\n"
+"</body>\n"
+"</html>\n"
+);
 
 with open(HTML, 'w', encoding='utf-8') as f:
     f.write(page)
-print("Ultimate HTML hazır")
+print("HTML hazır:", HTML)
 PYEOF
 
-echo -e "  \( {G}SKYWATCH ULTIMATE hazır! \){N}"
-echo -e "  \( {C}http://localhost: \){PORT} adresinde çalışacak${N}"
+echo -e "  \( {G}SKYWATCH hazır! ✓ \){N}"
+echo -e "  \( {C}Tarayıcıda açılıyor → http://localhost: \){PORT}${N}"
 
 cd "$TMPD" || exit
 termux-open-url "http://localhost:${PORT}" 2>/dev/null || true
 
+echo -e "\( {Y}Sunucuyu durdurmak için Ctrl + C bas. \){N}"
 $PY -m http.server $PORT --bind 127.0.0.1
