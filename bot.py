@@ -20,11 +20,11 @@ def generate_data(): while True: new_value = random.randint(0, 100) if len(data_
 
 -----------------------------
 
-Live weather fetch (wttr.in)
+Live weather fetch
 
 -----------------------------
 
-def fetch_weather(): while True: try: # Kayseri default (istersen değiştirilebilir) url = "https://wttr.in/Kayseri?format=j1" res = requests.get(url, timeout=5) data = res.json()
+def fetch_weather(): while True: try: url = "https://wttr.in/Kayseri?format=j1" res = requests.get(url, timeout=5) data = res.json()
 
 current = data["current_condition"][0]
 
@@ -38,7 +38,7 @@ current = data["current_condition"][0]
     except Exception as e:
         data_store["weather"] = {"error": str(e)}
 
-    time.sleep(60)  # her 60 saniyede güncelle
+    time.sleep(60)
 
 threading.Thread(target=generate_data, daemon=True).start() threading.Thread(target=fetch_weather, daemon=True).start()
 
@@ -122,7 +122,6 @@ HTML_PAGE = """
         chart.data.datasets[0].data = json.values;
         chart.update();
 
-        // weather update
         const w = json.weather;
         if (w && !w.error) {
             document.getElementById("weather").innerHTML =
