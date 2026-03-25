@@ -1,174 +1,1179 @@
 #!/bin/bash
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  SKYWATCH v3.0 — Ucak Takip Sistemi (Tum Buglar Duzeltildi)║
+# ║  Calistir: bash skywatch.sh                                  ║
+# ╚══════════════════════════════════════════════════════════════╝
 
-# ╔══════════════════════════════════════════════════════╗
-# ║   SKY PANEL PRO — Termux Launcher                   ║
-# ╚══════════════════════════════════════════════════════╝
+G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
 
 clear
+printf "\n${G}${B}"
+printf "  ███████╗██╗  ██╗██╗   ██╗██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗\n"
+printf "  ██╔════╝██║ ██╔╝╚██╗ ██╔╝██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║\n"
+printf "  ███████╗█████╔╝  ╚████╔╝ ██║ █╗ ██║███████║   ██║   ██║     ███████║\n"
+printf "  ╚════██║██╔═██╗   ╚██╔╝  ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║\n"
+printf "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
+printf "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
+printf "${N}\n"
+printf "  ${C}v3.0 — Tum Buglar Duzeltildi${N}\n"
+printf "  ─────────────────────────────────────────────────────────\n\n"
 
-echo -e "\033[1;36m🚀 SKY PANEL BAŞLATILIYOR...\033[0m"
-
-# 📦 Gerekli paket kontrol
-command -v python >/dev/null 2>&1 || {
-    echo "📦 Python kuruluyor..."
-    pkg install python -y
-}
-
-pip show flask >/dev/null 2>&1 || pip install flask
-pip show requests >/dev/null 2>&1 || pip install requests
-
-# 📁 panel.py yoksa oluştur
-if [ ! -f panel.py ]; then
-echo "📁 panel.py oluşturuluyor..."
-
-cat > panel.py << 'EOF'
-import random
-import requests
-from flask import Flask, jsonify, render_template_string
-
-app = Flask(__name__)
-PORT = random.randint(2000, 9000)
-
-history = {}
-
-def get_flights():
-    try:
-        url = "https://opensky-network.org/api/states/all"
-        data = requests.get(url, timeout=5).json()
-        flights = []
-
-        for s in data.get("states", []):
-            if not s[5] or not s[6]:
-                continue
-
-            icao = s[0]
-            lat = s[6]
-            lon = s[5]
-
-            if icao not in history:
-                history[icao] = []
-            history[icao].append([lat, lon])
-            if len(history[icao]) > 10:
-                history[icao].pop(0)
-
-            altitude = s[7] or 0
-            squawk = s[14]
-
-            flights.append({
-                "icao": icao,
-                "callsign": (s[1] or "").strip(),
-                "country": s[2],
-                "lat": lat,
-                "lon": lon,
-                "velocity": s[9] or 0,
-                "altitude": altitude,
-                "squawk": squawk,
-                "alert": (altitude > 11500 or squawk in ["7700","7600","7500"]),
-                "trail": history[icao]
-            })
-        return flights
-    except:
-        return []
-
-@app.route("/api")
-def api():
-    return jsonify(get_flights())
-
-@app.route("/")
-def index():
-    return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Sky Panel PRO</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<style>
-body { margin:0; background:#0b0f14; color:white; font-family:sans-serif; }
-#map { height:100vh; }
-.panel {
-    position:absolute; top:10px; left:10px;
-    background:#111; padding:10px; border-radius:10px;
-    max-height:90vh; overflow:auto; width:300px;
-}
-input { width:100%; padding:6px; background:#222; border:none; color:white; }
-.item { padding:6px; border-bottom:1px solid #333; cursor:pointer; }
-.alert { background:red; animation: blink 1s infinite; }
-@keyframes blink { 50% { opacity:0.3; } }
-</style>
-</head>
-
-<body>
-
-<div id="map"></div>
-<div class="panel">
-<input id="search" placeholder="Ara...">
-<div id="list"></div>
-</div>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script>
-var map = L.map('map').setView([39,35], 5);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-var markers = {};
-var trails = {};
-
-function update(){
-    fetch('/api')
-    .then(r=>r.json())
-    .then(data=>{
-        let list = document.getElementById("list");
-        list.innerHTML = "";
-        let search = document.getElementById("search").value.toLowerCase();
-
-        data.forEach(f=>{
-            let text = (f.callsign + f.country + f.icao).toLowerCase();
-            if(search && !text.includes(search)) return;
-
-            let div = document.createElement("div");
-            div.className = "item " + (f.alert ? "alert":"");
-            div.innerHTML = `
-            ✈️ ${f.callsign || "N/A"}<br>
-            🌍 ${f.country}<br>
-            ⬆ ${Math.round(f.altitude)} m
-            `;
-
-            div.onclick = ()=>{
-                map.setView([f.lat, f.lon], 8);
-            };
-
-            list.appendChild(div);
-
-            if(!markers[f.icao]){
-                markers[f.icao] = L.marker([f.lat, f.lon]).addTo(map);
-            } else {
-                markers[f.icao].setLatLng([f.lat, f.lon]);
-            }
-
-            if(trails[f.icao]){
-                map.removeLayer(trails[f.icao]);
-            }
-            trails[f.icao] = L.polyline(f.trail).addTo(map);
-        });
-    });
-}
-
-setInterval(update, 4000);
-update();
-</script>
-
-</body>
-</html>
-""")
-
-if __name__ == "__main__":
-    print(f"Panel: http://127.0.0.1:{PORT}")
-    app.run(host="0.0.0.0", port=PORT)
-EOF
-
+if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
+  printf "  ${Y}Python yukleniyor...${N}\n"
+  pkg install python -y
 fi
 
-# 🚀 başlat
-echo -e "\033[1;32m✔ Panel başlatılıyor...\033[0m"
-python panel.py
+PY=$(command -v python3 || command -v python)
+TMPD="${TMPDIR:-/tmp}"
+HTML="$TMPD/skywatch_v3.html"
+
+printf "  ${C}HTML olusturuluyor...${N}\n"
+
+$PY << 'PYEOF'
+import os, sys
+
+TMPD = os.environ.get("TMPDIR", "/tmp")
+HTML = os.path.join(TMPD, "skywatch_v3.html")
+
+def build():
+    L = []
+    def w(*args): L.append("".join(str(a) for a in args))
+
+    # ── HEAD ────────────────────────────────────────────────────
+    w("<!DOCTYPE html><html lang='tr'><head>")
+    w("<meta charset='UTF-8'>")
+    w("<meta name='viewport' content='width=device-width,initial-scale=1.0'>")
+    w("<title>SKYWATCH v3</title>")
+    w("<link href='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css' rel='stylesheet'>")
+    w("<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>")
+    w("<link href='https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600&display=swap' rel='stylesheet'>")
+
+    # ── CSS ─────────────────────────────────────────────────────
+    w("<style>")
+    w(":root{--g:#00ff88;--c:#00e5ff;--o:#ff6b35;--warn:#ffcc00;--red:#ff4466;--d:#020810;--p:rgba(2,15,25,0.95);--b:rgba(0,255,136,0.2);--b2:rgba(0,229,255,0.2);--t:#a8ffd4;--t2:rgba(168,255,212,0.5)}")
+    w("*{margin:0;padding:0;box-sizing:border-box}")
+    w("html,body{background:#020810;color:#a8ffd4;font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;width:100vw}")
+    w("body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.01) 2px,rgba(0,255,136,.01) 4px);pointer-events:none;z-index:1}")
+    w("#map{position:absolute;inset:0;width:100%;height:100%}")
+
+    # TOKEN MODAL - HIGHEST Z-INDEX, starts visible
+    w("#modal{position:fixed;inset:0;background:rgba(2,8,16,0.98);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}")
+    w("#modal.gone{display:none!important}")
+    w(".modal-box{background:#030e1a;border:1px solid rgba(0,255,136,0.3);padding:32px;width:460px;max-width:94vw;position:relative}")
+    w(".modal-box::before{content:'SKYWATCH v3.0';position:absolute;top:-11px;left:18px;background:#030e1a;padding:0 10px;font-family:'Orbitron',sans-serif;font-size:9px;color:#00ff88;letter-spacing:4px}")
+    w(".modal-title{font-family:'Orbitron',sans-serif;font-size:15px;color:#00e5ff;letter-spacing:3px;margin-bottom:6px}")
+    w(".modal-desc{font-size:11px;color:rgba(168,255,212,0.55);line-height:1.85;margin-bottom:20px}")
+    w(".modal-desc a{color:#00e5ff;text-decoration:none}")
+    w(".modal-desc b{color:#a8ffd4}")
+    w(".modal-label{font-size:9px;color:rgba(168,255,212,0.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}")
+    w(".modal-input{width:100%;background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.25);color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:12px;padding:11px 14px;outline:none;letter-spacing:0.5px;transition:border-color .2s,box-shadow .2s;margin-bottom:6px}")
+    w(".modal-input:focus{border-color:#00e5ff;box-shadow:0 0 14px rgba(0,229,255,0.15)}")
+    w(".modal-input::placeholder{color:rgba(168,255,212,0.2)}")
+    w(".modal-err{font-size:10px;color:#ff4466;letter-spacing:1px;min-height:16px;margin-bottom:10px;display:flex;align-items:center;gap:6px}")
+    w(".modal-btns{display:flex;gap:10px;margin-top:4px}")
+    w(".btn-start{flex:1;background:rgba(0,255,136,0.1);border:1px solid #00ff88;color:#00ff88;font-family:'Share Tech Mono',monospace;font-size:12px;padding:11px;cursor:pointer;letter-spacing:2px;transition:all .2s;text-transform:uppercase}")
+    w(".btn-start:hover{background:rgba(0,255,136,0.2);box-shadow:0 0 20px rgba(0,255,136,0.2)}")
+    w(".btn-start:active{transform:scale(0.98)}")
+    w(".btn-demo{background:rgba(0,229,255,0.07);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:12px;padding:11px 18px;cursor:pointer;letter-spacing:2px;transition:all .2s}")
+    w(".btn-demo:hover{background:rgba(0,229,255,0.15);border-color:#00e5ff}")
+    w(".btn-demo:active{transform:scale(0.98)}")
+    w(".modal-divider{display:flex;align-items:center;gap:10px;margin:14px 0}")
+    w(".modal-divider::before,.modal-divider::after{content:'';flex:1;height:1px;background:rgba(0,255,136,0.12)}")
+    w(".modal-divider span{font-size:9px;color:rgba(168,255,212,0.3);letter-spacing:2px}")
+    w(".modal-saved{font-size:10px;color:#00ff88;letter-spacing:1px;padding:7px 12px;border:1px solid rgba(0,255,136,0.2);background:rgba(0,255,136,0.05);margin-bottom:10px;display:none;align-items:center;gap:8px}")
+    w(".modal-saved.show{display:flex}")
+
+    # LOADING - starts HIDDEN (display:none), shown after modal submit
+    w("#loading{position:fixed;inset:0;background:#020810;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}")
+    w("#loading.active{display:flex}")
+    w("#loading.fade{opacity:0;transition:opacity .5s}")
+    w(".ld-logo{font-family:'Orbitron',sans-serif;font-size:32px;font-weight:900;color:#00ff88;letter-spacing:8px;animation:ldglow 2.5s ease-in-out infinite}")
+    w("@keyframes ldglow{0%,100%{text-shadow:0 0 20px rgba(0,255,136,0.3)}50%{text-shadow:0 0 60px rgba(0,255,136,0.8),0 0 100px rgba(0,255,136,0.3)}}")
+    w(".ld-sub{font-size:10px;color:rgba(168,255,212,0.4);letter-spacing:4px;margin-top:-10px}")
+    w(".ld-bar-wrap{width:260px;height:2px;background:rgba(0,255,136,0.1)}")
+    w(".ld-bar{height:100%;background:linear-gradient(90deg,#00ff88,#00e5ff);width:0%;transition:width .35s ease;box-shadow:0 0 8px #00ff88}")
+    w(".ld-status{font-size:10px;color:rgba(168,255,212,0.4);letter-spacing:3px;text-transform:uppercase}")
+    w(".ld-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden}")
+
+    # TOPBAR
+    w(".topbar{position:fixed;top:0;left:0;right:0;height:52px;background:rgba(2,14,24,0.96);border-bottom:1px solid rgba(0,255,136,0.18);display:flex;align-items:center;padding:0 14px;gap:12px;z-index:500;backdrop-filter:blur(16px)}")
+    w(".logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:16px;color:#00ff88;letter-spacing:5px;text-shadow:0 0 20px rgba(0,255,136,0.6);white-space:nowrap;display:flex;align-items:center;gap:8px}")
+    w(".logo-icon{animation:logospin 6s ease-in-out infinite;filter:drop-shadow(0 0 5px #00ff88)}")
+    w("@keyframes logospin{0%,100%{transform:rotate(0deg)}50%{transform:rotate(15deg)}}")
+    w(".lver{font-size:8px;color:rgba(0,255,136,0.4);letter-spacing:2px;margin-top:2px}")
+    w(".top-stats{display:flex;gap:14px;flex:1;overflow:hidden;align-items:center}")
+    w(".tsc{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--t2);white-space:nowrap}")
+    w(".tsc .tv{color:#00e5ff;font-family:'Orbitron',sans-serif;font-size:12px}")
+    w(".pulsedot{width:7px;height:7px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;animation:pulse 1.5s infinite;flex-shrink:0}")
+    w(".pulsedot.loading{background:#ff6b35;box-shadow:0 0 8px #ff6b35}")
+    w(".pulsedot.error{background:#ff4466;box-shadow:0 0 8px #ff4466}")
+    w("@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.2}}")
+    w(".vbar{width:1px;height:20px;background:rgba(0,255,136,0.18);flex-shrink:0}")
+    w(".top-right{display:flex;align-items:center;gap:6px;margin-left:auto}")
+    w(".clock{font-size:13px;color:#00e5ff;letter-spacing:2px;font-family:'Orbitron',sans-serif;min-width:70px}")
+    w(".tbtn{background:transparent;border:1px solid rgba(0,255,136,0.2);color:#00ff88;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 9px;cursor:pointer;letter-spacing:1px;transition:all .2s;white-space:nowrap;position:relative;overflow:hidden}")
+    w(".tbtn:hover,.tbtn.on{background:rgba(0,255,136,0.1);border-color:#00ff88;box-shadow:0 0 10px rgba(0,255,136,0.2)}")
+    w(".tbtn:active{transform:scale(0.95)}")
+
+    # SEARCH
+    w(".searchbar{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:501;display:flex;opacity:0;pointer-events:none;transition:opacity .25s;width:360px}")
+    w(".searchbar.open{opacity:1;pointer-events:all}")
+    w(".sinput{flex:1;background:rgba(3,18,30,0.98);border:1px solid rgba(0,229,255,0.3);border-right:none;color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:12px;padding:9px 14px;outline:none;letter-spacing:0.5px}")
+    w(".sinput:focus{border-color:#00e5ff}")
+    w(".sinput::placeholder{color:rgba(168,255,212,0.2)}")
+    w(".sclose{background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3);color:#00e5ff;font-family:'Share Tech Mono',monospace;font-size:10px;padding:9px 12px;cursor:pointer}")
+    w(".sclose:hover{background:rgba(0,229,255,0.18)}")
+    w(".sresults{position:absolute;top:100%;left:0;right:0;background:rgba(3,18,30,0.99);border:1px solid rgba(0,229,255,0.2);border-top:none;max-height:220px;overflow-y:auto;display:none}")
+    w(".sresults.open{display:block}")
+    w(".sresult-item{padding:9px 14px;font-size:11px;cursor:pointer;border-bottom:1px solid rgba(0,255,136,0.05)}")
+    w(".sresult-item:hover{background:rgba(0,255,136,0.08);color:#00ff88}")
+
+    # LEFT PANEL
+    w(".lpanel{position:fixed;top:52px;left:0;bottom:0;width:265px;background:rgba(2,14,24,0.97);border-right:1px solid rgba(0,255,136,0.18);z-index:200;display:flex;flex-direction:column;transition:transform .3s cubic-bezier(.4,0,.2,1)}")
+    w(".lpanel.closed{transform:translateX(-265px)}")
+    w(".ptoggle{position:fixed;top:66px;left:265px;width:16px;height:40px;background:rgba(2,14,24,0.97);border:1px solid rgba(0,255,136,0.18);border-left:none;z-index:201;display:flex;align-items:center;justify-content:center;font-size:11px;color:#00ff88;cursor:pointer;transition:left .3s cubic-bezier(.4,0,.2,1)}")
+    w(".ptoggle:hover{background:rgba(0,255,136,0.1)}")
+    w(".ptoggle.closed{left:0}")
+
+    # TABS
+    w(".tabs{display:flex;border-bottom:1px solid rgba(0,255,136,0.18)}")
+    w(".tabbt{flex:1;padding:9px 0;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(168,255,212,0.4);background:transparent;border:none;cursor:pointer;transition:all .2s;text-transform:uppercase;border-bottom:2px solid transparent}")
+    w(".tabbt.on{color:#00ff88;border-bottom-color:#00ff88;background:rgba(0,255,136,0.04)}")
+    w(".tabbt:hover:not(.on){color:var(--t)}")
+    w(".tabpanel{display:none;flex:1;overflow-y:auto;flex-direction:column;scrollbar-width:thin;scrollbar-color:rgba(0,255,136,0.2) transparent}")
+    w(".tabpanel.on{display:flex}")
+    w(".tabpanel::-webkit-scrollbar{width:3px}")
+    w(".tabpanel::-webkit-scrollbar-thumb{background:rgba(0,255,136,0.2)}")
+
+    # FILTER CHIPS
+    w(".fbar{padding:7px 10px;border-bottom:1px solid rgba(0,255,136,0.07);display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0}")
+    w(".fchip{font-size:9px;padding:3px 8px;border:1px solid rgba(0,255,136,0.2);color:rgba(168,255,212,0.5);background:transparent;cursor:pointer;letter-spacing:1px;font-family:'Share Tech Mono',monospace;transition:all .2s}")
+    w(".fchip.on{background:rgba(0,229,255,0.1);border-color:#00e5ff;color:#00e5ff}")
+    w(".fchip:hover{border-color:#00ff88;color:#00ff88}")
+    w(".fcountlabel{padding:3px 10px 5px;font-size:9px;color:rgba(168,255,212,0.35);letter-spacing:1px;flex-shrink:0;border-bottom:1px solid rgba(0,255,136,0.05)}")
+
+    # FLIGHT ITEMS
+    w(".fitem{padding:9px 12px;border-bottom:1px solid rgba(0,255,136,0.05);cursor:pointer;transition:background .12s;position:relative;flex-shrink:0}")
+    w(".fitem::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:#00ff88;opacity:0;transition:opacity .15s}")
+    w(".fitem:hover{background:rgba(0,255,136,0.06)}")
+    w(".fitem:hover::before{opacity:1}")
+    w(".fitem.sel{background:rgba(0,229,255,0.05)}")
+    w(".fitem.sel::before{opacity:1;background:#00e5ff}")
+    w(".fitem.emerg{background:rgba(255,68,102,0.05)}")
+    w(".fitem.emerg::before{opacity:1;background:#ff4466;animation:pulse 0.5s infinite}")
+    w(".fcall{font-family:'Orbitron',sans-serif;font-size:11px;color:#00e5ff;letter-spacing:1px;display:flex;align-items:center;gap:5px}")
+    w(".fflag{font-size:13px;line-height:1}")
+    w(".fdetail{font-size:9px;color:rgba(168,255,212,0.45);display:flex;gap:8px;margin-top:3px;flex-wrap:wrap}")
+    w(".fdv{color:#a8ffd4}")
+    w(".altbar{height:2px;background:rgba(0,255,136,0.08);margin-top:5px;overflow:hidden}")
+    w(".altfill{height:100%;transition:width .4s ease}")
+
+    # STATS
+    w(".stblock{padding:12px;border-bottom:1px solid rgba(0,255,136,0.07);flex-shrink:0}")
+    w(".sthead{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}")
+    w(".bigstat{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:2px}")
+    w(".bsi{background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.1);padding:8px 10px}")
+    w(".bsv{font-family:'Orbitron',sans-serif;font-size:18px;color:#00e5ff;line-height:1}")
+    w(".bsl{font-size:8px;color:rgba(168,255,212,0.4);letter-spacing:2px;margin-top:3px;text-transform:uppercase}")
+    w(".strow{display:flex;align-items:center;gap:8px;margin-bottom:4px}")
+    w(".stlabel{font-size:10px;color:rgba(168,255,212,0.5);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}")
+    w(".sttrack{width:72px;height:3px;background:rgba(0,255,136,0.08);flex-shrink:0}")
+    w(".stfill{height:100%;background:#00ff88;transition:width .7s ease}")
+    w(".stval{font-size:10px;color:#00ff88;width:26px;text-align:right;flex-shrink:0}")
+
+    # ALERTS
+    w(".alert-item{padding:9px 12px;border-bottom:1px solid rgba(255,68,102,0.1);display:flex;gap:8px;flex-shrink:0}")
+    w(".alert-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}")
+    w(".alert-pip.high{background:#ff4466;box-shadow:0 0 6px #ff4466;animation:pulse .8s infinite}")
+    w(".alert-pip.med{background:#ffcc00;box-shadow:0 0 5px #ffcc00}")
+    w(".alert-pip.low{background:#00e5ff;box-shadow:0 0 4px #00e5ff}")
+    w(".alert-msg{font-size:10px;color:#a8ffd4;line-height:1.4}")
+    w(".alert-time{font-size:9px;color:rgba(168,255,212,0.35);margin-top:2px}")
+    w(".no-alerts{padding:24px;text-align:center;font-size:11px;color:rgba(168,255,212,0.2);letter-spacing:2px}")
+
+    # INFO PANEL
+    w(".info-panel{position:fixed;bottom:16px;right:16px;width:295px;background:rgba(3,18,30,0.98);border:1px solid rgba(0,229,255,0.25);z-index:200;display:none;animation:infoin .2s ease;box-shadow:0 0 30px rgba(0,229,255,0.07)}")
+    w(".info-panel.vis{display:block}")
+    w("@keyframes infoin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}")
+    w(".info-head{padding:10px 13px;background:rgba(0,229,255,0.06);border-bottom:1px solid rgba(0,229,255,0.2);font-family:'Orbitron',sans-serif;font-size:12px;color:#00e5ff;letter-spacing:2px;display:flex;justify-content:space-between;align-items:center}")
+    w(".info-actions-head{display:flex;gap:8px;align-items:center}")
+    w(".trail-toggle{font-size:9px;padding:2px 7px;border:1px solid rgba(0,229,255,0.25);color:rgba(0,229,255,0.6);background:transparent;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px;transition:all .2s}")
+    w(".trail-toggle:hover,.trail-toggle.on{background:rgba(0,229,255,0.1);border-color:#00e5ff;color:#00e5ff}")
+    w(".close-x{color:rgba(168,255,212,0.35);font-size:17px;cursor:pointer;transition:color .2s;line-height:1}")
+    w(".close-x:hover{color:#ff4466}")
+    w(".info-grid{padding:10px 13px;display:grid;grid-template-columns:1fr 1fr;gap:8px}")
+    w(".ifield{display:flex;flex-direction:column;gap:2px}")
+    w(".ilabel{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:2px;text-transform:uppercase}")
+    w(".ival{font-size:12px;color:#00ff88;font-family:'Orbitron',sans-serif}")
+    w(".ival.blue{color:#00e5ff}")
+    w(".ival.red{color:#ff4466}")
+    w(".ival.yellow{color:#ffcc00}")
+    w(".spd-wrap{padding:0 13px 8px;display:flex;align-items:center;gap:8px}")
+    w(".spd-track{flex:1;height:3px;background:rgba(0,255,136,0.1);overflow:hidden}")
+    w(".spd-fill{height:100%;background:linear-gradient(90deg,#00ff88,#00e5ff,#ffcc00);transition:width .5s ease}")
+    w(".spd-label{font-size:9px;color:rgba(168,255,212,0.4);white-space:nowrap}")
+    w(".info-btns{padding:0 13px 10px;display:flex;gap:5px}")
+    w(".iabtn{flex:1;font-size:9px;padding:5px;border:1px solid rgba(0,255,136,0.18);color:rgba(168,255,212,0.5);background:transparent;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px;transition:all .2s;text-align:center}")
+    w(".iabtn:hover{color:#00ff88;border-color:#00ff88;background:rgba(0,255,136,0.06)}")
+    w(".iabtn:active{transform:scale(0.96)}")
+
+    # RADAR
+    w(".radar-wrap{position:fixed;bottom:16px;left:16px;z-index:200;background:rgba(3,18,30,0.97);border:1px solid rgba(0,255,136,0.18);padding:8px;box-shadow:0 0 16px rgba(0,255,136,0.05)}")
+    w(".radar-head{font-size:8px;color:rgba(168,255,212,0.35);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;display:flex;justify-content:space-between}")
+    w(".radar-cnt{color:#00ff88;font-family:'Orbitron',sans-serif}")
+
+    # HUD
+    w(".hud{position:fixed;top:50%;right:16px;transform:translateY(-50%);z-index:200;display:flex;flex-direction:column;gap:6px;opacity:0;pointer-events:none;transition:opacity .3s}")
+    w(".hud.vis{opacity:1}")
+    w(".hud-meter{background:rgba(3,18,30,0.97);border:1px solid rgba(0,229,255,0.2);padding:8px 10px;width:78px;overflow:hidden;position:relative}")
+    w(".hud-meter::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#00e5ff,transparent);animation:hudscan 2s linear infinite}")
+    w("@keyframes hudscan{0%{top:0}100%{top:100%}}")
+    w(".hud-label{font-size:7px;color:rgba(168,255,212,0.35);letter-spacing:2px;text-transform:uppercase;margin-bottom:3px}")
+    w(".hud-val{font-family:'Orbitron',sans-serif;font-size:15px;color:#00e5ff;line-height:1}")
+    w(".hud-unit{font-size:7px;color:rgba(168,255,212,0.4);margin-top:2px}")
+
+    # COMPASS
+    w(".compass{position:fixed;top:62px;right:104px;z-index:200}")
+
+    # LAYER PANEL
+    w(".layers{position:fixed;top:52px;right:0;z-index:200;display:flex;flex-direction:column;gap:3px;padding:6px}")
+    w(".lbtn{background:rgba(3,18,30,0.97);border:1px solid rgba(0,255,136,0.18);color:rgba(168,255,212,0.5);font-family:'Share Tech Mono',monospace;font-size:9px;padding:6px 10px;cursor:pointer;letter-spacing:1px;text-align:center;transition:all .2s;width:80px}")
+    w(".lbtn:hover,.lbtn.on{color:#00ff88;border-color:#00ff88;background:rgba(0,255,136,0.07)}")
+    w(".lsep{height:1px;background:rgba(0,255,136,0.12);margin:2px 0}")
+
+    # NOTIFICATION
+    w(".notif{position:fixed;top:64px;left:50%;transform:translateX(-50%) translateY(-80px);background:rgba(3,18,30,0.98);border:1px solid rgba(0,255,136,0.25);padding:9px 16px;font-size:11px;color:#00e5ff;z-index:1000;transition:transform .3s cubic-bezier(.4,0,.2,1);letter-spacing:1px;display:flex;align-items:center;gap:8px;white-space:nowrap;max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,0.5)}")
+    w(".notif.show{transform:translateX(-50%) translateY(0)}")
+    w(".notif.err{color:#ff4466;border-color:rgba(255,68,102,0.4)}")
+    w(".notif.warn{color:#ffcc00;border-color:rgba(255,204,0,0.4)}")
+    w(".notif-icon{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;flex-shrink:0}")
+    w(".notif.show .notif-icon{background:rgba(0,229,255,0.2)}")
+    w(".notif.err .notif-icon{background:rgba(255,68,102,0.2);color:#ff4466}")
+    w(".notif.warn .notif-icon{background:rgba(255,204,0,0.2);color:#ffcc00}")
+
+    # KEYBOARD HELP
+    w(".kbhelp{position:fixed;inset:0;background:rgba(2,8,16,0.97);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px)}")
+    w(".kbhelp.vis{display:flex}")
+    w(".kbbox{background:#030e1a;border:1px solid rgba(0,255,136,0.25);padding:28px;width:460px;max-width:94vw}")
+    w(".kbtitle{font-family:'Orbitron',sans-serif;font-size:13px;color:#00ff88;letter-spacing:4px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}")
+    w(".kbgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}")
+    w(".kbrow{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(0,255,136,0.05)}")
+    w(".kbkey{background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.2);padding:2px 8px;font-size:9px;color:#00ff88;font-family:'Orbitron',sans-serif;min-width:32px;text-align:center;white-space:nowrap}")
+    w(".kbdesc{font-size:10px;color:rgba(168,255,212,0.5)}")
+
+    # PROGRESS BAR
+    w(".refbar{position:fixed;bottom:0;left:0;right:0;height:2px;background:rgba(0,255,136,0.06);z-index:999}")
+    w(".refprog{height:100%;background:linear-gradient(90deg,#00ff88,#00e5ff);width:100%;box-shadow:0 0 5px #00ff88}")
+
+    # MAPBOX
+    w(".mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right{display:none!important}")
+    w(".mapboxgl-popup-content{background:rgba(3,18,30,0.99)!important;border:1px solid rgba(0,255,136,0.2)!important;color:#a8ffd4!important;font-family:'Share Tech Mono',monospace!important;font-size:10px!important;padding:10px 13px!important;border-radius:0!important}")
+    w(".mapboxgl-popup-tip{display:none!important}")
+    w(".mapboxgl-ctrl-top-right{top:52px!important;right:92px!important}")
+
+    w("@media(max-width:580px){.lpanel{width:240px}.ptoggle{left:240px}.ptoggle.closed{left:0}.radar-wrap{display:none}.top-stats .tsc:nth-child(n+4){display:none}.layers{display:none}.hud{display:none}}")
+    w("</style></head><body>")
+
+    # ── TOKEN MODAL ───────────────────────────────────────────────
+    w("<div id='modal'>")
+    w("  <div class='modal-box'>")
+    w("    <div class='modal-title'>MAPBOX TOKEN</div>")
+    w("    <p class='modal-desc'>")
+    w("      Uydu haritasi icin <b>ucretsiz</b> Mapbox token gereklidir.<br>")
+    w("      <a href='https://account.mapbox.com' target='_blank'>account.mapbox.com</a>")
+    w("      adresinden kayit olup token alin.<br><br>")
+    w("      Token olmadan <b>Demo Mod</b> ile devam edebilirsiniz.")
+    w("    </p>")
+    w("    <div id='saved-token' class='modal-saved'>")
+    w("      <span>&#10003;</span><span id='saved-label'>Kayitli token bulundu</span>")
+    w("    </div>")
+    w("    <div class='modal-label'>API TOKEN</div>")
+    w("    <input id='token-input' class='modal-input' type='text' placeholder='pk.eyJ1IjoiLi4uIiwiYSI6Ii4uLiJ9...' autocomplete='off' spellcheck='false'>")
+    w("    <div class='modal-err' id='modal-err'></div>")
+    w("    <div class='modal-btns'>")
+    w("      <button class='btn-start' id='btn-start' onclick='doStart()'>&#9654; BASLAT</button>")
+    w("      <button class='btn-demo' id='btn-demo' onclick='doDemo()'>DEMO MOD</button>")
+    w("    </div>")
+    w("    <div class='modal-divider'><span>KLAVYE</span></div>")
+    w("    <div style='font-size:9px;color:rgba(168,255,212,0.3);letter-spacing:1px'>ENTER = Baslat &nbsp; TAB = Demo Mod</div>")
+    w("  </div>")
+    w("</div>")
+
+    # ── LOADING (starts hidden) ───────────────────────────────────
+    w("<div id='loading'>")
+    w("  <div class='ld-particles'><canvas id='ldcanvas'></canvas></div>")
+    w("  <div class='ld-logo'>SKYWATCH</div>")
+    w("  <div class='ld-sub'>CANLI UCAK TAKiP v3.0</div>")
+    w("  <div class='ld-bar-wrap'><div class='ld-bar' id='ldbar'></div></div>")
+    w("  <div class='ld-status' id='ldstatus'>HAZIRLANIYOR...</div>")
+    w("</div>")
+
+    # ── KEYBOARD HELP ─────────────────────────────────────────────
+    w("<div class='kbhelp' id='kbhelp'>")
+    w("  <div class='kbbox'>")
+    w("    <div class='kbtitle'>KLAVYE KiSAYOLLARI <span onclick='toggleHelp()' style='cursor:pointer;color:#ff6b35;font-size:18px'>&#215;</span></div>")
+    w("    <div class='kbgrid'>")
+    for k,d in [("F","Arama"),("R","Yenile"),("L","Sol panel"),("S","Uydu harita"),("D","Karanlik harita"),("T","Sokak harita"),("H","Hava durumu"),("C","Konumumu bul"),("A","Tum ucaklar"),("ESC","Secimi kaldir"),("?","Bu yardim"),("F11","Tam ekran")]:
+        w(f"      <div class='kbrow'><div class='kbkey'>{k}</div><div class='kbdesc'>{d}</div></div>")
+    w("    </div>")
+    w("  </div>")
+    w("</div>")
+
+    # ── TOPBAR ────────────────────────────────────────────────────
+    w("<div class='topbar'>")
+    w("  <div class='logo'>")
+    w("    <svg class='logo-icon' width='18' height='18' viewBox='0 0 24 24' fill='none'><path d='M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z' fill='#00ff88'/></svg>")
+    w("    SKYWATCH<div class='lver'>v3</div>")
+    w("  </div>")
+    w("  <div class='vbar'></div>")
+    w("  <div class='top-stats'>")
+    w("    <div class='tsc'><div class='pulsedot loading' id='sdot'></div><span id='sstatus'>BAGLANIYOR</span></div>")
+    w("    <div class='tsc'>&#9992;&nbsp;<span class='tv' id='scount'>0</span></div>")
+    w("    <div class='tsc'>ULKE&nbsp;<span class='tv' id='scountry'>0</span></div>")
+    w("    <div class='tsc'>MAX&nbsp;<span class='tv' id='smaxalt'>0</span>m</div>")
+    w("    <div class='tsc'>SON&nbsp;<span class='tv' id='slastupd'>--:--</span></div>")
+    w("  </div>")
+    w("  <div class='top-right'>")
+    w("    <div class='clock' id='clock'>00:00:00</div>")
+    w("    <button class='tbtn' onclick='toggleSearch()' title='Ara [F]'>&#128269;</button>")
+    w("    <button class='tbtn' onclick='doRefresh()' title='Yenile [R]'>&#8635;</button>")
+    w("    <button class='tbtn' onclick='gotoMe()' title='Konumum [C]'>&#11788;</button>")
+    w("    <button class='tbtn' id='wxbtn' onclick='toggleWeather()' title='Hava [H]'>&#9928;</button>")
+    w("    <button class='tbtn' onclick='toggleHelp()' title='Yardim [?]'>?</button>")
+    w("    <button class='tbtn' onclick='doFullscreen()'>&#9974;</button>")
+    w("  </div>")
+    w("</div>")
+
+    # ── SEARCH ────────────────────────────────────────────────────
+    w("<div class='searchbar' id='searchbar'>")
+    w("  <div style='position:relative;flex:1'>")
+    w("    <input class='sinput' id='sinput' placeholder='Callsign, ulke, ICAO...' oninput='doSearch(this.value)' onkeydown='searchKey(event)'>")
+    w("    <div class='sresults' id='sresults'></div>")
+    w("  </div>")
+    w("  <button class='sclose' onclick='toggleSearch()'>&#215;</button>")
+    w("</div>")
+
+    # ── PANEL TOGGLE ──────────────────────────────────────────────
+    w("<div class='ptoggle' id='ptoggle' onclick='togglePanel()'>&#9664;</div>")
+
+    # ── LEFT PANEL ────────────────────────────────────────────────
+    w("<div class='lpanel' id='lpanel'>")
+    w("  <div class='tabs'>")
+    w("    <button class='tabbt on' id='tab0' onclick='switchTab(0)'>UCUSLAR</button>")
+    w("    <button class='tabbt' id='tab1' onclick='switchTab(1)'>iSTAT</button>")
+    w("    <button class='tabbt' id='tab2' onclick='switchTab(2)'>ALARM</button>")
+    w("  </div>")
+    # Tab 0 - Flights
+    w("  <div class='tabpanel on' id='tp0'>")
+    w("    <div class='fbar'>")
+    w("      <button class='fchip on' id='fc-all' onclick='setFilter(\"all\")'>TUMU</button>")
+    w("      <button class='fchip' id='fc-high' onclick='setFilter(\"high\")'>YUKSEK</button>")
+    w("      <button class='fchip' id='fc-fast' onclick='setFilter(\"fast\")'>HIZ</button>")
+    w("      <button class='fchip' id='fc-tr' onclick='setFilter(\"tr\")'>TR</button>")
+    w("      <button class='fchip' id='fc-emg' onclick='setFilter(\"emg\")'>ACiL</button>")
+    w("    </div>")
+    w("    <div class='fcountlabel'><span id='fcount'>0</span> UCAK</div>")
+    w("    <div id='flist' style='flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(0,255,136,0.2) transparent'>")
+    w("      <div style='padding:20px;text-align:center;color:rgba(168,255,212,0.2);font-size:11px;letter-spacing:2px'>VERi YUKLENiYOR...</div>")
+    w("    </div>")
+    w("  </div>")
+    # Tab 1 - Stats
+    w("  <div class='tabpanel' id='tp1'>")
+    w("    <div class='stblock'>")
+    w("      <div class='sthead'>OZET</div>")
+    w("      <div class='bigstat'>")
+    w("        <div class='bsi'><div class='bsv' id='st-total'>0</div><div class='bsl'>UCAK</div></div>")
+    w("        <div class='bsi'><div class='bsv' id='st-co'>0</div><div class='bsl'>ULKE</div></div>")
+    w("        <div class='bsi'><div class='bsv' id='st-aalt'>0</div><div class='bsl'>ORT.YUK(m)</div></div>")
+    w("        <div class='bsi'><div class='bsv' id='st-aspd'>0</div><div class='bsl'>ORT.HIZ</div></div>")
+    w("      </div>")
+    w("    </div>")
+    w("    <div class='stblock'><div class='sthead'>ULKE SIRASI</div><div id='stco'></div></div>")
+    w("    <div class='stblock'><div class='sthead'>HIZ DAGILIMI (km/s)</div><div id='stspd'></div></div>")
+    w("    <div class='stblock'><div class='sthead'>YUKSEKLIK DAGILIMI (m)</div><div id='stalt'></div></div>")
+    w("  </div>")
+    # Tab 2 - Alerts
+    w("  <div class='tabpanel' id='tp2'>")
+    w("    <div style='padding:7px 12px;border-bottom:1px solid rgba(0,255,136,0.07);font-size:9px;color:rgba(168,255,212,0.4);letter-spacing:2px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0'>")
+    w("      <span>ALARMLAR</span><button class='fchip' onclick='clearAlerts()' style='font-size:8px;padding:2px 7px'>TEMIZLE</button>")
+    w("    </div>")
+    w("    <div id='alertlist'><div class='no-alerts'>ALARM YOK</div></div>")
+    w("  </div>")
+    w("</div>")
+
+    # ── MAP ───────────────────────────────────────────────────────
+    w("<div id='map'></div>")
+
+    # ── LAYER BUTTONS ─────────────────────────────────────────────
+    w("<div class='layers'>")
+    w("  <button class='lbtn on' id='lbsat' onclick='setLayer(\"satellite\")'>&#128752; UYDU</button>")
+    w("  <button class='lbtn' id='lbdrk' onclick='setLayer(\"dark\")'>&#127769; KARANLIK</button>")
+    w("  <button class='lbtn' id='lbstr' onclick='setLayer(\"street\")'>&#128506; SOKAK</button>")
+    w("  <div class='lsep'></div>")
+    w("  <button class='lbtn' id='lbtrm' onclick='toggleTerminator()'>&#9788; GECE</button>")
+    w("</div>")
+
+    # ── COMPASS ───────────────────────────────────────────────────
+    w("<div class='compass'><canvas id='compass' width='46' height='46'></canvas></div>")
+
+    # ── INFO PANEL ────────────────────────────────────────────────
+    w("<div class='info-panel' id='infopanel'>")
+    w("  <div class='info-head'>")
+    w("    <span id='info-call'>---</span>")
+    w("    <div class='info-actions-head'>")
+    w("      <button class='trail-toggle' id='trailbtn' onclick='toggleTrail()'>iZ</button>")
+    w("      <span class='close-x' onclick='closeInfo()'>&#215;</span>")
+    w("    </div>")
+    w("  </div>")
+    w("  <div class='info-grid'>")
+    w("    <div class='ifield'><div class='ilabel'>ULKE</div><div class='ival blue' id='inf-co'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>YUKSEKLIK</div><div class='ival' id='inf-alt'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>HIZ</div><div class='ival' id='inf-spd'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>ROTA</div><div class='ival' id='inf-hdg'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>ENLEM</div><div class='ival' id='inf-lat'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>BOYLAM</div><div class='ival' id='inf-lon'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>SQUAWK</div><div class='ival' id='inf-sqk'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>DURUM</div><div class='ival' id='inf-grnd'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>ICAO</div><div class='ival' style='font-size:10px;letter-spacing:1px' id='inf-icao'>---</div></div>")
+    w("    <div class='ifield'><div class='ilabel'>DIKEY HIZ</div><div class='ival' id='inf-vs'>---</div></div>")
+    w("  </div>")
+    w("  <div class='spd-wrap'><div class='spd-label'>0</div><div class='spd-track'><div class='spd-fill' id='spdgauge'></div></div><div class='spd-label'>1200+</div></div>")
+    w("  <div class='info-btns'>")
+    w("    <button class='iabtn' onclick='flyTo()'>&#9992; GiT</button>")
+    w("    <button class='iabtn' onclick='copyCoords()'>&#128203; KOORD</button>")
+    w("    <button class='iabtn' onclick='openFA()'>&#127760; FA</button>")
+    w("  </div>")
+    w("</div>")
+
+    # ── RADAR ─────────────────────────────────────────────────────
+    w("<div class='radar-wrap'>")
+    w("  <div class='radar-head'>RADAR <span class='radar-cnt' id='radarcnt'>0</span></div>")
+    w("  <canvas id='radarc' width='100' height='100'></canvas>")
+    w("</div>")
+
+    # ── HUD ───────────────────────────────────────────────────────
+    w("<div class='hud' id='hud'>")
+    w("  <div class='hud-meter'><div class='hud-label'>YUKSEK</div><div class='hud-val' id='hud-alt'>---</div><div class='hud-unit'>m</div></div>")
+    w("  <div class='hud-meter'><div class='hud-label'>HIZ</div><div class='hud-val' id='hud-spd'>---</div><div class='hud-unit'>km/s</div></div>")
+    w("  <div class='hud-meter'><div class='hud-label'>ROTA</div><div class='hud-val' id='hud-hdg'>---</div><div class='hud-unit'>deg</div></div>")
+    w("</div>")
+
+    # ── NOTIFICATION ──────────────────────────────────────────────
+    w("<div class='notif' id='notif'>")
+    w("  <div class='notif-icon' id='notif-icon'>i</div>")
+    w("  <span id='notif-msg'></span>")
+    w("</div>")
+
+    # ── REFRESH BAR ───────────────────────────────────────────────
+    w("<div class='refbar'><div class='refprog' id='refprog'></div></div>")
+
+    # ── JAVASCRIPT ────────────────────────────────────────────────
+    w("<script>")
+    w("// ── STATE ─────────────────────────────────────────────────────")
+    w("var MAP=null, TOKEN='', DEMO=false;")
+    w("var flights=[], selIcao=null, activeFilter='all';")
+    w("var panelOpen=true, searchOpen=false, helpOpen=false;")
+    w("var curLayer='satellite', weatherOn=false, terminatorOn=false;")
+    w("var markers={}, trailOn={}, trailPts={}, radarAngle=0;")
+    w("var alerts=[], rfTimer=null, RF=30000;")
+    w("var FLAGS={Turkey:'TR',Germany:'DE','United Kingdom':'GB',France:'FR','United States':'US',Spain:'ES',Italy:'IT',Netherlands:'NL',Russia:'RU','United Arab Emirates':'AE',Qatar:'QA','Saudi Arabia':'SA',China:'CN',Japan:'JP',Australia:'AU',Canada:'CA',Brazil:'BR',India:'IN','South Korea':'KR',Switzerland:'CH',Poland:'PL',Austria:'AT',Greece:'GR',Portugal:'PT',Ukraine:'UA',Romania:'RO'};")
+
+    w("// ── FLAG HELPER ────────────────────────────────────────────────")
+    w("function flag(country){var c=FLAGS[country];if(!c)return '';return c.split('').map(function(x){return String.fromCodePoint(127397+x.charCodeAt(0));}).join('');}")
+
+    w("// ── NOTIFICATION ───────────────────────────────────────────────")
+    w("function notify(msg,type){")
+    w("  var el=document.getElementById('notif');")
+    w("  var ic=document.getElementById('notif-icon');")
+    w("  var mc=document.getElementById('notif-msg');")
+    w("  ic.textContent=type==='err'?'!':type==='warn'?'?':'i';")
+    w("  mc.textContent=msg;")
+    w("  el.className='notif show'+(type==='err'?' err':type==='warn'?' warn':'');")
+    w("  clearTimeout(el._t);")
+    w("  el._t=setTimeout(function(){el.classList.remove('show');},3500);")
+    w("}")
+
+    w("// ── MODAL LOGIC ─────────────────────────────────────────────────")
+    w("// Called when page loads - check for saved token")
+    w("window.addEventListener('load',function(){")
+    w("  var saved=localStorage.getItem('skyw_token');")
+    w("  if(saved&&saved.length>10){")
+    w("    document.getElementById('token-input').value=saved;")
+    w("    var sv=document.getElementById('saved-token');")
+    w("    document.getElementById('saved-label').textContent='Kayitli token: '+saved.slice(0,12)+'...';")
+    w("    sv.classList.add('show');")
+    w("  }")
+    w("  // Enter key on input")
+    w("  document.getElementById('token-input').addEventListener('keydown',function(e){")
+    w("    if(e.key==='Enter')doStart();")
+    w("    if(e.key==='Tab'){e.preventDefault();doDemo();}")
+    w("  });")
+    w("});")
+
+    w("function setModalErr(msg){")
+    w("  var e=document.getElementById('modal-err');")
+    w("  e.innerHTML=msg?'<span style=\"color:#ff4466\">&#9888;</span> '+msg:'';")
+    w("}")
+
+    w("function doStart(){")
+    w("  var v=document.getElementById('token-input').value.trim();")
+    w("  setModalErr('');")
+    w("  if(!v){setModalErr('Token bos birakilamaz');return;}")
+    w("  // Accept any token starting with pk. or provide warning if unsure")
+    w("  if(v.length<20){setModalErr('Token cok kisa gorunuyor, kontrol edin');return;}")
+    w("  TOKEN=v;")
+    w("  localStorage.setItem('skyw_token',v);")
+    w("  closeModal();")
+    w("  runBoot(false);")
+    w("}")
+
+    w("function doDemo(){")
+    w("  DEMO=true;")
+    w("  closeModal();")
+    w("  runBoot(true);")
+    w("}")
+
+    w("function closeModal(){")
+    w("  // Disable buttons to prevent double-click")
+    w("  document.getElementById('btn-start').disabled=true;")
+    w("  document.getElementById('btn-demo').disabled=true;")
+    w("  document.getElementById('modal').classList.add('gone');")
+    w("}")
+
+    w("// ── BOOT ────────────────────────────────────────────────────────")
+    w("async function runBoot(demo){")
+    w("  var ld=document.getElementById('loading');")
+    w("  var bar=document.getElementById('ldbar');")
+    w("  var status=document.getElementById('ldstatus');")
+    w("  ld.classList.add('active');")
+    w("  startLdParticles();")
+    w("  var steps=[")
+    w("    [10,'SISTEM BASLATILIYOR...'],")
+    w("    [25,'OPENSKY BAGLANTISI KURULUYOR...'],")
+    w("    [45,'HARiTA YUKLENIYOR...'],")
+    w("    [65,'UCAK VERiSi ALINIYOR...'],")
+    w("    [80,'RADAR AKTiF...'],")
+    w("    [95,'iSTATiSTiKLER HESAPLANIYOR...'],")
+    w("    [100,'HAZIR!']")
+    w("  ];")
+    w("  for(var i=0;i<steps.length;i++){")
+    w("    bar.style.width=steps[i][0]+'%';")
+    w("    status.textContent=steps[i][1];")
+    w("    await sleep(280);")
+    w("  }")
+    w("  await sleep(180);")
+    w("  ld.classList.add('fade');")
+    w("  await sleep(500);")
+    w("  ld.classList.remove('active','fade');")
+    w("  ld.style.display='none';")
+    w("  // Init everything")
+    w("  if(demo) initNoMap(); else initMap();")
+    w("  startClock();")
+    w("  startRadar();")
+    w("  startCompass();")
+    w("  setupKeys();")
+    w("  loadFlights();")
+    w("  startRefTimer();")
+    w("}")
+
+    w("function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}")
+
+    w("// ── PARTICLES ───────────────────────────────────────────────────")
+    w("function startLdParticles(){")
+    w("  var cv=document.getElementById('ldcanvas');")
+    w("  if(!cv)return;")
+    w("  cv.width=window.innerWidth;cv.height=window.innerHeight;")
+    w("  var ctx=cv.getContext('2d');")
+    w("  var pts=Array.from({length:50},function(){return{x:Math.random()*cv.width,y:Math.random()*cv.height,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4};});")
+    w("  function frame(){")
+    w("    if(!document.getElementById('loading').classList.contains('active'))return;")
+    w("    ctx.clearRect(0,0,cv.width,cv.height);")
+    w("    pts.forEach(function(p){")
+    w("      p.x+=p.vx;p.y+=p.vy;")
+    w("      if(p.x<0||p.x>cv.width)p.vx*=-1;")
+    w("      if(p.y<0||p.y>cv.height)p.vy*=-1;")
+    w("      ctx.beginPath();ctx.arc(p.x,p.y,1.2,0,Math.PI*2);")
+    w("      ctx.fillStyle='rgba(0,255,136,0.25)';ctx.fill();")
+    w("    });")
+    w("    requestAnimationFrame(frame);")
+    w("  }")
+    w("  frame();")
+    w("}")
+
+    w("// ── CLOCK ────────────────────────────────────────────────────────")
+    w("function startClock(){")
+    w("  setInterval(function(){")
+    w("    document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8);")
+    w("  },1000);")
+    w("}")
+
+    w("// ── MAP INIT ─────────────────────────────────────────────────────")
+    w("function initMap(){")
+    w("  mapboxgl.accessToken=TOKEN;")
+    w("  MAP=new mapboxgl.Map({")
+    w("    container:'map',")
+    w("    style:'mapbox://styles/mapbox/satellite-v9',")
+    w("    center:[35,40],zoom:4,antialias:true")
+    w("  });")
+    w("  MAP.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');")
+    w("  MAP.on('load',function(){")
+    w("    setSdot('live');")
+    w("  });")
+    w("  MAP.on('error',function(e){")
+    w("    setSdot('error');")
+    w("    notify('Harita hatasi - Token gecerli mi?','err');")
+    w("  });")
+    w("  MAP.on('rotate',function(){drawCompass(MAP.getBearing());});")
+    w("}")
+
+    w("function initNoMap(){")
+    w("  setSdot('demo');")
+    w("  var m=document.getElementById('map');")
+    w("  m.style.background='radial-gradient(ellipse at 50% 40%,#030f1e 0%,#020810 100%)';")
+    w("  var c=document.createElement('canvas');")
+    w("  c.style.cssText='position:absolute;inset:0;width:100%;height:100%';")
+    w("  m.appendChild(c);")
+    w("  c.width=window.innerWidth;c.height=window.innerHeight;")
+    w("  var ctx=c.getContext('2d');")
+    w("  ctx.strokeStyle='rgba(0,255,136,0.04)';ctx.lineWidth=1;")
+    w("  for(var x=0;x<c.width;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke();}")
+    w("  for(var y=0;y<c.height;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke();}")
+    w("}")
+
+    w("function setSdot(state){")
+    w("  var d=document.getElementById('sdot'),s=document.getElementById('sstatus');")
+    w("  d.className='pulsedot';")
+    w("  if(state==='live'){s.textContent='CANLI';}") 
+    w("  else if(state==='loading'){d.classList.add('loading');s.textContent='YUKLENIYOR';}")
+    w("  else if(state==='error'){d.classList.add('error');s.textContent='HATA';}")
+    w("  else if(state==='demo'){s.textContent='DEMO';}")
+    w("}")
+
+    w("// ── LAYER SWITCH ─────────────────────────────────────────────────")
+    w("var LAYERS={satellite:'mapbox://styles/mapbox/satellite-v9',dark:'mapbox://styles/mapbox/dark-v11',street:'mapbox://styles/mapbox/streets-v12'};")
+    w("function setLayer(l){")
+    w("  if(DEMO||!MAP)return;")
+    w("  curLayer=l;")
+    w("  var ids={satellite:'lbsat',dark:'lbdrk',street:'lbstr'};")
+    w("  Object.keys(ids).forEach(function(k){document.getElementById(ids[k]).classList.toggle('on',k===l);});")
+    w("  MAP.setStyle(LAYERS[l]);")
+    w("  MAP.once('style.load',function(){redrawMarkers();});")
+    w("  notify(l.toUpperCase()+' KATMANI','info');")
+    w("}")
+
+    w("// ── TERMINATOR ───────────────────────────────────────────────────")
+    w("function toggleTerminator(){")
+    w("  terminatorOn=!terminatorOn;")
+    w("  document.getElementById('lbtrm').classList.toggle('on',terminatorOn);")
+    w("  if(terminatorOn)drawTerminator();")
+    w("  else if(MAP){try{if(MAP.getLayer('trm'))MAP.removeLayer('trm');if(MAP.getSource('trm'))MAP.removeSource('trm');}catch(e){}}")
+    w("}")
+    w("function drawTerminator(){")
+    w("  if(!MAP)return;")
+    w("  var d=new Date(),dec=-23.45*Math.cos((360/365*(d.getMonth()*30+d.getDate())+10)*Math.PI/180)*Math.PI/180;")
+    w("  var coords=[];")
+    w("  for(var lon=-180;lon<=180;lon+=2){var lat=Math.atan(-Math.cos(lon*Math.PI/180)/Math.tan(dec))*180/Math.PI;coords.push([lon,lat]);}")
+    w("  coords.push([180,-90],[180,90],[-180,90],[-180,coords[0][1]],coords[0]);")
+    w("  try{")
+    w("    if(MAP.getSource('trm'))MAP.removeLayer('trm'),MAP.removeSource('trm');")
+    w("    MAP.addSource('trm',{type:'geojson',data:{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}});")
+    w("    MAP.addLayer({id:'trm',type:'fill',source:'trm',paint:{'fill-color':'#000','fill-opacity':0.4}});")
+    w("  }catch(e){}")
+    w("}")
+
+    w("// ── WEATHER ─────────────────────────────────────────────────────")
+    w("function toggleWeather(){")
+    w("  weatherOn=!weatherOn;")
+    w("  document.getElementById('wxbtn').classList.toggle('on',weatherOn);")
+    w("  notify('HAVA DURUMU '+(weatherOn?'AKTIF':'KAPALI'),'info');")
+    w("}")
+
+    w("// ── OPENSKY API ──────────────────────────────────────────────────")
+    w("async function fetchFlights(){")
+    w("  // Try Europe+Turkey bounds first (lighter)")
+    w("  var urls=[")
+    w("    'https://opensky-network.org/api/states/all?lamin=25&lomin=-20&lamax=72&lomax=55',")
+    w("    'https://opensky-network.org/api/states/all'")
+    w("  ];")
+    w("  for(var i=0;i<urls.length;i++){")
+    w("    try{")
+    w("      var r=await fetch(urls[i],{signal:AbortSignal.timeout(15000)});")
+    w("      if(!r.ok)continue;")
+    w("      var d=await r.json();")
+    w("      return d.states||[];")
+    w("    }catch(e){continue;}")
+    w("  }")
+    w("  notify('OpenSky baglanamiyor - demo veri gosteriliyor','warn');")
+    w("  return generateDemo();")
+    w("}")
+
+    w("function parseState(s){")
+    w("  return{")
+    w("    icao24:s[0]||'',")
+    w("    callsign:(s[1]||'').trim()||s[0]||'?',")
+    w("    country:s[2]||'?',")
+    w("    lon:s[5],lat:s[6],")
+    w("    alt:s[7]?Math.round(s[7]):null,")
+    w("    ground:s[8],")
+    w("    vel:s[9]?Math.round(s[9]*3.6):null,")
+    w("    hdg:s[10]!==null?Math.round(s[10]):null,")
+    w("    vs:s[11]?Math.round(s[11]):0,")
+    w("    sqk:s[14]||'----'")
+    w("  };")
+    w("}")
+
+    w("function generateDemo(){")
+    w("  var airlines=['TK','LH','BA','AF','EK','QR','SU','PC','FR','W6','IBE','KLM','SAS','DLH','THY','AUA','SWR','TAP'],")
+    w("      countries=['Turkey','Germany','United Kingdom','France','United Arab Emirates','Qatar','Russia','United States','Spain','Netherlands','Italy','Switzerland'];")
+    w("  return Array.from({length:90},function(_,i){")
+    w("    var al=airlines[i%airlines.length],co=countries[i%countries.length];")
+    w("    return[")
+    w("      'dm'+String(i).padStart(3,'0'),al+(200+i)+'  ',co,")
+    w("      null,null,")
+    w("      10+Math.random()*50, 30+Math.random()*35,")
+    w("      1200+Math.random()*12000, false,")
+    w("      100+Math.random()*900, Math.random()*360,")
+    w("      (Math.random()-.5)*12,null,null,")
+    w("      Math.floor(1000+Math.random()*8999)")
+    w("    ];")
+    w("  });")
+    w("}")
+
+    w("// ── LOAD FLIGHTS ─────────────────────────────────────────────────")
+    w("async function loadFlights(){")
+    w("  setSdot('loading');")
+    w("  var raw=await fetchFlights();")
+    w("  flights=raw.map(parseState).filter(function(f){return f.lat&&f.lon&&!f.ground;});")
+    w("  // Update topbar stats")
+    w("  var countries=new Set(flights.map(function(f){return f.country;}));")
+    w("  var alts=flights.filter(function(f){return f.alt;}).map(function(f){return f.alt;});")
+    w("  document.getElementById('scount').textContent=flights.length;")
+    w("  document.getElementById('scountry').textContent=countries.size;")
+    w("  document.getElementById('smaxalt').textContent=alts.length?Math.max.apply(null,alts):0;")
+    w("  document.getElementById('slastupd').textContent=new Date().toTimeString().slice(0,5);")
+    w("  setSdot(DEMO?'demo':'live');")
+    w("  checkAlerts();")
+    w("  updateStats();")
+    w("  renderList();")
+    w("  updateTrails();")
+    w("  if(MAP)redrawMarkers();")
+    w("}")
+
+    w("function doRefresh(){resetRefTimer();loadFlights();notify('VERi YENiLENDi','info');}")
+
+    w("// ── FILTER ────────────────────────────────────────────────────────")
+    w("function setFilter(f){")
+    w("  activeFilter=f;")
+    w("  ['all','high','fast','tr','emg'].forEach(function(x){")
+    w("    var el=document.getElementById('fc-'+x);")
+    w("    if(el)el.classList.toggle('on',x===f);")
+    w("  });")
+    w("  renderList();")
+    w("}")
+    w("function applyFilter(list){")
+    w("  if(activeFilter==='all')return list;")
+    w("  if(activeFilter==='high')return list.filter(function(f){return f.alt&&f.alt>9000;});")
+    w("  if(activeFilter==='fast')return list.filter(function(f){return f.vel&&f.vel>800;});")
+    w("  if(activeFilter==='tr')return list.filter(function(f){return f.country==='Turkey';});")
+    w("  if(activeFilter==='emg')return list.filter(function(f){return f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';});")
+    w("  return list;")
+    w("}")
+
+    w("// ── RENDER LIST ───────────────────────────────────────────────────")
+    w("function renderList(){")
+    w("  var fl=document.getElementById('flist');fl.innerHTML='';")
+    w("  var filtered=applyFilter(flights);")
+    w("  document.getElementById('fcount').textContent=filtered.length;")
+    w("  var frag=document.createDocumentFragment();")
+    w("  filtered.slice(0,150).forEach(function(f){")
+    w("    var emg=f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';")
+    w("    var altPct=f.alt?Math.min(100,f.alt/130):0;")
+    w("    var altColor=f.alt>9000?'#ff4466':f.alt>5000?'#ffcc00':'#00ff88';")
+    w("    var d=document.createElement('div');")
+    w("    d.className='fitem'+(f.icao24===selIcao?' sel':'')+(emg?' emerg':'');")
+    w("    d.innerHTML='<div class=\"fcall\"><span class=\"fflag\">'+flag(f.country)+'</span>'+f.callsign+'</div>'")
+    w("      +'<div class=\"fdetail\">'")
+    w("      +'<span class=\"fdv\">'+f.country.slice(0,12)+'</span>'")
+    w("      +'<span>&#9650;<span class=\"fdv\">'+(f.alt?f.alt+'m':'--')+'</span></span>'")
+    w("      +'<span>&#10148;<span class=\"fdv\">'+(f.vel?f.vel:'--')+'</span></span>'")
+    w("      +'</div>'")
+    w("      +'<div class=\"altbar\"><div class=\"altfill\" style=\"width:'+altPct+'%;background:'+altColor+'\"></div></div>';")
+    w("    d.onclick=(function(ff){return function(){pickFlight(ff);};})(f);")
+    w("    frag.appendChild(d);")
+    w("  });")
+    w("  fl.appendChild(frag);")
+    w("}")
+
+    w("// ── STATS ─────────────────────────────────────────────────────────")
+    w("function updateStats(){")
+    w("  var total=flights.length;")
+    w("  var cmap={};flights.forEach(function(f){cmap[f.country]=(cmap[f.country]||0)+1;});")
+    w("  var alts=flights.filter(function(f){return f.alt;});")
+    w("  var vels=flights.filter(function(f){return f.vel;});")
+    w("  var aAlt=alts.length?Math.round(alts.reduce(function(s,f){return s+f.alt;},0)/alts.length):0;")
+    w("  var aVel=vels.length?Math.round(vels.reduce(function(s,f){return s+f.vel;},0)/vels.length):0;")
+    w("  document.getElementById('st-total').textContent=total;")
+    w("  document.getElementById('st-co').textContent=Object.keys(cmap).length;")
+    w("  document.getElementById('st-aalt').textContent=aAlt;")
+    w("  document.getElementById('st-aspd').textContent=aVel;")
+    w("  // Countries")
+    w("  var csorted=Object.entries(cmap).sort(function(a,b){return b[1]-a[1];}).slice(0,8);")
+    w("  var maxC=csorted[0]?csorted[0][1]:1;")
+    w("  document.getElementById('stco').innerHTML=csorted.map(function(e){")
+    w("    return '<div class=\"strow\"><div class=\"stlabel\">'+flag(e[0])+' '+e[0].slice(0,14)+'</div><div class=\"sttrack\"><div class=\"stfill\" style=\"width:'+(e[1]/maxC*100)+'%\"></div></div><div class=\"stval\">'+e[1]+'</div></div>';")
+    w("  }).join('');")
+    w("  // Speeds")
+    w("  var spb=[['0-400',0,0],['400-600',400,600],['600-800',600,800],['800-1000',800,1000],['>1000',1000,99999]];")
+    w("  vels.forEach(function(f){spb.forEach(function(b){if(f.vel>=b[1]&&f.vel<b[2])b[0+3]=(b[3]||0)+1;});});")
+    w("  // Simplified speed buckets")
+    w("  var spBkts=[{l:'<400',n:0},{l:'400-600',n:0},{l:'600-800',n:0},{l:'800-1000',n:0},{l:'>1000',n:0}];")
+    w("  vels.forEach(function(f){if(f.vel<400)spBkts[0].n++;else if(f.vel<600)spBkts[1].n++;else if(f.vel<800)spBkts[2].n++;else if(f.vel<1000)spBkts[3].n++;else spBkts[4].n++;});")
+    w("  var maxS=Math.max.apply(null,spBkts.map(function(b){return b.n;}));")
+    w("  document.getElementById('stspd').innerHTML=spBkts.map(function(b){return '<div class=\"strow\"><div class=\"stlabel\">'+b.l+'</div><div class=\"sttrack\"><div class=\"stfill\" style=\"width:'+(maxS>0?b.n/maxS*100:0)+'%;background:#00e5ff\"></div></div><div class=\"stval\" style=\"color:#00e5ff\">'+b.n+'</div></div>';}).join('');")
+    w("  // Altitude buckets")
+    w("  var altBkts=[{l:'<3k',n:0},{l:'3k-6k',n:0},{l:'6k-9k',n:0},{l:'9k-12k',n:0},{l:'>12k',n:0}];")
+    w("  alts.forEach(function(f){if(f.alt<3000)altBkts[0].n++;else if(f.alt<6000)altBkts[1].n++;else if(f.alt<9000)altBkts[2].n++;else if(f.alt<12000)altBkts[3].n++;else altBkts[4].n++;});")
+    w("  var maxA=Math.max.apply(null,altBkts.map(function(b){return b.n;}));")
+    w("  document.getElementById('stalt').innerHTML=altBkts.map(function(b){return '<div class=\"strow\"><div class=\"stlabel\">'+b.l+'</div><div class=\"sttrack\"><div class=\"stfill\" style=\"width:'+(maxA>0?b.n/maxA*100:0)+'%;background:#ffcc00\"></div></div><div class=\"stval\" style=\"color:#ffcc00\">'+b.n+'</div></div>';}).join('');")
+    w("}")
+
+    w("// ── ALERTS ────────────────────────────────────────────────────────")
+    w("function checkAlerts(){")
+    w("  flights.forEach(function(f){")
+    w("    // High altitude")
+    w("    if(f.alt&&f.alt>11500){")
+    w("      addAlert(f.callsign+' yuksek irtifa: '+f.alt+'m','med');")
+    w("    }")
+    w("    // Emergency squawk")
+    w("    var sqkNames={'7700':'ACIL DURUM','7600':'RADYO ARIZA','7500':'HiJACK'};")
+    w("    if(sqkNames[f.sqk]){")
+    w("      addAlert('SQUAWK '+f.sqk+' '+sqkNames[f.sqk]+': '+f.callsign,'high');")
+    w("    }")
+    w("  });")
+    w("}")
+    w("function addAlert(msg,level){")
+    w("  if(alerts.find(function(a){return a.msg===msg;}))return;")
+    w("  alerts.unshift({msg:msg,level:level,time:new Date().toTimeString().slice(0,5)});")
+    w("  if(alerts.length>40)alerts.pop();")
+    w("  renderAlerts();")
+    w("  if(level==='high')notify('ALARM: '+msg,'err');")
+    w("}")
+    w("function renderAlerts(){")
+    w("  var al=document.getElementById('alertlist');")
+    w("  var tab2=document.getElementById('tab2');")
+    w("  if(!alerts.length){al.innerHTML='<div class=\"no-alerts\">ALARM YOK</div>';tab2.textContent='ALARM';return;}")
+    w("  al.innerHTML=alerts.slice(0,30).map(function(a){")
+    w("    return '<div class=\"alert-item\"><div class=\"alert-pip '+a.level+'\"></div><div><div class=\"alert-msg\">'+a.msg+'</div><div class=\"alert-time\">'+a.time+'</div></div></div>';")
+    w("  }).join('');")
+    w("  tab2.textContent='ALARM('+Math.min(alerts.length,30)+')';")
+    w("}")
+    w("function clearAlerts(){alerts=[];renderAlerts();}")
+
+    w("// ── MARKERS ───────────────────────────────────────────────────────")
+    w("function makeMarkerEl(hdg,sel,sqk,alt){")
+    w("  var emg=sqk==='7700'||sqk==='7600'||sqk==='7500';")
+    w("  var color=emg?'#ff4466':sel?'#00e5ff':alt>9000?'#ffcc00':'#00ff88';")
+    w("  var sz=sel?20:13;")
+    w("  var el=document.createElement('div');")
+    w("  el.style.cssText='width:'+sz+'px;height:'+sz+'px;cursor:pointer;';")
+    w("  if(emg)el.style.animation='pulse .6s infinite';")
+    w("  el.innerHTML='<svg viewBox=\"0 0 24 24\" fill=\"none\" style=\"transform:rotate('+(hdg||0)+'deg);width:100%;height:100%;filter:drop-shadow(0 0 '+(sel?5:3)+'px '+color+')\">'")
+    w("    +'<path d=\"M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z\" fill=\"'+color+'\" opacity=\"0.95\"/>'")
+    w("    +'</svg>';")
+    w("  return el;")
+    w("}")
+    w("function redrawMarkers(){")
+    w("  if(!MAP)return;")
+    w("  Object.values(markers).forEach(function(m){m.remove();});markers={};")
+    w("  flights.forEach(function(f){")
+    w("    var el=makeMarkerEl(f.hdg,f.icao24===selIcao,f.sqk,f.alt);")
+    w("    var m=new mapboxgl.Marker({element:el}).setLngLat([f.lon,f.lat]).addTo(MAP);")
+    w("    el.addEventListener('click',(function(ff){return function(e){e.stopPropagation();pickFlight(ff);};})(f));")
+    w("    markers[f.icao24]=m;")
+    w("  });")
+    w("}")
+
+    w("// ── SELECT FLIGHT ──────────────────────────────────────────────────")
+    w("function pickFlight(f){")
+    w("  selIcao=f.icao24;")
+    w("  var emg=f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';")
+    w("  // Info panel")
+    w("  document.getElementById('info-call').textContent=f.callsign;")
+    w("  document.getElementById('inf-co').textContent=flag(f.country)+' '+f.country.slice(0,16);")
+    w("  document.getElementById('inf-alt').textContent=f.alt?f.alt+'m':'--';")
+    w("  document.getElementById('inf-alt').className='ival'+(f.alt>9000?' yellow':'');")
+    w("  document.getElementById('inf-spd').textContent=f.vel?f.vel+' km/s':'--';")
+    w("  document.getElementById('inf-hdg').textContent=f.hdg!==null?f.hdg+'deg':'--';")
+    w("  document.getElementById('inf-lat').textContent=f.lat?f.lat.toFixed(5):'--';")
+    w("  document.getElementById('inf-lon').textContent=f.lon?f.lon.toFixed(5):'--';")
+    w("  var sqkEl=document.getElementById('inf-sqk');")
+    w("  sqkEl.textContent=f.sqk||'--';")
+    w("  sqkEl.className='ival'+(emg?' red':'');")
+    w("  document.getElementById('inf-grnd').textContent=f.ground?'YERDE':f.vs>2?'YUKSELIYOR':f.vs<-2?'INIYOR':'SEYREDIYOR';")
+    w("  document.getElementById('inf-icao').textContent=(f.icao24||'--').toUpperCase();")
+    w("  document.getElementById('inf-vs').textContent=f.vs?(f.vs>0?'+':'')+f.vs+' m/s':'--';")
+    w("  document.getElementById('spdgauge').style.width=(f.vel?Math.min(100,f.vel/12):0)+'%';")
+    w("  document.getElementById('hud-alt').textContent=f.alt?Math.round(f.alt):'--';")
+    w("  document.getElementById('hud-spd').textContent=f.vel||'--';")
+    w("  document.getElementById('hud-hdg').textContent=f.hdg!==null?f.hdg:'--';")
+    w("  document.getElementById('trailbtn').classList.toggle('on',!!trailOn[f.icao24]);")
+    w("  document.getElementById('infopanel').classList.add('vis');")
+    w("  document.getElementById('hud').classList.add('vis');")
+    w("  if(MAP&&f.lat&&f.lon)MAP.flyTo({center:[f.lon,f.lat],zoom:7,speed:1.5,curve:1.2});")
+    w("  renderList();")
+    w("  if(MAP)redrawMarkers();")
+    w("}")
+
+    w("function closeInfo(){")
+    w("  selIcao=null;")
+    w("  document.getElementById('infopanel').classList.remove('vis');")
+    w("  document.getElementById('hud').classList.remove('vis');")
+    w("  renderList();if(MAP)redrawMarkers();")
+    w("}")
+
+    w("function flyTo(){var f=flights.find(function(x){return x.icao24===selIcao;});if(f&&MAP)MAP.flyTo({center:[f.lon,f.lat],zoom:9,speed:1.5});}")
+    w("function copyCoords(){var f=flights.find(function(x){return x.icao24===selIcao;});if(!f)return;var t=f.lat.toFixed(5)+', '+f.lon.toFixed(5);try{navigator.clipboard.writeText(t);notify('KOORDINAT KOPYALANDI','info');}catch(e){notify(t,'info');}}")
+    w("function openFA(){var f=flights.find(function(x){return x.icao24===selIcao;});if(f)window.open('https://flightaware.com/live/flight/'+f.callsign.trim(),'_blank');}")
+
+    w("// ── TRAIL ─────────────────────────────────────────────────────────")
+    w("function toggleTrail(){")
+    w("  if(!selIcao)return;")
+    w("  trailOn[selIcao]=!trailOn[selIcao];")
+    w("  document.getElementById('trailbtn').classList.toggle('on',trailOn[selIcao]);")
+    w("  if(!trailOn[selIcao]){delete trailPts[selIcao];removeTrailLayer(selIcao);}")
+    w("  notify('UCUS iZi '+(trailOn[selIcao]?'AKTIF':'KALDIRILDI'),'info');")
+    w("}")
+    w("function updateTrails(){")
+    w("  if(!MAP)return;")
+    w("  flights.forEach(function(f){")
+    w("    if(!trailOn[f.icao24]||!f.lat||!f.lon)return;")
+    w("    if(!trailPts[f.icao24])trailPts[f.icao24]=[];")
+    w("    trailPts[f.icao24].push([f.lon,f.lat]);")
+    w("    if(trailPts[f.icao24].length>100)trailPts[f.icao24].shift();")
+    w("    var sid='trl-'+f.icao24,lid='trll-'+f.icao24;")
+    w("    var geo={type:'Feature',geometry:{type:'LineString',coordinates:trailPts[f.icao24]}};")
+    w("    try{")
+    w("      if(MAP.getSource(sid))MAP.getSource(sid).setData(geo);")
+    w("      else{MAP.addSource(sid,{type:'geojson',data:geo});MAP.addLayer({id:lid,type:'line',source:sid,paint:{'line-color':'#00e5ff','line-width':1.5,'line-opacity':0.65,'line-dasharray':[2,3]}});}")
+    w("    }catch(e){}")
+    w("  });")
+    w("}")
+    w("function removeTrailLayer(icao){if(!MAP)return;try{if(MAP.getLayer('trll-'+icao))MAP.removeLayer('trll-'+icao);if(MAP.getSource('trl-'+icao))MAP.removeSource('trl-'+icao);}catch(e){}}")
+
+    w("// ── SEARCH ────────────────────────────────────────────────────────")
+    w("function toggleSearch(){")
+    w("  searchOpen=!searchOpen;")
+    w("  document.getElementById('searchbar').classList.toggle('open',searchOpen);")
+    w("  if(searchOpen)setTimeout(function(){document.getElementById('sinput').focus();},80);")
+    w("  else{document.getElementById('sinput').value='';document.getElementById('sresults').classList.remove('open');}")
+    w("}")
+    w("function doSearch(q){")
+    w("  var sr=document.getElementById('sresults');")
+    w("  if(!q||q.length<2){sr.classList.remove('open');return;}")
+    w("  var ql=q.toLowerCase();")
+    w("  var res=flights.filter(function(f){return f.callsign.toLowerCase().includes(ql)||f.country.toLowerCase().includes(ql)||f.icao24.toLowerCase().includes(ql);}).slice(0,12);")
+    w("  if(!res.length){sr.classList.remove('open');return;}")
+    w("  sr.innerHTML=res.map(function(f){return '<div class=\"sresult-item\" onclick=\"pickByIcao(\\\"'+f.icao24+'\\\")\">'+flag(f.country)+' <b>'+f.callsign+'</b> — '+f.country+(f.alt?' '+f.alt+'m':'')+'</div>';}).join('');")
+    w("  sr.classList.add('open');")
+    w("}")
+    w("function searchKey(e){if(e.key==='Escape'){toggleSearch();}}")
+    w("function pickByIcao(icao){var f=flights.find(function(x){return x.icao24===icao;});if(f){pickFlight(f);toggleSearch();}}")
+
+    w("// ── PANEL ─────────────────────────────────────────────────────────")
+    w("function togglePanel(){")
+    w("  panelOpen=!panelOpen;")
+    w("  document.getElementById('lpanel').classList.toggle('closed',!panelOpen);")
+    w("  var btn=document.getElementById('ptoggle');")
+    w("  btn.classList.toggle('closed',!panelOpen);")
+    w("  btn.innerHTML=panelOpen?'&#9664;':'&#9654;';")
+    w("}")
+
+    w("// ── TABS ─────────────────────────────────────────────────────────")
+    w("function switchTab(i){")
+    w("  for(var j=0;j<3;j++){")
+    w("    document.getElementById('tab'+j).classList.toggle('on',j===i);")
+    w("    document.getElementById('tp'+j).classList.toggle('on',j===i);")
+    w("  }")
+    w("}")
+
+    w("// ── GEOLOCATION ───────────────────────────────────────────────────")
+    w("function gotoMe(){")
+    w("  if(!navigator.geolocation){notify('KONUM DESTEGI YOK','err');return;}")
+    w("  navigator.geolocation.getCurrentPosition(")
+    w("    function(p){if(MAP)MAP.flyTo({center:[p.coords.longitude,p.coords.latitude],zoom:8,speed:1.5});notify('KONUMUNUZA ODAKLANILDI','info');},")
+    w("    function(){notify('KONUM ALINAMIYOR','err');}")
+    w("  );")
+    w("}")
+
+    w("// ── FULLSCREEN ────────────────────────────────────────────────────")
+    w("function doFullscreen(){")
+    w("  if(!document.fullscreenElement)document.documentElement.requestFullscreen().catch(function(){});")
+    w("  else document.exitFullscreen().catch(function(){});")
+    w("}")
+
+    w("// ── KEYBOARD ─────────────────────────────────────────────────────")
+    w("function setupKeys(){")
+    w("  document.addEventListener('keydown',function(e){")
+    w("    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;")
+    w("    var k=e.key;")
+    w("    if(k==='f'||k==='F'){e.preventDefault();toggleSearch();}")
+    w("    else if(k==='r'||k==='R'){doRefresh();}")
+    w("    else if(k==='l'||k==='L'){togglePanel();}")
+    w("    else if(k==='s'||k==='S'){setLayer('satellite');}")
+    w("    else if(k==='d'||k==='D'){setLayer('dark');}")
+    w("    else if(k==='t'||k==='T'){setLayer('street');}")
+    w("    else if(k==='h'||k==='H'){toggleWeather();}")
+    w("    else if(k==='c'||k==='C'){gotoMe();}")
+    w("    else if(k==='Escape'){closeInfo();if(searchOpen)toggleSearch();if(helpOpen)toggleHelp();}")
+    w("    else if(k==='?'){toggleHelp();}")
+    w("    else if(k==='F11'){e.preventDefault();doFullscreen();}")
+    w("  });")
+    w("}")
+    w("function toggleHelp(){helpOpen=!helpOpen;document.getElementById('kbhelp').classList.toggle('vis',helpOpen);}")
+
+    w("// ── RADAR ─────────────────────────────────────────────────────────")
+    w("function startRadar(){")
+    w("  var cv=document.getElementById('radarc');")
+    w("  var ctx=cv.getContext('2d');")
+    w("  function frame(){")
+    w("    ctx.clearRect(0,0,100,100);")
+    w("    // Grid circles")
+    w("    ctx.strokeStyle='rgba(0,255,136,0.14)';ctx.lineWidth=1;")
+    w("    [18,32,48].forEach(function(r){ctx.beginPath();ctx.arc(50,50,r,0,Math.PI*2);ctx.stroke();});")
+    w("    // Cross")
+    w("    ctx.strokeStyle='rgba(0,255,136,0.08)';")
+    w("    ctx.beginPath();ctx.moveTo(50,2);ctx.lineTo(50,98);ctx.stroke();")
+    w("    ctx.beginPath();ctx.moveTo(2,50);ctx.lineTo(98,50);ctx.stroke();")
+    w("    // Sweep")
+    w("    ctx.save();ctx.translate(50,50);ctx.rotate(radarAngle);")
+    w("    var sw=ctx.createLinearGradient(0,0,48,0);")
+    w("    sw.addColorStop(0,'rgba(0,255,136,0.55)');sw.addColorStop(1,'rgba(0,255,136,0)');")
+    w("    ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,48,-0.4,0);ctx.closePath();ctx.fillStyle=sw;ctx.fill();")
+    w("    ctx.restore();")
+    w("    // Blips")
+    w("    var cnt=0;")
+    w("    if(flights.length&&MAP){")
+    w("      var ctr=MAP.getCenter();")
+    w("      flights.forEach(function(f){")
+    w("        if(!f.lat||!f.lon)return;")
+    w("        var dx=(f.lon-ctr.lng)*1.3,dy=-(f.lat-ctr.lat)*1.6;")
+    w("        if(Math.abs(dx)>46||Math.abs(dy)>46)return;")
+    w("        cnt++;")
+    w("        var emg=f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';")
+    w("        ctx.beginPath();ctx.arc(50+dx,50+dy,emg?3:1.5,0,Math.PI*2);")
+    w("        ctx.fillStyle=emg?'rgba(255,68,102,0.9)':f.icao24===selIcao?'rgba(255,204,0,0.9)':'rgba(0,229,255,0.75)';")
+    w("        ctx.fill();")
+    w("      });")
+    w("    }else{")
+    w("      // Demo blips")
+    w("      flights.slice(0,35).forEach(function(f,i){")
+    w("        var a=(i/35)*Math.PI*2,r=5+Math.random()*40;")
+    w("        ctx.beginPath();ctx.arc(50+Math.cos(a)*r,50+Math.sin(a)*r,1.5,0,Math.PI*2);")
+    w("        ctx.fillStyle='rgba(0,229,255,0.6)';ctx.fill();cnt++;")
+    w("      });")
+    w("    }")
+    w("    document.getElementById('radarcnt').textContent=cnt;")
+    w("    radarAngle+=0.03;")
+    w("    requestAnimationFrame(frame);")
+    w("  }")
+    w("  frame();")
+    w("}")
+
+    w("// ── COMPASS ───────────────────────────────────────────────────────")
+    w("function startCompass(){drawCompass(0);}")
+    w("function drawCompass(bearing){")
+    w("  var cv=document.getElementById('compass');if(!cv)return;")
+    w("  var ctx=cv.getContext('2d'),cx=23,cy=23,r=20;")
+    w("  ctx.clearRect(0,0,46,46);")
+    w("  ctx.strokeStyle='rgba(0,255,136,0.2)';ctx.lineWidth=1;")
+    w("  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();")
+    w("  var dirs=['N','E','S','W'];")
+    w("  dirs.forEach(function(d,i){")
+    w("    var a=(i*90-bearing)*Math.PI/180;")
+    w("    ctx.fillStyle=d==='N'?'#ff4466':'rgba(168,255,212,0.5)';")
+    w("    ctx.font='bold 7px Orbitron,monospace';ctx.textAlign='center';ctx.textBaseline='middle';")
+    w("    ctx.fillText(d,cx+Math.sin(a)*(r-5),cy-Math.cos(a)*(r-5));")
+    w("  });")
+    w("  ctx.save();ctx.translate(cx,cy);ctx.rotate(-bearing*Math.PI/180);")
+    w("  ctx.fillStyle='#ff4466';")
+    w("  ctx.beginPath();ctx.moveTo(0,-13);ctx.lineTo(2.5,0);ctx.lineTo(0,-2);ctx.lineTo(-2.5,0);ctx.closePath();ctx.fill();")
+    w("  ctx.fillStyle='rgba(168,255,212,0.4)';")
+    w("  ctx.beginPath();ctx.moveTo(0,13);ctx.lineTo(2.5,0);ctx.lineTo(0,2);ctx.lineTo(-2.5,0);ctx.closePath();ctx.fill();")
+    w("  ctx.restore();")
+    w("}")
+
+    w("// ── REFRESH TIMER ─────────────────────────────────────────────────")
+    w("function startRefTimer(){")
+    w("  var bar=document.getElementById('refprog'),start=Date.now();")
+    w("  rfTimer=setInterval(function(){")
+    w("    var e=Date.now()-start,pct=Math.max(0,100-(e/RF)*100);")
+    w("    bar.style.width=pct+'%';")
+    w("    if(e>=RF){start=Date.now();loadFlights();}")
+    w("  },300);")
+    w("}")
+    w("function resetRefTimer(){if(rfTimer)clearInterval(rfTimer);rfTimer=null;startRefTimer();}")
+
+    w("</script></body></html>")
+    return "\n".join(L)
+
+html = build()
+with open(HTML, "w", encoding="utf-8") as f:
+    f.write(html)
+
+print("OK:" + HTML + " (" + str(len(html)) + " bytes)")
+PYEOF
+
+if [ ! -f "$HTML" ]; then
+  printf "  ${R}HATA: HTML olusturulamadi!${N}\n"; exit 1
+fi
+
+SIZE=$(wc -c < "$HTML")
+LINES=$(wc -l < "$HTML")
+printf "  ${G}HTML hazir — ${SIZE} byte, ${LINES} satir${N}\n"
+
+# Random port
+PORT=$(( RANDOM % 8900 + 1100 ))
+while lsof -i :$PORT >/dev/null 2>&1 || ss -tln 2>/dev/null | grep -q ":$PORT "; do
+  PORT=$(( RANDOM % 8900 + 1100 ))
+done
+
+printf "\n"
+printf "  ┌──────────────────────────────────────────────────┐\n"
+printf "  │  ${B}URL    :${N} ${C}http://localhost:$PORT${N}\n"
+printf "  │  ${B}DURUM  :${N} ${G}AKTIF${N}\n"
+printf "  │  ${B}VERSIYON:${N} v3.0 (buglar duzeltildi)\n"
+printf "  │\n"
+printf "  │  Durdur: Ctrl + C\n"
+printf "  └──────────────────────────────────────────────────┘\n\n"
+
+sleep 0.7
+command -v termux-open-url &>/dev/null && termux-open-url "http://localhost:$PORT" & \
+  printf "  ${C}Tarayici aciliyor...${N}\n\n"
+
+cd "$TMPD"
+$PY << PYEOF
+import http.server, socketserver, os, sys, signal
+
+PORT = $PORT
+DIR = "$TMPD"
+os.chdir(DIR)
+
+class H(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, fmt, *a):
+        print("  [%s] %s" % (self.address_string(), fmt % a))
+    def do_GET(self):
+        if self.path == "/" or self.path == "/index.html":
+            self.path = "/skywatch_v3.html"
+        super().do_GET()
+
+def bye(s, f):
+    print("\n  Sunucu kapatildi.\n")
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, bye)
+
+socketserver.TCPServer.allow_reuse_address = True
+with socketserver.TCPServer(("", PORT), H) as httpd:
+    print("  Sunucu: http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
+    httpd.serve_forever()
+PYEOF
