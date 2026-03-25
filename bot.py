@@ -1,56 +1,49 @@
-from flask import Flask, render_template_string, jsonify import random import threading import time import requests import xml.etree.ElementTree as ET
+from flask import Flask, render_template_string, jsonify
+import random
+import threading
+import time
+import requests
+import xml.etree.ElementTree as ET
 
-app = Flask(name)
+app = Flask(__name__)
 
------------------------------
+data_store = {
+    "news": []
+}
 
-News store
+def fetch_news():
+    while True:
+        try:
+            url = "https://news.google.com/rss?hl=tr&gl=TR&ceid=TR:tr"
+            res = requests.get(url, timeout=5)
 
------------------------------
+            root = ET.fromstring(res.content)
+            items = []
 
-data_store = { "news": [] }
+            for item in root.findall("./channel/item")[:20]:
+                title_el = item.find("title")
+                date_el = item.find("pubDate")
 
------------------------------
+                title = title_el.text if title_el is not None else ""
+                date = date_el.text if date_el is not None else ""
 
-Fetch live news (RSS)
+                items.append({
+                    "title": title,
+                    "date": date
+                })
 
------------------------------
+            data_store["news"] = items
 
-def fetch_news(): while True: try: url = "https://news.google.com/rss?hl=tr&gl=TR&ceid=TR:tr" res = requests.get(url, timeout=5)
+        except Exception as e:
+            data_store["news"] = [{"title": f"Hata: {str(e)}", "date": ""}]
 
-root = ET.fromstring(res.content)
-        items = []
-
-        for item in root.findall("./channel/item")[:20]:
-            title_el = item.find("title")
-            date_el = item.find("pubDate")
-
-            title = title_el.text if title_el is not None else ""
-            date = date_el.text if date_el is not None else ""
-
-            items.append({
-                "title": title,
-                "date": date
-            })
-
-        data_store["news"] = items
-
-    except Exception as e:
-        data_store["news"] = [{"title": f"Hata: {str(e)}", "date": ""}]
-
-    time.sleep(60)
+        time.sleep(60)
 
 threading.Thread(target=fetch_news, daemon=True).start()
 
------------------------------
-
-UI
-
------------------------------
-
 HTML_PAGE = """
-
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html>
 <head>
     <title>Termux News Panel</title>
     <style>
@@ -81,10 +74,14 @@ HTML_PAGE = """
         }
     </style>
 </head>
-<body><div class="card">
+<body>
+
+<div class="card">
     <h1>📰 Canlı Haberler</h1>
     <div id="news">Yükleniyor...</div>
-</div><script>
+</div>
+
+<script>
     async function loadNews() {
         const res = await fetch('/news');
         const data = await res.json();
@@ -106,10 +103,21 @@ HTML_PAGE = """
 
     loadNews();
     setInterval(loadNews, 60000);
-</script></body>
+</script>
+
+</body>
 </html>
-"""@app.route("/") def index(): return render_template_string(HTML_PAGE)
+"""
 
-@app.route("/news") def get_news(): return jsonify(data_store)
+@app.route("/")
+def index():
+    return render_template_string(HTML_PAGE)
 
-if name == "main": port = random.randint(5000, 9000) print(f"Server running on http://127.0.0.1:{port}") app.run(host="0.0.0.0", port=port)
+@app.route("/news")
+def get_news():
+    return jsonify(data_store)
+
+if __name__ == "__main__":
+    port = random.randint(5000, 9000)
+    print(f"Server running on http://127.0.0.1:{port}")
+    app.run(host="0.0.0.0", port=port)
