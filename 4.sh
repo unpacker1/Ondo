@@ -1,6 +1,6 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  SKYWATCH v2.0 — Ultimate Ucak Takip Sistemi                ║
+# ║  SKYWATCH v2.0 — Ultimate Ucak Takip Sistemi (KARARLI)     ║
 # ║  Calistir: bash skywatch.sh                                  ║
 # ╚══════════════════════════════════════════════════════════════╝
 # Ozellikler:
@@ -29,7 +29,7 @@ printf "  ╚════██║██╔═██╗   ╚██╔╝  █�
 printf "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
 printf "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
 printf "${N}\n"
-printf "  ${C}v2.0 Ultimate — OpenSky + Mapbox + Hava Durumu + İstatistik${N}\n"
+printf "  ${C}v2.0 Ultimate — OpenSky + Mapbox + Hava Durumu + İstatistik (KARARLI)${N}\n"
 printf "  ─────────────────────────────────────────────────────────\n\n"
 
 if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
@@ -41,7 +41,7 @@ PY=$(command -v python3 || command -v python)
 TMPD="${TMPDIR:-/tmp}"
 HTML="$TMPD/skywatch_v2.html"
 
-printf "  ${C}HTML olusturuluyor (v2.0)...${N}\n"
+printf "  ${C}HTML olusturuluyor (v2.0 - kararli surum)...${N}\n"
 
 $PY << 'PYEOF'
 import os, sys
@@ -56,29 +56,19 @@ w("<!DOCTYPE html>")
 w("<html lang='tr'>")
 w("<head>")
 w("<meta charset='UTF-8'>")
-w("<meta name='viewport' content='width=device-width,initial-scale=1.0'>")
-w("<title>SKYWATCH v2</title>")
+w("<meta name='viewport' content='width=device-width,initial-scale=1.0,user-scalable=no'>")
+w("<title>SKYWATCH v2 - Kararli</title>")
 w("<link href='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css' rel='stylesheet'>")
 w("<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>")
 w("<link href='https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;900&family=Rajdhani:wght@300;400;600&display=swap' rel='stylesheet'>")
 w("<style>")
-w(":root{")
-w("  --g:#00ff88;--c:#00e5ff;--o:#ff6b35;--warn:#ffcc00;--red:#ff4466;")
-w("  --d:#020810;--d2:#030e1a;--p:rgba(2,15,25,0.93);--p2:rgba(3,18,30,0.97);")
-w("  --b:rgba(0,255,136,0.22);--b2:rgba(0,229,255,0.18);--t:#a8ffd4;--t2:rgba(168,255,212,0.55)")
-w("}")
+w(":root{--g:#00ff88;--c:#00e5ff;--o:#ff6b35;--warn:#ffcc00;--red:#ff4466;--d:#020810;--d2:#030e1a;--p:rgba(2,15,25,0.93);--p2:rgba(3,18,30,0.97);--b:rgba(0,255,136,0.22);--b2:rgba(0,229,255,0.18);--t:#a8ffd4;--t2:rgba(168,255,212,0.55)}")
 w("*{margin:0;padding:0;box-sizing:border-box}")
 w("html,body{background:var(--d);color:var(--t);font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;width:100vw}")
-# scanline
 w("body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.012) 2px,rgba(0,255,136,.012) 4px);pointer-events:none;z-index:9998}")
-# cursor
 w("body{cursor:crosshair}")
 w("button,a,.fi,.ptg,.ix,.layer-btn,.tab-btn,.close-x{cursor:pointer}")
-
-# MAP
 w("#map{position:absolute;top:0;left:0;width:100%;height:100%}")
-
-# TOPBAR
 w(".topbar{position:fixed;top:0;left:0;right:0;height:52px;background:var(--p2);border-bottom:1px solid var(--b);display:flex;align-items:center;padding:0 14px;gap:12px;z-index:200;backdrop-filter:blur(16px)}")
 w(".logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:16px;color:var(--g);letter-spacing:5px;text-shadow:0 0 24px rgba(0,255,136,.7);white-space:nowrap;display:flex;align-items:center;gap:8px}")
 w(".logo svg{animation:spin3 8s linear infinite;filter:drop-shadow(0 0 6px var(--g))}")
@@ -100,8 +90,6 @@ w(".btn:hover::before{left:100%}")
 w(".btn:hover,.btn.A{background:rgba(0,255,136,.1);border-color:var(--g);box-shadow:0 0 12px rgba(0,255,136,.25),inset 0 0 8px rgba(0,255,136,.05)}")
 w(".btn.warn{border-color:rgba(255,204,0,.4);color:var(--warn)}.btn.warn:hover{background:rgba(255,204,0,.1);border-color:var(--warn)}")
 w(".btn.danger{border-color:rgba(255,68,102,.4);color:var(--red)}.btn.danger:hover{background:rgba(255,68,102,.1)}")
-
-# SEARCH BAR
 w(".searchbar{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:201;display:flex;gap:0;opacity:0;pointer-events:none;transition:opacity .3s}")
 w(".searchbar.vis{opacity:1;pointer-events:all}")
 w(".search-input{background:var(--p2);border:1px solid var(--b);border-right:none;color:var(--c);font-family:'Share Tech Mono',monospace;font-size:12px;padding:8px 14px;width:320px;outline:none;letter-spacing:1px}")
@@ -113,15 +101,11 @@ w(".search-results{position:absolute;top:100%;left:0;width:100%;background:var(-
 w(".search-results.vis{display:block}")
 w(".sr-item{padding:8px 14px;font-size:11px;cursor:pointer;border-bottom:1px solid rgba(0,255,136,.06);color:var(--t)}")
 w(".sr-item:hover{background:rgba(0,255,136,.07);color:var(--g)}")
-
-# LEFT PANEL
 w(".lp{position:fixed;top:52px;left:0;bottom:0;width:268px;background:var(--p2);border-right:1px solid var(--b);z-index:190;display:flex;flex-direction:column;transition:transform .35s cubic-bezier(.4,0,.2,1)}")
 w(".lp.hide{transform:translateX(-268px)}")
 w(".ptg{position:fixed;top:66px;left:268px;width:16px;height:40px;background:var(--p2);border:1px solid var(--b);border-left:none;z-index:191;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--g);transition:left .35s cubic-bezier(.4,0,.2,1)}")
 w(".ptg:hover{background:rgba(0,255,136,.1)}")
 w(".ptg.hide{left:0}")
-
-# TABS
 w(".tabs{display:flex;border-bottom:1px solid var(--b)}")
 w(".tab-btn{flex:1;padding:9px 0;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--t2);background:transparent;border:none;cursor:pointer;transition:all .2s;text-transform:uppercase}")
 w(".tab-btn.A{color:var(--g);border-bottom:2px solid var(--g);background:rgba(0,255,136,.05)}")
@@ -130,14 +114,10 @@ w(".tab-panel{display:none;flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar
 w(".tab-panel.A{display:flex;flex-direction:column}")
 w(".tab-panel::-webkit-scrollbar{width:3px}")
 w(".tab-panel::-webkit-scrollbar-thumb{background:var(--b)}")
-
-# FILTER BAR
 w(".filter-bar{padding:8px 10px;border-bottom:1px solid rgba(0,255,136,.08);display:flex;gap:6px;flex-wrap:wrap}")
 w(".filter-chip{font-size:9px;padding:3px 8px;border:1px solid var(--b);color:var(--t2);background:transparent;cursor:pointer;letter-spacing:1px;font-family:'Share Tech Mono',monospace;transition:all .2s}")
 w(".filter-chip.A{background:rgba(0,229,255,.1);border-color:var(--c);color:var(--c)}")
 w(".filter-chip:hover{border-color:var(--g);color:var(--g)}")
-
-# FLIGHT LIST
 w(".fi{padding:9px 12px;border-bottom:1px solid rgba(0,255,136,.06);cursor:pointer;transition:background .15s;position:relative}")
 w(".fi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--g);opacity:0;transition:opacity .2s}")
 w(".fi:hover::before,.fi.sel::before{opacity:1}")
@@ -150,8 +130,6 @@ w(".fi-alt-bar{height:2px;background:rgba(0,255,136,.12);margin-top:5px;border-r
 w(".fi-alt-fill{height:100%;background:linear-gradient(90deg,var(--g),var(--c));transition:width .5s}")
 w(".fd{font-size:9px;color:rgba(168,255,212,.5);display:flex;gap:8px;margin-top:3px;flex-wrap:wrap}")
 w(".fv{color:var(--t)}")
-
-# STATS PANEL
 w(".stat-section{padding:12px;border-bottom:1px solid rgba(0,255,136,.07)}")
 w(".stat-title{font-size:9px;color:rgba(168,255,212,.4);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}")
 w(".stat-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}")
@@ -163,8 +141,6 @@ w(".big-stat{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10
 w(".bs-item{background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.12);padding:8px 10px}")
 w(".bs-val{font-family:'Orbitron',sans-serif;font-size:18px;color:var(--c)}")
 w(".bs-label{font-size:8px;color:var(--t2);letter-spacing:2px;margin-top:2px;text-transform:uppercase}")
-
-# ALERTS PANEL
 w(".alert-item{padding:9px 12px;border-bottom:1px solid rgba(255,68,102,.1);display:flex;gap:8px;align-items:flex-start}")
 w(".alert-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}")
 w(".alert-dot.high{background:var(--warn);box-shadow:0 0 6px var(--warn)}")
@@ -172,11 +148,6 @@ w(".alert-dot.low{background:var(--c);box-shadow:0 0 6px var(--c)}")
 w(".alert-text{font-size:10px;color:var(--t)}")
 w(".alert-time{font-size:9px;color:var(--t2);margin-top:2px}")
 w(".no-alerts{padding:20px;text-align:center;font-size:11px;color:rgba(168,255,212,.25);letter-spacing:2px}")
-
-# PANEL TOGGLE BUTTON (right toggle)
-w(".ptg{cursor:pointer}")
-
-# INFO PANEL
 w(".ip{position:fixed;bottom:16px;right:16px;width:300px;background:var(--p2);border:1px solid var(--b2);z-index:190;display:none;box-shadow:0 0 30px rgba(0,229,255,.08)}")
 w(".ip.vis{display:block;animation:slideIn .25s ease}")
 w("@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}")
@@ -199,13 +170,9 @@ w(".gauge-label{font-size:9px;color:var(--t2);white-space:nowrap}")
 w(".info-actions{padding:0 13px 10px;display:flex;gap:6px}")
 w(".ia-btn{flex:1;font-size:9px;padding:5px;border:1px solid var(--b);color:var(--t2);background:transparent;cursor:pointer;letter-spacing:1px;font-family:'Share Tech Mono',monospace;transition:all .2s;text-align:center}")
 w(".ia-btn:hover{color:var(--g);border-color:var(--g);background:rgba(0,255,136,.06)}")
-
-# RADAR
 w(".rc{position:fixed;bottom:16px;left:16px;z-index:190;background:var(--p2);border:1px solid var(--b);padding:8px;box-shadow:0 0 20px rgba(0,255,136,.06)}")
 w(".rl{font-size:8px;color:rgba(168,255,212,.35);letter-spacing:2px;margin-bottom:5px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}")
 w(".radar-count{color:var(--g);font-family:'Orbitron',sans-serif}")
-
-# HUD METERS
 w(".hm{position:fixed;top:50%;right:16px;transform:translateY(-50%);z-index:190;display:flex;flex-direction:column;gap:6px;opacity:0;transition:opacity .3s;pointer-events:none}")
 w(".hm.vis{opacity:1}")
 w(".mt{background:var(--p2);border:1px solid var(--b);padding:8px 10px;width:80px;position:relative;overflow:hidden}")
@@ -214,25 +181,17 @@ w("@keyframes scan{0%{transform:translateY(0)}100%{transform:translateY(60px)}}"
 w(".mla{font-size:7px;color:rgba(168,255,212,.35);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px}")
 w(".mv{font-family:'Orbitron',sans-serif;font-size:15px;color:var(--c);line-height:1}")
 w(".mu{font-size:7px;color:rgba(168,255,212,.4);margin-top:2px}")
-
-# NOTIFICATION
 w(".ntf{position:fixed;top:64px;right:16px;background:var(--p2);border:1px solid var(--b);padding:8px 14px;font-size:10px;color:var(--c);z-index:999;transform:translateX(130%);transition:transform .3s cubic-bezier(.4,0,.2,1);letter-spacing:1px;display:flex;align-items:center;gap:8px;max-width:280px}")
 w(".ntf.sh{transform:translateX(0)}")
 w(".ntf.er{color:var(--o);border-color:rgba(255,107,53,.4)}")
 w(".ntf.warn{color:var(--warn);border-color:rgba(255,204,0,.4)}")
 w(".ntf-icon{flex-shrink:0}")
-
-# REFRESH BAR
 w(".rb{position:fixed;bottom:0;left:0;right:0;height:2px;background:rgba(0,255,136,.06);z-index:999}")
 w(".rp{height:100%;background:linear-gradient(90deg,var(--g),var(--c));box-shadow:0 0 6px var(--g);width:100%;transition:width linear}")
-
-# LAYER PANEL (right side)
 w(".layer-panel{position:fixed;top:52px;right:0;z-index:190;display:flex;flex-direction:column;gap:4px;padding:8px 6px}")
 w(".layer-btn{background:var(--p2);border:1px solid var(--b);color:var(--t2);font-family:'Share Tech Mono',monospace;font-size:9px;padding:6px 10px;cursor:pointer;letter-spacing:1px;text-align:center;transition:all .2s;width:82px}")
 w(".layer-btn:hover,.layer-btn.A{color:var(--g);border-color:var(--g);background:rgba(0,255,136,.07)}")
 w(".layer-sep{height:1px;background:var(--b);margin:2px 0}")
-
-# KEYBOARD SHORTCUTS OVERLAY
 w(".kb-overlay{position:fixed;inset:0;background:rgba(2,8,16,.96);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px)}")
 w(".kb-overlay.vis{display:flex}")
 w(".kb-box{background:var(--p2);border:1px solid var(--b);padding:30px;width:480px;max-width:95vw}")
@@ -241,8 +200,6 @@ w(".kb-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}")
 w(".kb-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(0,255,136,.06)}")
 w(".kb-key{background:rgba(0,255,136,.08);border:1px solid var(--b);padding:2px 8px;font-size:10px;color:var(--g);font-family:'Orbitron',sans-serif;min-width:30px;text-align:center}")
 w(".kb-desc{font-size:10px;color:var(--t2)}")
-
-# LOADING
 w("#ld{position:fixed;inset:0;background:var(--d);z-index:9001;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .6s}")
 w("#ld.hide{opacity:0;pointer-events:none}")
 w(".ll{font-family:'Orbitron',sans-serif;font-size:32px;font-weight:900;color:var(--g);letter-spacing:8px;animation:glow 2.5s infinite}")
@@ -252,8 +209,6 @@ w(".lbw{width:260px;height:2px;background:rgba(0,255,136,.1);overflow:hidden}")
 w(".lb{height:100%;background:linear-gradient(90deg,var(--g),var(--c));width:0%;transition:width .4s ease}")
 w(".lt{font-size:10px;color:rgba(168,255,212,.4);letter-spacing:3px;text-transform:uppercase}")
 w(".l-particles{position:absolute;inset:0;pointer-events:none}")
-
-# TOKEN MODAL
 w("#tm{position:fixed;inset:0;background:rgba(2,8,16,.97);z-index:9002;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)}")
 w("#tm.hide{display:none}")
 w(".mb{background:var(--p2);border:1px solid var(--b);padding:30px;width:460px;max-width:95vw;position:relative}")
@@ -271,23 +226,16 @@ w(".bp:hover{background:rgba(0,255,136,.18);box-shadow:0 0 20px rgba(0,255,136,.
 w(".bd{background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.25);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:11px;padding:10px;cursor:pointer;letter-spacing:2px;transition:all .25s}")
 w(".bd:hover{background:rgba(0,229,255,.14)}")
 w(".token-hint{font-size:9px;color:rgba(168,255,212,.3);letter-spacing:1px;margin-bottom:8px}")
-
-# WEATHER TOOLTIP
 w(".wx-popup{background:var(--p2);border:1px solid rgba(255,204,0,.3);padding:10px 14px;font-size:11px;color:var(--warn);min-width:160px}")
 w(".wx-name{font-family:'Orbitron',sans-serif;font-size:12px;margin-bottom:6px}")
 w(".wx-row{display:flex;justify-content:space-between;font-size:10px;color:var(--t2);margin-bottom:3px}")
 w(".wx-row span{color:var(--t)}")
-
-# COMPASS
 w(".compass{position:fixed;top:62px;right:96px;z-index:190;width:48px;height:48px}")
 w("canvas#comp{display:block}")
-
-# MAPBOX OVERRIDES
 w(".mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right{display:none!important}")
 w(".mapboxgl-popup-content{background:var(--p2)!important;border:1px solid var(--b)!important;color:var(--t)!important;font-family:'Share Tech Mono',monospace!important;font-size:10px!important;padding:10px 13px!important;border-radius:0!important;box-shadow:0 0 20px rgba(0,255,136,.1)!important}")
 w(".mapboxgl-popup-tip{display:none!important}")
 w(".mapboxgl-ctrl-top-right{top:52px!important;right:94px!important}")
-
 w("@media(max-width:600px){.lp{width:240px}.ptg{left:240px}.ptg.hide{left:0}.rc{display:none}.ip{right:8px;bottom:8px;width:calc(100vw - 16px)}.stats .sc:nth-child(n+4){display:none}.layer-panel{display:none}}")
 w("</style>")
 w("</head>")
@@ -490,8 +438,18 @@ w("</div>")
 w("<div class='ntf' id='ntf'><span class='ntf-icon' id='ntf-icon'>i</span><span id='ntf-msg'></span></div>")
 w("<div class='rb'><div class='rp' id='rp'></div></div>")
 
-# JAVASCRIPT
+# JAVASCRIPT (GÜNCELLENMIŞ, HATA YAKALAMA EKLENDI)
 w("<script>")
+w("(function(){")
+w("  // Global hata yakalama")
+w("  window.onerror = function(msg, url, line) {")
+w("    try { showNtf('JS Hata: ' + msg.slice(0,60), 'err'); } catch(e) {}")
+w("    console.error(msg, url, line);")
+w("    return false;")
+w("  };")
+w("  // mapboxgl yoksa dummy tanımla (demo mod için)")
+w("  if (typeof mapboxgl === 'undefined') { window.mapboxgl = { accessToken: '' }; }")
+w("})();")
 w("var map=null,mbToken='',demoMode=false,flights=[],selIcao=null,panelOn=true,markers={},rfInt=null,radarA=0,RF=30000;")
 w("var flightFilter='all',searchVisible=false,trailEnabled={},trailData={},alerts=[],weatherOn=false,terminatorOn=false;")
 w("var curLayer='satellite',kbVisible=false;")
@@ -531,24 +489,34 @@ w("}")
 
 # INIT
 w("function initWithToken(){")
-w("  var v=document.getElementById('ti').value.trim();")
-w("  if(!v.startsWith('pk.')){showNtf('Gecersiz token! pk. ile baslamali','err');return;}")
-w("  mbToken=v;localStorage.setItem('mbt',v);")
-w("  document.getElementById('tm').classList.add('hide');")
-w("  boot(false);")
+w("  try{")
+w("    var v=document.getElementById('ti').value.trim();")
+w("    if(!v.startsWith('pk.')){showNtf('Gecersiz token! pk. ile baslamali','err');return;}")
+w("    mbToken=v;localStorage.setItem('mbt',v);")
+w("    document.getElementById('tm').classList.add('hide');")
+w("    boot(false);")
+w("  }catch(e){showNtf('Token hatasi: '+e.message,'err');}")
 w("}")
 w("function initDemo(){demoMode=true;document.getElementById('tm').classList.add('hide');boot(true);}")
 
 # BOOT with particles
 w("async function boot(demo){")
-w("  startLoadParticles();")
-w("  var lb=document.getElementById('lb'),lt=document.getElementById('lt');")
-w("  var steps=[[15,'OPENSKY BAGLANTISI...'],[35,'HARITA YUKLENiYOR...'],[55,'UCAK VERiSi ALINIYOR...'],[75,'RADAR BASlATILIYOR...'],[90,'iSTATiSTiK HESAPLANiYOR...'],[100,'HAZIR']];")
-w("  for(var i=0;i<steps.length;i++){lb.style.width=steps[i][0]+'%';lt.textContent=steps[i][1];await sleep(320);}")
-w("  await sleep(200);")
-w("  document.getElementById('ld').classList.add('hide');")
-w("  if(demo)initNoMap();else initMap();")
-w("  startRadar();startClock();startCompass();loadFlights();startRfTimer();setupKeyboard();")
+w("  try{")
+w("    startLoadParticles();")
+w("    var lb=document.getElementById('lb'),lt=document.getElementById('lt');")
+w("    var steps=[[15,'OPENSKY BAGLANTISI...'],[35,'HARITA YUKLENiYOR...'],[55,'UCAK VERiSi ALINIYOR...'],[75,'RADAR BASlATILIYOR...'],[90,'iSTATiSTiK HESAPLANiYOR...'],[100,'HAZIR']];")
+w("    for(var i=0;i<steps.length;i++){lb.style.width=steps[i][0]+'%';lt.textContent=steps[i][1];await sleep(320);}")
+w("    await sleep(200);")
+w("    document.getElementById('ld').classList.add('hide');")
+w("    if(demo)initNoMap(); else initMap();")
+w("    startRadar();startClock();startCompass();loadFlights();startRfTimer();setupKeyboard();")
+w("  }catch(e){")
+w("    console.error('Boot hatasi:',e);")
+w("    showNtf('Baslatma hatasi: '+e.message,'err');")
+w("    document.getElementById('ld').classList.add('hide');")
+w("    initNoMap();")
+w("    loadFlights();")
+w("  }")
 w("}")
 w("function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}")
 
@@ -572,6 +540,7 @@ w("function startClock(){setInterval(function(){document.getElementById('clk').t
 
 # MAP INIT
 w("function initMap(){")
+w("  if(demoMode || !mapboxgl) return;")
 w("  mapboxgl.accessToken=mbToken;")
 w("  map=new mapboxgl.Map({container:'map',style:'mapbox://styles/mapbox/satellite-v9',center:[35,40],zoom:4,antialias:true,fog:{color:'rgb(2,8,16)',high-color:'rgb(2,8,16)',horizon-blend:0.05}});")
 w("  map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');")
@@ -676,19 +645,26 @@ w("}")
 
 # FLIGHTS LOAD
 w("async function loadFlights(){")
-w("  document.getElementById('sd').classList.add('L');")
-w("  var raw=await fetchOpenSky();")
-w("  flights=raw.map(parseS).filter(function(f){return f.lat&&f.lon&&!f.ground;});")
-w("  var countries=new Set(flights.map(function(f){return f.country;}));")
-w("  var alts=flights.filter(function(f){return f.alt;}).map(function(f){return f.alt;});")
-w("  var maxAlt=alts.length?Math.max.apply(null,alts):0;")
-w("  document.getElementById('pc').textContent=flights.length;")
-w("  document.getElementById('uc').textContent=countries.size;")
-w("  document.getElementById('mx').textContent=maxAlt;")
-w("  document.getElementById('lu').textContent=new Date().toTimeString().slice(0,5);")
-w("  document.getElementById('sd').classList.remove('L');")
-w("  checkAlerts();updateStats();renderList();updateTrails();")
-w("  if(map)renderMarkers();")
+w("  try{")
+w("    document.getElementById('sd').classList.add('L');")
+w("    var raw=await fetchOpenSky();")
+w("    flights=raw.map(parseS).filter(function(f){return f.lat&&f.lon&&!f.ground;});")
+w("    var countries=new Set(flights.map(function(f){return f.country;}));")
+w("    var alts=flights.filter(function(f){return f.alt;}).map(function(f){return f.alt;});")
+w("    var maxAlt=alts.length?Math.max.apply(null,alts):0;")
+w("    document.getElementById('pc').textContent=flights.length;")
+w("    document.getElementById('uc').textContent=countries.size;")
+w("    document.getElementById('mx').textContent=maxAlt;")
+w("    document.getElementById('lu').textContent=new Date().toTimeString().slice(0,5);")
+w("    document.getElementById('sd').classList.remove('L');")
+w("    checkAlerts();updateStats();renderList();updateTrails();")
+w("    if(map)renderMarkers();")
+w("  }catch(e){")
+w("    console.error('loadFlights hatasi:',e);")
+w("    showNtf('Ucak verisi alinamadi, demo mod aktif','warn');")
+w("    flights=genDemo().map(parseS).filter(function(f){return f.lat&&f.lon;});")
+w("    updateStats();renderList();")
+w("  }")
 w("}")
 w("function refreshData(){resetRfTimer();loadFlights();showNtf('VERi YENiLENDi','info');}")
 
@@ -731,45 +707,47 @@ w("}")
 
 # STATS
 w("function updateStats(){")
-w("  var total=flights.length;")
-w("  var countries={};")
-w("  var alts=flights.filter(function(f){return f.alt;});")
-w("  var vels=flights.filter(function(f){return f.vel;});")
-w("  flights.forEach(function(f){countries[f.country]=(countries[f.country]||0)+1;});")
-w("  var avgAlt=alts.length?Math.round(alts.reduce(function(s,f){return s+f.alt;},0)/alts.length):0;")
-w("  var avgVel=vels.length?Math.round(vels.reduce(function(s,f){return s+f.vel;},0)/vels.length):0;")
-w("  document.getElementById('bs-total').textContent=total;")
-w("  document.getElementById('bs-countries').textContent=Object.keys(countries).length;")
-w("  document.getElementById('bs-avg-alt').textContent=avgAlt;")
-w("  document.getElementById('bs-avg-spd').textContent=avgVel;")
-w("  var sorted=Object.entries(countries).sort(function(a,b){return b[1]-a[1];}).slice(0,8);")
-w("  var maxC=sorted[0]?sorted[0][1]:1;")
-w("  var sc=document.getElementById('stat-countries');sc.innerHTML='';")
-w("  sorted.forEach(function(e){")
-w("    sc.innerHTML+='<div class=\"stat-row\"><div class=\"stat-label\">'+getFlag(e[0])+' '+e[0].slice(0,14)+'</div><div class=\"stat-bar-wrap\"><div class=\"stat-bar\" style=\"width:'+(e[1]/maxC*100)+'%\"></div></div><div class=\"stat-val\">'+e[1]+'</div></div>';")
-w("  });")
-w("  var spBuckets=[['0-400',0],['>400',0],['>600',0],['>800',0],['>1000',0]];")
-w("  vels.forEach(function(f){")
-w("    if(f.vel>1000)spBuckets[4][1]++;")
-w("    else if(f.vel>800)spBuckets[3][1]++;")
-w("    else if(f.vel>600)spBuckets[2][1]++;")
-w("    else if(f.vel>400)spBuckets[1][1]++;")
-w("    else spBuckets[0][1]++;")
-w("  });")
-w("  var maxS=Math.max.apply(null,spBuckets.map(function(b){return b[1];}));")
-w("  var ss=document.getElementById('stat-speeds');ss.innerHTML='';")
-w("  spBuckets.forEach(function(b){ss.innerHTML+='<div class=\"stat-row\"><div class=\"stat-label\">'+b[0]+' km/s</div><div class=\"stat-bar-wrap\"><div class=\"stat-bar\" style=\"width:'+(maxS>0?b[1]/maxS*100:0)+'%;background:var(--c)\"></div></div><div class=\"stat-val\" style=\"color:var(--c)\">'+b[1]+'</div></div>';});")
-w("  var altBuckets=[['<3000',0],['3000-6k',0],['6k-9k',0],['9k-12k',0],['>12k',0]];")
-w("  alts.forEach(function(f){")
-w("    if(f.alt>12000)altBuckets[4][1]++;")
-w("    else if(f.alt>9000)altBuckets[3][1]++;")
-w("    else if(f.alt>6000)altBuckets[2][1]++;")
-w("    else if(f.alt>3000)altBuckets[1][1]++;")
-w("    else altBuckets[0][1]++;")
-w("  });")
-w("  var maxA=Math.max.apply(null,altBuckets.map(function(b){return b[1];}));")
-w("  var sa=document.getElementById('stat-alts');sa.innerHTML='';")
-w("  altBuckets.forEach(function(b){sa.innerHTML+='<div class=\"stat-row\"><div class=\"stat-label\">'+b[0]+' m</div><div class=\"stat-bar-wrap\"><div class=\"stat-bar\" style=\"width:'+(maxA>0?b[1]/maxA*100:0)+'%;background:var(--warn)\"></div></div><div class=\"stat-val\" style=\"color:var(--warn)\">'+b[1]+'</div></div>';});")
+w("  try{")
+w("    var total=flights.length;")
+w("    var countries={};")
+w("    var alts=flights.filter(function(f){return f.alt;});")
+w("    var vels=flights.filter(function(f){return f.vel;});")
+w("    flights.forEach(function(f){countries[f.country]=(countries[f.country]||0)+1;});")
+w("    var avgAlt=alts.length?Math.round(alts.reduce(function(s,f){return s+f.alt;},0)/alts.length):0;")
+w("    var avgVel=vels.length?Math.round(vels.reduce(function(s,f){return s+f.vel;},0)/vels.length):0;")
+w("    document.getElementById('bs-total').textContent=total;")
+w("    document.getElementById('bs-countries').textContent=Object.keys(countries).length;")
+w("    document.getElementById('bs-avg-alt').textContent=avgAlt;")
+w("    document.getElementById('bs-avg-spd').textContent=avgVel;")
+w("    var sorted=Object.entries(countries).sort(function(a,b){return b[1]-a[1];}).slice(0,8);")
+w("    var maxC=sorted[0]?sorted[0][1]:1;")
+w("    var sc=document.getElementById('stat-countries');sc.innerHTML='';")
+w("    sorted.forEach(function(e){")
+w("      sc.innerHTML+='<div class=\"stat-row\"><div class=\"stat-label\">'+getFlag(e[0])+' '+e[0].slice(0,14)+'</div><div class=\"stat-bar-wrap\"><div class=\"stat-bar\" style=\"width:'+(e[1]/maxC*100)+'%\"></div></div><div class=\"stat-val\">'+e[1]+'</div></div>';")
+w("    });")
+w("    var spBuckets=[['0-400',0],['>400',0],['>600',0],['>800',0],['>1000',0]];")
+w("    vels.forEach(function(f){")
+w("      if(f.vel>1000)spBuckets[4][1]++;")
+w("      else if(f.vel>800)spBuckets[3][1]++;")
+w("      else if(f.vel>600)spBuckets[2][1]++;")
+w("      else if(f.vel>400)spBuckets[1][1]++;")
+w("      else spBuckets[0][1]++;")
+w("    });")
+w("    var maxS=Math.max.apply(null,spBuckets.map(function(b){return b[1];}));")
+w("    var ss=document.getElementById('stat-speeds');ss.innerHTML='';")
+w("    spBuckets.forEach(function(b){ss.innerHTML+='<div class=\"stat-row\"><div class=\"stat-label\">'+b[0]+' km/s</div><div class=\"stat-bar-wrap\"><div class=\"stat-bar\" style=\"width:'+(maxS>0?b[1]/maxS*100:0)+'%;background:var(--c)\"></div></div><div class=\"stat-val\" style=\"color:var(--c)\">'+b[1]+'</div></div>';});")
+w("    var altBuckets=[['<3000',0],['3000-6k',0],['6k-9k',0],['9k-12k',0],['>12k',0]];")
+w("    alts.forEach(function(f){")
+w("      if(f.alt>12000)altBuckets[4][1]++;")
+w("      else if(f.alt>9000)altBuckets[3][1]++;")
+w("      else if(f.alt>6000)altBuckets[2][1]++;")
+w("      else if(f.alt>3000)altBuckets[1][1]++;")
+w("      else altBuckets[0][1]++;")
+w("    });")
+w("    var maxA=Math.max.apply(null,altBuckets.map(function(b){return b[1];}));")
+w("    var sa=document.getElementById('stat-alts');sa.innerHTML='';")
+w("    altBuckets.forEach(function(b){sa.innerHTML+='<div class=\"stat-row\"><div class=\"stat-label\">'+b[0]+' m</div><div class=\"stat-bar-wrap\"><div class=\"stat-bar\" style=\"width:'+(maxA>0?b[1]/maxA*100:0)+'%;background:var(--warn)\"></div></div><div class=\"stat-val\" style=\"color:var(--warn)\">'+b[1]+'</div></div>';});")
+w("  }catch(e){console.error('updateStats hatasi',e);}")
 w("}")
 
 # ALERTS
@@ -1032,7 +1010,7 @@ while lsof -i :$PORT >/dev/null 2>&1; do PORT=$(( RANDOM % 8975 + 1025 )); done
 printf "\n"
 printf "  ┌─────────────────────────────────────────────────┐\n"
 printf "  │  ${B}URL   :${N} ${C}http://localhost:$PORT${N}\n"
-printf "  │  ${B}DURUM :${N} ${G}AKTIF${N}\n"
+printf "  │  ${B}DURUM :${N} ${G}AKTIF (KARARLI SURUM)${N}\n"
 printf "  │  Durdurmak icin: Ctrl + C\n"
 printf "  └─────────────────────────────────────────────────┘\n\n"
 
