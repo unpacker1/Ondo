@@ -1,12 +1,12 @@
 #!/bin/bash
- 
+
 # ╔══════════════════════════════════════════════════════╗
 # ║  SKYWATCH — Termux All-in-One Launcher               ║
 # ║  Calistir: bash skywatch.sh                          ║
 # ╚══════════════════════════════════════════════════════╝
- 
+
 G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
- 
+
 clear
 echo ""
 echo -e "${G}${B}"
@@ -23,8 +23,8 @@ echo ""
 
 # Python kontrol
 if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
-  echo -e "  ${Y}Python yukleniyor...${N}"
-  pkg install python -y
+echo -e "  ${Y}Python yukleniyor...${N}"
+pkg install python -y
 fi
 
 PY=$(command -v python3 || command -v python)
@@ -33,194 +33,198 @@ HTML="$TMPD/skywatch_index.html"
 
 echo -e "  ${C}HTML olusturuluyor...${N}"
 
-# HTML oluşturma + BONUS ENTEGRASYON
+# HTML üretimi
 $PY << 'PYEOF'
 import os, sys
 
 TMPD = os.environ.get("TMPDIR", "/tmp")
 HTML = os.path.join(TMPD, "skywatch_index.html")
 
-BONUS_MODULE = """
-<!-- ===== BONUS MODULE START ===== -->
-<script>
-(function(){
-
-let replay=false;
-let snapshots=[];
-
-function capture(){
-  try{
-    if(typeof flights!=="undefined"){
-      snapshots.push(JSON.parse(JSON.stringify(flights)));
-      if(snapshots.length>20) snapshots.shift();
-    }
-  }catch(e){}
-}
-
-function toggleReplay(){
-  replay=!replay;
-  if(typeof showNtf==="function"){
-    showNtf("Replay: "+(replay?"ON":"OFF"));
-  }
-}
-
-function beep(){
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator();
-    o.connect(ctx.destination);
-    o.frequency.value=700;
-    o.start();
-    setTimeout(()=>o.stop(),150);
-  }catch(e){}
-}
-
-function distance(lat1,lon1,lat2,lon2){
-  const R=6371;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2+
-          Math.cos(lat1*Math.PI/180)*
-          Math.cos(lat2*Math.PI/180)*
-          Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-function geofence(){
-  try{
-    if(!map||!flights) return;
-    const c=map.getCenter();
-    flights.forEach(f=>{
-      if(f.lat&&f.lon){
-        let d=distance(c.lat,c.lng,f.lat,f.lon);
-        if(d<50){
-          beep();
-          if(typeof showNtf==="function"){
-            showNtf("GEOFENCE ALERT",true);
-          }
-        }
-      }
-    });
-  }catch(e){}
-}
-
-function hook(){
-  setInterval(capture,5000);
-  setInterval(geofence,3000);
-
-  window.addEventListener("keydown",e=>{
-    if(e.key.toLowerCase()==="r"){
-      toggleReplay();
-    }
-  });
-}
-
-window.addEventListener("load",hook);
-
-})();
-</script>
-<!-- ===== BONUS MODULE END ===== -->
-"""
-
-page = f"""
-<!DOCTYPE html>
-<html lang='tr'>
+page = """<!DOCTYPE html>
+<html>
 <head>
-<meta charset='UTF-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<meta charset="utf-8">
 <title>SKYWATCH</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link href='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css' rel='stylesheet'>
-<script src='https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js'></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
 
 <style>
-body{{margin:0;background:#020810;color:#a8ffd4;font-family:monospace}}
-#map{{position:absolute;top:0;left:0;width:100%;height:100%}}
+body { margin:0; font-family:Arial; background:#0a0a0a; color:#fff; }
+#map { position:absolute; top:0; bottom:0; width:100%; }
+.panel {
+  position:absolute;
+  top:10px;
+  left:10px;
+  background:#111;
+  padding:10px;
+  border-radius:10px;
+  z-index:2;
+  width:260px;
+}
+input, button {
+  width:100%;
+  margin-top:5px;
+  padding:6px;
+  border:none;
+  border-radius:6px;
+}
+button { background:#00c3ff; color:#000; font-weight:bold; cursor:pointer; }
+.small { font-size:12px; opacity:0.8; }
 </style>
 </head>
 
 <body>
 
-<div id='map'></div>
+<div class="panel">
+  <h3>SKYWATCH PANEL</h3>
+  
+  <input id="token" placeholder="Mapbox Token" />
+  <button onclick="initMap()">BASLAT</button>
+  
+  <hr>
+  
+  <div class="small">BONUS FILTER</div>
+  <input id="minAlt" placeholder="Min irtifa (m)" type="number" />
+  <button onclick="applyFilter()">FILTRE UYGULA</button>
+  
+  <div id="info" class="small"></div>
+</div>
+
+<div id="map"></div>
 
 <script>
-let map, flights=[];
+let map;
+let aircraftData = [];
+let markers = [];
 
-mapboxgl.accessToken="";
-map = new mapboxgl.Map({
-  container:'map',
-  style:'mapbox://styles/mapbox/satellite-v9',
-  center:[35,40],
-  zoom:4
-});
+function initMap(){
+  const token = document.getElementById("token").value;
+  if(!token){
+    alert("Token giriniz!");
+    return;
+  }
 
-async function fetchOpenSky(){
-  let r=await fetch('https://opensky-network.org/api/states/all');
-  let d=await r.json();
-  return d.states||[];
+  mapboxgl.accessToken = token;
+
+  map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+    center: [35.5, 38.7],
+    zoom: 5
+  });
+
+  fetchData();
+  setInterval(fetchData, 5000);
 }
 
-function parse(s){
-  return {{icao:s[0],lat:s[6],lon:s[5]}};
+function fetchData(){
+  fetch("https://opensky-network.org/api/states/all")
+    .then(r => r.json())
+    .then(data => {
+      aircraftData = data.states || [];
+      renderMarkers(aircraftData);
+      document.getElementById("info").innerText = "Ucak: " + aircraftData.length;
+    });
 }
 
-async function loadFlights(){
-  let raw=await fetchOpenSky();
-  flights=raw.map(parse).filter(f=>f.lat&&f.lon);
-  render();
-}
+function renderMarkers(data){
+  markers.forEach(m => m.remove());
+  markers = [];
 
-function render(){
-  document.querySelectorAll('.mk').forEach(m=>m.remove());
-  flights.forEach(f=>{
-    let el=document.createElement('div');
-    el.className='mk';
-    el.style.width='6px';
-    el.style.height='6px';
-    el.style.background='#0f0';
-    el.style.borderRadius='50%';
-    new mapboxgl.Marker(el).setLngLat([f.lon,f.lat]).addTo(map);
+  data.forEach(a => {
+    if(!a[5] || !a[6]) return;
+
+    const el = document.createElement('div');
+    el.style.width = "6px";
+    el.style.height = "6px";
+    el.style.background = "red";
+    el.style.borderRadius = "50%";
+
+    const marker = new mapboxgl.Marker(el)
+      .setLngLat([a[5], a[6]])
+      .addTo(map);
+
+    markers.push(marker);
   });
 }
 
-function refreshData(){
-  loadFlights();
+function applyFilter(){
+  const minAlt = parseFloat(document.getElementById("minAlt").value) || 0;
+
+  const filtered = aircraftData.filter(a => {
+    const alt = a[7] || 0;
+    return alt >= minAlt;
+  });
+
+  renderMarkers(filtered);
+  document.getElementById("info").innerText = "Filtreli Ucak: " + filtered.length;
 }
-
-setInterval(loadFlights,5000);
-loadFlights();
 </script>
-
-{BONUS_MODULE}
 
 </body>
 </html>
 """
 
-with open(HTML,"w",encoding="utf-8") as f:
+with open(HTML, "w", encoding="utf-8") as f:
     f.write(page)
 
-print("OK:", HTML)
+print("OK: " + HTML)
 sys.exit(0)
 PYEOF
 
-PORT=$(( RANDOM % 5000 + 3000 ))
+if [ ! -f "$HTML" ]; then
+echo -e "  ${R}HATA: HTML dosyasi olusturulamadi!${N}"
+exit 1
+fi
+
+echo -e "  ${G}HTML hazir.${N}"
+
+PORT=$(( RANDOM % 8975 + 1025 ))
+while lsof -i :$PORT >/dev/null 2>&1; do
+PORT=$(( RANDOM % 8975 + 1025 ))
+done
+
+echo ""
+echo "  ┌──────────────────────────────────────────────┐"
+echo -e "  │  ${B}URL   :${N} ${C}http://localhost:$PORT${N}"
+echo -e "  │  ${B}DURUM :${N} ${G}AKTIF${N}"
+echo "  │  Durdurmak icin: Ctrl + C"
+echo "  └──────────────────────────────────────────────┘"
+echo ""
+
+sleep 0.8
+if command -v termux-open-url &>/dev/null; then
+termux-open-url "http://localhost:$PORT" &
+echo -e "  ${C}Tarayici aciliyor...${N}"
+else
+echo -e "  ${Y}Tarayicinizda acin: http://localhost:$PORT${N}"
+fi
+echo ""
 
 cd "$TMPD"
-
 $PY << PYEOF
-import http.server, socketserver, os
+import http.server, socketserver, os, sys, signal
 
-PORT=$PORT
+PORT = $PORT
 os.chdir("$TMPD")
 
 class H(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, fmt, *a):
+        print("  [%s] %s" % (self.address_string(), fmt % a))
     def do_GET(self):
-        if self.path=="/":
-            self.path="/skywatch_index.html"
-        return http.server.SimpleHTTPRequestHandler.do_GET(self)
+        if self.path == "/":
+            self.path = "/skywatch_index.html"
+        super().do_GET()
 
-with socketserver.TCPServer(("",PORT),H) as httpd:
-    print("http://localhost:%d" % PORT)
-    httpd.serve_forever()
+def bye(s, f):
+    print("\n  Sunucu kapatildi.\n")
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, bye)
+
+with socketserver.TCPServer(("", PORT), H) as h:
+    print("  http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
+    h.serve_forever()
 PYEOF
