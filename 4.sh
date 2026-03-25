@@ -6,6 +6,13 @@
 
 G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
 
+# ----- AYARLAR -----
+# Sunucunun dinleyeceği IP (0.0.0.0 tüm arayüzler, 127.0.0.1 sadece localhost)
+HOST="0.0.0.0"
+# Sunucu portu (örnek: 8080)
+PORT="8080"
+# -------------------
+
 clear
 echo ""
 echo -e "${G}${B}"
@@ -445,20 +452,11 @@ with open(HTML, "w", encoding="utf-8") as f:
 print("HTML dosyası oluşturuldu:", HTML)
 PYEOF
 
-# HTML dosyasını Termux'ta aç
-echo -e "  ${G}HTML hazir, tarayici aciliyor...${N}"
-sleep 1
+# HTML dosyasını HTTP sunucusu ile yayınla
+echo -e "  ${G}HTML hazir, HTTP sunucusu baslatiliyor...${N}"
+echo -e "  ${C}Adres: http://$HOST:$PORT/skywatch_index.html${N}"
+echo -e "  ${Y}Sunucuyu durdurmak icin Ctrl+C kullanin.${N}"
 
-# Termux'da varsayılan tarayıcı ile aç
-if command -v termux-open-url &>/dev/null; then
-    termux-open-url "file://$HTML"
-elif command -v xdg-open &>/dev/null; then
-    xdg-open "$HTML"
-else
-    echo -e "  ${Y}Tarayici acilamadi, dosyayi manuel acin:${N}"
-    echo "  file://$HTML"
-fi
-
-echo -e "  ${C}Skywatch baslatildi. Tarayiciyi kapatmak icin Ctrl+C${N}"
-# Bekleme yap, scriptin hemen kapanmasını engelle
-read -p "  ${Y}Devam etmek için Enter'a basın...${N}"
+cd "$TMPD" || exit 1
+# Python ile basit HTTP sunucusu başlat
+$PY -m http.server "$PORT" --bind "$HOST"
