@@ -22,18 +22,21 @@ root = ET.fromstring(res.content)
         items = []
 
         for item in root.findall("./channel/item")[:20]:
-            title = item.find("title").text
-            pubDate = item.find("pubDate").text
+            title_el = item.find("title")
+            date_el = item.find("pubDate")
+
+            title = title_el.text if title_el is not None else ""
+            date = date_el.text if date_el is not None else ""
 
             items.append({
                 "title": title,
-                "date": pubDate
+                "date": date
             })
 
         data_store["news"] = items
 
     except Exception as e:
-        data_store["news"] = [{"title": "Hata: " + str(e), "date": ""}]
+        data_store["news"] = [{"title": f"Hata: {str(e)}", "date": ""}]
 
     time.sleep(60)
 
@@ -79,7 +82,7 @@ HTML_PAGE = """
     </style>
 </head>
 <body><div class="card">
-    <h1>📰 Canlı Kritik Haberler</h1>
+    <h1>📰 Canlı Haberler</h1>
     <div id="news">Yükleniyor...</div>
 </div><script>
     async function loadNews() {
