@@ -1,113 +1,164 @@
-from flask import Flask, jsonify, request, render_template_string
-import threading
-import time
+from flask import Flask, render_template_string
+from flask_socketio import SocketIO
+import threading, time
 import numpy as np
+from datetime import datetime
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-plasma = {
-    "temperature": 100,
-    "stability": 50,
-    "energy": 0,
-    "auto_mode": True
+# --- Physical constants ---
+AMBIENT = 25
+DT = 0.1
+K_LOSS = 0.02
+
+# --- reactors ---
+reactors = {
+    f"RX{i}": {
+        "T": np.random.uniform(100,140),
+        "target": np.random.uniform(140,180),
+        "Q_in": 0,
+        "stability": 0,
+        "anomaly_score": 0,
+        "auto": True,
+        "history": []
+    } for i in range(1,5)
 }
 
-# --- AI Kontrol (basit dengeleme algoritması) ---
-def ai_control():
-    target_temp = 150
+logs = []
 
+# --- AI anomaly model (simple heuristic AI) ---
+def anomaly_score(T, target):
+    return abs(T - target) / target
+
+# --- AI controller (adaptive) ---
+def ai_control(error):
+    return (0.8 * error) + (0.01 * error**2)
+
+# --- physics simulation loop ---
+def simulate():
     while True:
-        if plasma["auto_mode"]:
-            # sıcaklığı hedefe yaklaştır
-            diff = target_temp - plasma["temperature"]
+        for r, d in reactors.items():
 
-            adjustment = diff * 0.1  # kontrol katsayısı
-            plasma["temperature"] += adjustment
+            T = d["T"]
+            target = d["target"]
 
-        # doğal dalgalanma
-        plasma["temperature"] += np.random.uniform(-2, 2)
+            # heat loss
+            Q_loss = K_LOSS * (T - AMBIENT)
 
-        # stabilite hesapla
-        plasma["stability"] = max(0, 100 - abs(plasma["temperature"] - 150))
+            # error
+            error = target - T
 
-        # enerji üretimi
-        plasma["energy"] = plasma["temperature"] * plasma["stability"] / 100
+            # AI control input
+            control = ai_control(error) if d["auto"] else 0
 
-        time.sleep(1)
+            # heat input
+            Q_in = control
 
-# --- Web Panel ---
+            # physics update
+            T_next = T + (Q_in - Q_loss) * DT
+
+            d["T"] = T_next
+
+            # stability
+            d["stability"] = max(0, 100 - abs(T_next - target))
+
+            # anomaly
+            d["anomaly_score"] = anomaly_score(T_next, target)
+
+            if d["anomaly_score"] > 0.5:
+                logs.append(f"{datetime.now().strftime('%H:%M:%S')} {r} anomaly high")
+
+            # history
+            d["history"].append(T_next)
+            if len(d["history"]) > 60:
+                d["history"].pop(0)
+
+        if len(logs) > 80:
+            logs.pop(0)
+
+        socketio.emit("update", {"reactors":reactors,"logs":logs})
+        time.sleep(0.5)
+
+# --- UI ---
 HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Plazma Kontrol Paneli</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>Ultra Physics AI Twin</title>
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{background:#000;color:#0ff;font-family:monospace;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;padding:10px;}
+.card{border:1px solid #0ff;padding:10px;}
+.warn{color:orange;}
+.crit{color:red;}
+.ok{color:lime;}
+canvas{background:#001;}
+#log{height:150px;overflow:auto;border-top:1px solid #0ff;padding:10px;}
+</style>
 </head>
-<body style="background:#111;color:#fff;font-family:Arial;text-align:center;">
 
-<h1>🔥 Plazma Reaktör Paneli</h1>
+<body>
 
-<p>Sıcaklık: <span id="temp"></span></p>
-<p>Stabilite: <span id="stab"></span></p>
-<p>Enerji: <span id="energy"></span></p>
+<h2 style="text-align:center;">🚀 Ultra Physics AI Digital Twin</h2>
 
-<button onclick="control('increase')">➕ Isı Artır</button>
-<button onclick="control('decrease')">➖ Isı Azalt</button>
-<button onclick="toggleAuto()">🤖 Auto Mode</button>
+<div class="grid" id="grid"></div>
 
-<canvas id="chart" width="400" height="200"></canvas>
+<canvas id="chart"></canvas>
+
+<div id="log"></div>
 
 <script>
-let tempData = [];
+const socket = io();
+let selected="RX1";
+let chartData=[];
 
-async function fetchData(){
-    let res = await fetch('/data');
-    let data = await res.json();
+socket.on("update",(data)=>{
+    let grid=document.getElementById("grid");
+    grid.innerHTML="";
 
-    document.getElementById('temp').innerText = data.temperature.toFixed(2);
-    document.getElementById('stab').innerText = data.stability.toFixed(2);
-    document.getElementById('energy').innerText = data.energy.toFixed(2);
+    Object.keys(data.reactors).forEach(r=>{
+        let d=data.reactors[r];
 
-    tempData.push(data.temperature);
-    if(tempData.length > 20) tempData.shift();
+        let cls = d.anomaly_score>0.5 ? "crit" : d.anomaly_score>0.2 ? "warn":"ok";
 
-    chart.data.datasets[0].data = tempData;
-    chart.update();
-}
+        grid.innerHTML += `
+        <div class="card">
+            <h3>${r}</h3>
+            <p>Temp: ${d.T.toFixed(2)}</p>
+            <p>Target: ${d.target.toFixed(1)}</p>
+            <p class="${cls}">Anomaly: ${d.anomaly_score.toFixed(2)}</p>
+            <p>Stability: ${d.stability.toFixed(1)}</p>
+        </div>
+        `;
 
-setInterval(fetchData, 1000);
-
-// kontrol butonları
-function control(action){
-    fetch('/control', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({action:action})
+        if(r===selected){
+            chartData=d.history;
+        }
     });
-}
 
-function toggleAuto(){
-    fetch('/toggle_auto', {method:'POST'});
-}
+    document.getElementById("log").innerHTML=data.logs.join("<br>");
+    chart.data.datasets[0].data=chartData;
+    chart.update();
+});
 
-// grafik
-let ctx = document.getElementById('chart').getContext('2d');
-let chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: Array(20).fill(""),
-        datasets: [{
-            label: 'Temperature',
-            data: [],
-            borderColor: 'cyan',
-            fill: false
+let ctx=document.getElementById("chart").getContext("2d");
+
+let chart=new Chart(ctx,{
+    type:"line",
+    data:{
+        labels:Array(60).fill(""),
+        datasets:[{
+            label:"Temperature",
+            data:[],
+            borderColor:"cyan",
+            fill:false
         }]
     },
-    options: {
-        scales: {
-            y: { beginAtZero: true }
-        }
-    }
+    options:{animation:false}
 });
 </script>
 
@@ -119,26 +170,7 @@ let chart = new Chart(ctx, {
 def home():
     return render_template_string(HTML)
 
-@app.route("/data")
-def data():
-    return jsonify(plasma)
-
-@app.route("/control", methods=["POST"])
-def control():
-    action = request.json.get("action")
-
-    if action == "increase":
-        plasma["temperature"] += 20
-    elif action == "decrease":
-        plasma["temperature"] -= 20
-
-    return jsonify({"status": "ok"})
-
-@app.route("/toggle_auto", methods=["POST"])
-def toggle_auto():
-    plasma["auto_mode"] = not plasma["auto_mode"]
-    return jsonify({"auto_mode": plasma["auto_mode"]})
-
+# start system
 if __name__ == "__main__":
-    threading.Thread(target=ai_control, daemon=True).start()
-    app.run(host="0.0.0.0", port=5000)
+    threading.Thread(target=simulate, daemon=True).start()
+    socketio.run(app, host="0.0.0.0", port=5000)
