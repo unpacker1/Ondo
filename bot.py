@@ -1,189 +1,92 @@
 from flask import Flask, render_template_string, jsonify
 import random
-import threading
-import time
-import requests
-import xml.etree.ElementTree as ET
+import math
 
 app = Flask(__name__)
 
-data_store = {
-    "news": {}
-}
+# Basit ISS simülasyonu (örnek hareket)
+def get_iss_position():
+    t = time.time()
+    lat = 20 * math.sin(t / 5)
+    lon = (t * 10) % 360 - 180
+    return {"lat": lat, "lon": lon}
 
-NEWS_SOURCES = [
-    "https://news.google.com/rss?hl=tr&gl=TR&ceid=TR:tr",
-    "https://feeds.bbci.co.uk/news/rss.xml",
-    "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
-    "https://rss.cnn.com/rss/edition.rss",
-    "https://www.aljazeera.com/xml/rss/all.xml",
-    "https://www.theguardian.com/world/rss",
-    "https://www.reuters.com/world/rss",
-    "https://www.hurriyet.com.tr/rss/anasayfa",
-    "https://www.sabah.com.tr/rss/gundem.xml"
-]
-
-def categorize(title):
-    t = title.lower()
-
-    if any(k in t for k in ["economy", "ekonomi", "finance", "market", "dolar", "euro", "faiz"]):
-        return "Economy"
-    elif any(k in t for k in ["sport", "football", "basketball", "spor", "maç"]):
-        return "Sports"
-    elif any(k in t for k in ["technology", "tech", "ai", "yazılım", "teknoloji"]):
-        return "Technology"
-    elif any(k in t for k in ["turkey", "türkiye", "istanbul", "ankara", "kayseri"]):
-        return "Turkey"
-    elif any(k in t for k in ["world", "global", "usa", "uk", "china", "russia"]):
-        return "World"
-    else:
-        return "Other"
-
-def score(title):
-    t = title.lower()
-    s = 0
-
-    keywords = {
-        "war": 5, "attack": 5, "crisis": 4, "breaking": 5,
-        "earthquake": 5, "deprem": 5, "explosion": 5,
-        "president": 3, "government": 3,
-        "economy": 3, "inflation": 4, "faiz": 4,
-        "bitcoin": 3, "ai": 3
-    }
-
-    for k, v in keywords.items():
-        if k in t:
-            s += v
-
-    if "breaking" in t:
-        s += 5
-
-    return s
-
-def fetch_news():
-    while True:
-        categorized = {
-            "World": [],
-            "Turkey": [],
-            "Technology": [],
-            "Economy": [],
-            "Sports": [],
-            "Other": []
-        }
-
-        for url in NEWS_SOURCES:
-            try:
-                res = requests.get(url, timeout=5)
-                root = ET.fromstring(res.content)
-
-                for item in root.findall("./channel/item")[:10]:
-                    title_el = item.find("title")
-                    date_el = item.find("pubDate")
-
-                    title = title_el.text if title_el is not None else ""
-                    date = date_el.text if date_el is not None else ""
-
-                    cat = categorize(title)
-                    s = score(title)
-
-                    categorized[cat].append({
-                        "title": title,
-                        "date": date,
-                        "score": s
-                    })
-
-            except Exception as e:
-                categorized["Other"].append({
-                    "title": f"Error: {str(e)}",
-                    "date": url,
-                    "score": 0
-                })
-
-        for cat in categorized:
-            categorized[cat] = sorted(categorized[cat], key=lambda x: x["score"], reverse=True)
-
-        data_store["news"] = categorized
-
-        time.sleep(10)
-
-threading.Thread(target=fetch_news, daemon=True).start()
-
-HTML_PAGE = """
+HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>News Panel</title>
+    <title>3D World</title>
     <style>
-        body {
-            background: #0f172a;
-            color: #e2e8f0;
+        body { margin: 0; overflow: hidden; background: black; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
             font-family: Arial;
-            margin: 0;
-            padding: 20px;
-        }
-        .card {
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 12px;
-            max-width: 900px;
-            margin: auto;
-        }
-        .category {
-            margin-top: 20px;
-        }
-        .news-item {
-            padding: 8px 0;
-            border-bottom: 1px solid #334155;
-        }
-        .critical {
-            color: #f87171;
-            font-weight: bold;
         }
     </style>
 </head>
 <body>
+<div id="info">3D World Running</div>
 
-<div class="card">
-    <h1>📰 Live News</h1>
-    <div id="news"></div>
-</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
-async function loadNews() {
-    const res = await fetch('/news');
-    const data = await res.json();
+// Scene
+const scene = new THREE.Scene();
 
-    const container = document.getElementById("news");
-    container.innerHTML = "";
+// Camera
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.z = 2;
 
-    for (const category in data.news) {
-        const section = document.createElement("div");
-        section.className = "category";
+// Renderer
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-        const h = document.createElement("h2");
-        h.innerText = category;
-        section.appendChild(h);
+// Earth texture
+const geometry = new THREE.SphereGeometry(1, 64, 64);
+const texture = new THREE.TextureLoader().load("https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg");
+const material = new THREE.MeshBasicMaterial({map: texture});
+const earth = new THREE.Mesh(geometry, material);
+scene.add(earth);
 
-        data.news[category].forEach(item => {
-            const div = document.createElement("div");
-            div.className = "news-item";
+// ISS marker
+const issGeometry = new THREE.SphereGeometry(0.02, 16, 16);
+const issMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
+const iss = new THREE.Mesh(issGeometry, issMaterial);
+scene.add(iss);
 
-            const critical = item.score >= 6;
+// Convert lat/lon to 3D position
+function latLonToVector3(lat, lon, radius=1.01) {
+    const phi = (90 - lat) * Math.PI / 180;
+    const theta = (lon + 180) * Math.PI / 180;
 
-            div.innerHTML =
-                "<div class='" + (critical ? "critical" : "") + "'>" + item.title + "</div>" +
-                "<div>" + item.date + "</div>" +
-                "<small>Score: " + item.score + "</small>";
+    const x = -radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.cos(phi);
+    const z = radius * Math.sin(phi) * Math.sin(theta);
 
-            section.appendChild(div);
-        });
-
-        container.appendChild(section);
-    }
+    return new THREE.Vector3(x, y, z);
 }
 
-loadNews();
-setInterval(loadNews, 10000);
+// Animation loop
+async function animate() {
+    requestAnimationFrame(animate);
+
+    earth.rotation.y += 0.001;
+
+    // fetch ISS position from backend
+    const res = await fetch('/iss');
+    const data = await res.json();
+
+    const pos = latLonToVector3(data.lat, data.lon);
+    iss.position.copy(pos);
+
+    renderer.render(scene, camera);
+}
+
+animate();
 </script>
 
 </body>
@@ -192,13 +95,18 @@ setInterval(loadNews, 10000);
 
 @app.route("/")
 def index():
-    return render_template_string(HTML_PAGE)
+    return render_template_string(HTML)
 
-@app.route("/news")
-def get_news():
-    return jsonify(data_store)
+@app.route("/iss")
+def iss():
+    # Fake moving ISS
+    t = time.time()
+    lat = 20 * math.sin(t / 5)
+    lon = (t * 10) % 360 - 180
+    return jsonify({"lat": lat, "lon": lon})
 
 if __name__ == "__main__":
+    import time
     port = random.randint(5000, 9000)
-    print(f"Server running on http://127.0.0.1:{port}")
+    print(f"Running on http://127.0.0.1:{port}")
     app.run(host="0.0.0.0", port=port)
