@@ -33,139 +33,99 @@ HTML="$TMPD/skywatch_index.html"
 
 echo -e "  ${C}HTML olusturuluyor...${N}"
 
-# HTML üretimi
 $PY << 'PYEOF'
 import os, sys
 
 TMPD = os.environ.get("TMPDIR", "/tmp")
 HTML = os.path.join(TMPD, "skywatch_index.html")
 
-page = """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>SKYWATCH</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
-
-<style>
-body { margin:0; font-family:Arial; background:#0a0a0a; color:#fff; }
-#map { position:absolute; top:0; bottom:0; width:100%; }
-.panel {
-  position:absolute;
-  top:10px;
-  left:10px;
-  background:#111;
-  padding:10px;
-  border-radius:10px;
-  z-index:2;
-  width:260px;
-}
-input, button {
-  width:100%;
-  margin-top:5px;
-  padding:6px;
-  border:none;
-  border-radius:6px;
-}
-button { background:#00c3ff; color:#000; font-weight:bold; cursor:pointer; }
-.small { font-size:12px; opacity:0.8; }
-</style>
-</head>
-
-<body>
-
-<div class="panel">
-  <h3>SKYWATCH PANEL</h3>
-  
-  <input id="token" placeholder="Mapbox Token" />
-  <button onclick="initMap()">BASLAT</button>
-  
-  <hr>
-  
-  <div class="small">BONUS FILTER</div>
-  <input id="minAlt" placeholder="Min irtifa (m)" type="number" />
-  <button onclick="applyFilter()">FILTRE UYGULA</button>
-  
-  <div id="info" class="small"></div>
-</div>
-
-<div id="map"></div>
-
-<script>
-let map;
-let aircraftData = [];
-let markers = [];
-
-function initMap(){
-  const token = document.getElementById("token").value;
-  if(!token){
-    alert("Token giriniz!");
-    return;
-  }
-
-  mapboxgl.accessToken = token;
-
-  map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/mapbox/satellite-streets-v12',
-    center: [35.5, 38.7],
-    zoom: 5
-  });
-
-  fetchData();
-  setInterval(fetchData, 5000);
-}
-
-function fetchData(){
-  fetch("https://opensky-network.org/api/states/all")
-    .then(r => r.json())
-    .then(data => {
-      aircraftData = data.states || [];
-      renderMarkers(aircraftData);
-      document.getElementById("info").innerText = "Ucak: " + aircraftData.length;
-    });
-}
-
-function renderMarkers(data){
-  markers.forEach(m => m.remove());
-  markers = [];
-
-  data.forEach(a => {
-    if(!a[5] || !a[6]) return;
-
-    const el = document.createElement('div');
-    el.style.width = "6px";
-    el.style.height = "6px";
-    el.style.background = "red";
-    el.style.borderRadius = "50%";
-
-    const marker = new mapboxgl.Marker(el)
-      .setLngLat([a[5], a[6]])
-      .addTo(map);
-
-    markers.push(marker);
-  });
-}
-
-function applyFilter(){
-  const minAlt = parseFloat(document.getElementById("minAlt").value) || 0;
-
-  const filtered = aircraftData.filter(a => {
-    const alt = a[7] || 0;
-    return alt >= minAlt;
-  });
-
-  renderMarkers(filtered);
-  document.getElementById("info").innerText = "Filtreli Ucak: " + filtered.length;
-}
-</script>
-
-</body>
-</html>
-"""
+page = ( "\n" "\n" "\n" "\n" "\n" "SKYWATCH\n" "\n" "\n" "\n" "\n" "\n" "\n" "\n" "
+\n" "  
+\n" "    
+MAPBOX TOKEN
+\n" "    
+\n" "      Uydu haritasi icin ucretsiz Mapbox token gereklidir.\n" "      [account.mapbox.com](https://account.mapbox.com) adresinden alin.\n" "      Token olmadan **Demo Mod** ile ucak listesi goruntulenebilir.\n" "    
+\n" "    \n" "    
+\n" "      BASLAT\n" "      DEMO MOD\n" "    
+\n" "  
+\n" "
+\n" "\n" "
+\n" "  
+SKYWATCH
+\n" "  
+\n" "  
+SISTEM BASLATILIYOR...
+\n" "
+\n" "\n" "
+\n" "  
+SKYWATCH
+\n" "  
+\n" "    
+BAGLANILIYOR
+\n" "    
+UCAK: 0
+\n" "    
+SON: --:--
+\n" "  
+\n" "  
+\n" "    
+00:00:00
+\n" "    ↻ YENILE\n" "    UYDU\n" "    KARANLIK\n" "    SOKAK\n" "  
+\n" "
+\n" "\n" "
+◀
+\n" "\n" "
+\n" "  
+UCUS LISTESI0
+\n" "  
+VERI BEKLENIYOR...
+\n" "
+\n" "\n" "
+\n" "\n" "
+\n" "  
+---×
+\n" "  
+\n" "    
+ULKE
+---
+\n" "    
+YUKSEKLIK
+---
+\n" "    
+HIZ
+---
+\n" "    
+ROTA
+---
+\n" "    
+ENLEM
+---
+\n" "    
+BOYLAM
+---
+\n" "    
+SQUAWK
+---
+\n" "    
+DURUM
+---
+\n" "  
+\n" "
+\n" "\n" "
+RADAR
+\n" "\n" "
+\n" "  
+YUKSEK
+---
+METRE
+\n" "  
+HIZ
+---
+KM/S
+\n" "
+\n" "\n" "
+\n" "
+\n" "\n" "\n" "\n" "\n" )
 
 with open(HTML, "w", encoding="utf-8") as f:
     f.write(page)
@@ -188,7 +148,7 @@ done
 
 echo ""
 echo "  ┌──────────────────────────────────────────────┐"
-echo -e "  │  ${B}URL   :${N} ${C}http://localhost:$PORT${N}"
+echo -e "  │  ${B}URL   :${N} ${C}[http://localhost:$PORT${N}](http://localhost:$PORT${N})"
 echo -e "  │  ${B}DURUM :${N} ${G}AKTIF${N}"
 echo "  │  Durdurmak icin: Ctrl + C"
 echo "  └──────────────────────────────────────────────┘"
@@ -196,10 +156,10 @@ echo ""
 
 sleep 0.8
 if command -v termux-open-url &>/dev/null; then
-termux-open-url "http://localhost:$PORT" &
+termux-open-url "[http://localhost:$PORT](http://localhost:$PORT)" &
 echo -e "  ${C}Tarayici aciliyor...${N}"
 else
-echo -e "  ${Y}Tarayicinizda acin: http://localhost:$PORT${N}"
+echo -e "  ${Y}Tarayicinizda acin: [http://localhost:$PORT${N}](http://localhost:$PORT${N})"
 fi
 echo ""
 
@@ -225,6 +185,6 @@ def bye(s, f):
 signal.signal(signal.SIGINT, bye)
 
 with socketserver.TCPServer(("", PORT), H) as h:
-    print("  http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
+    print("  [http://localhost:%d](http://localhost:%d)  |  Ctrl+C ile durdur\n" % PORT)
     h.serve_forever()
 PYEOF
