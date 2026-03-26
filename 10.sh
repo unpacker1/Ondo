@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  AIS Gemi Takip Sunucusu - Termux için (AISStream)          ║
+# ║  AIS Gemi Takip Sunucusu - Düzeltilmiş Sürüm                ║
 # ║  Kullanım: ./ais-server.sh --key "API_ANAHTARIN"            ║
 # ╚══════════════════════════════════════════════════════════════╝
 
@@ -38,9 +38,9 @@ mkdir -p "$CACHE_DIR"
 SERVER_SCRIPT="$CACHE_DIR/ais_server.py"
 HTML_FILE="$CACHE_DIR/ais.html"
 
-echo -e "${C}📡 AISStream bağlantısı hazırlanıyor...${N}"
+echo -e "${C}📡 AISStream bağlantısı hazırlanıyor (düzeltilmiş)...${N}"
 
-# Python sunucu + WebSocket istemcisi (iyileştirilmiş)
+# Python sunucu - DÜZELTİLMİŞ WebSocket bağlantısı
 cat > "$SERVER_SCRIPT" << 'PYEOF'
 #!/usr/bin/env python3
 import asyncio
@@ -57,57 +57,73 @@ CORS(app)
 
 API_KEY = os.environ.get("AIS_API_KEY", "")
 
-# Geniş bölge: Akdeniz + Karadeniz (yaklaşık)
-BOUNDING_BOX = [25.0, 34.0, 42.0, 47.0]  # [minLon, minLat, maxLon, maxLat]
-# Daha geniş için:
-# BOUNDING_BOX = [-180.0, -90.0, 180.0, 90.0]   # tüm dünya (çok fazla veri)
+# DOĞRU format: [minLat, minLon], [maxLat, maxLon]
+# Türkiye ve çevresi (Akdeniz, Ege, Karadeniz)
+BOUNDING_BOX = [[34.0, 25.0], [47.0, 42.0]]  # [[minLat, minLon], [maxLat, maxLon]]
 
 latest_vessels = {}
 last_update = 0
-message_count = 0
+connection_active = False
 
 async def listen_ais():
-    """AISStream WebSocket'ine bağlan ve gemileri dinle"""
-    global latest_vessels, last_update, message_count
+    """AISStream WebSocket'ine bağlan - DÜZELTİLMİŞ"""
+    global latest_vessels, last_update, connection_active
     uri = "wss://stream.aisstream.io/v0/stream"
     
+    # DOĞRU subscription formatı (dokümantasyona göre)[citation:2]
     subscription = {
         "APIKey": API_KEY,
-        "BoundingBoxes": [[BOUNDING_BOX[0], BOUNDING_BOX[1], BOUNDING_BOX[2], BOUNDING_BOX[3]]],
+        "BoundingBoxes": [BOUNDING_BOX],  # [[minLat, minLon], [maxLat, maxLon]]
         "FilterMessageTypes": ["PositionReport"]
     }
     
     while True:
         try:
-            async with websockets.connect(uri) as websocket:
+            async with websockets.connect(uri, ping_interval=20, ping_timeout=10) as websocket:
+                print("✅ WebSocket bağlantısı kuruldu")
+                
+                # ÖNEMLİ: Subscription mesajını HEMEN gönder (3 saniye içinde)[citation:2]
                 await websocket.send(json.dumps(subscription))
-                print("✅ AISStream bağlantısı kuruldu, gemiler dinleniyor...")
-                print(f"   Bölge: {BOUNDING_BOX}")
+                print(f"📡 Subscription gönderildi: {BOUNDING_BOX}")
+                connection_active = True
                 
                 async for message in websocket:
                     data = json.loads(message)
-                    message_count += 1
-                    if message_count % 50 == 0:
-                        print(f"📨 {message_count} mesaj alındı, gemiler: {len(latest_vessels)}")
                     
-                    if "MessageType" in data and data["MessageType"] == "PositionReport":
+                    # Hata mesajı kontrolü
+                    if "error" in data:
+                        print(f"⚠️ API Hatası: {data['error']}")
+                        continue
+                    
+                    if data.get("MessageType") == "PositionReport":
                         meta = data.get("MetaData", {})
-                        pos = data.get("Message", {})
+                        msg = data.get("Message", {}).get("PositionReport", {})
                         
-                        mmsi = meta.get("MMSI")
-                        if mmsi and pos.get("Latitude") and pos.get("Longitude"):
-                            latest_vessels[mmsi] = {
-                                "mmsi": mmsi,
+                        mmsi = msg.get("UserID") or meta.get("MMSI")
+                        lat = msg.get("Latitude") or meta.get("latitude")
+                        lon = msg.get("Longitude") or meta.get("longitude")
+                        
+                        if mmsi and lat and lon:
+                            latest_vessels[str(mmsi)] = {
+                                "mmsi": str(mmsi),
                                 "name": meta.get("ShipName", "Bilinmiyor"),
-                                "lat": pos["Latitude"],
-                                "lon": pos["Longitude"],
-                                "speed": pos.get("Sog", 0),
-                                "heading": pos.get("Cog", 0),
+                                "lat": lat,
+                                "lon": lon,
+                                "speed": msg.get("Sog", 0),
+                                "heading": msg.get("Cog", 0),
                                 "timestamp": time.time()
                             }
                             last_update = time.time()
+                            if len(latest_vessels) % 50 == 0:
+                                print(f"📊 {len(latest_vessels)} gemi takip ediliyor")
+                                
+        except websockets.exceptions.ConnectionClosed as e:
+            print(f"❌ Bağlantı kapandı: {e}, 10 saniye sonra yeniden bağlanıyor...")
+            connection_active = False
+            await asyncio.sleep(10)
         except Exception as e:
-            print(f"WebSocket hatası: {e}, 10 saniye sonra yeniden bağlanılıyor...")
+            print(f"❌ Hata: {e}, 10 saniye sonra yeniden bağlanıyor...")
+            connection_active = False
             await asyncio.sleep(10)
 
 @app.route('/')
@@ -121,7 +137,17 @@ def get_vessels():
         "vessels": list(latest_vessels.values()),
         "count": len(latest_vessels),
         "last_update": last_update,
+        "connected": connection_active,
         "bounding_box": BOUNDING_BOX
+    })
+
+@app.route('/api/status')
+def get_status():
+    """Bağlantı durumu"""
+    return jsonify({
+        "connected": connection_active,
+        "vessel_count": len(latest_vessels),
+        "last_update": last_update
     })
 
 def start_websocket_thread():
@@ -133,7 +159,9 @@ def start_websocket_thread():
 if __name__ == '__main__':
     print("🚢 AIS Sunucu başlatılıyor...")
     print(f"   Bölge: {BOUNDING_BOX}")
-    # WebSocket'i arka planda başlat
+    print("   Subscription formatı düzeltildi ✅")
+    print("   Ping/pong mekanizması eklendi ✅")
+    
     thread = threading.Thread(target=start_websocket_thread, daemon=True)
     thread.start()
     
@@ -142,13 +170,13 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 PYEOF
 
-# HTML istemci (Leaflet haritası)
+# HTML istemci (Türkiye merkezli harita)
 cat > "$HTML_FILE" << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>AIS Gemi Takip Sistemi</title>
+    <title>AIS Gemi Takip Sistemi - Termux</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -159,7 +187,7 @@ cat > "$HTML_FILE" << 'HTMLEOF'
             position:absolute; bottom:20px; left:20px; z-index:1000;
             background:rgba(0,0,0,0.75); backdrop-filter:blur(8px); padding:12px 18px;
             border-radius:8px; color:white; font-size:13px; border-left:4px solid #00aaff;
-            max-width:280px;
+            max-width:300px;
         }
         .controls .stat { margin:4px 0; }
         .controls .stat span { color:#00aaff; font-weight:bold; }
@@ -167,6 +195,15 @@ cat > "$HTML_FILE" << 'HTMLEOF'
             background:#00aaff; border:none; color:white; padding:4px 12px;
             margin-top:8px; border-radius:4px; cursor:pointer;
         }
+        .status-badge {
+            display:inline-block;
+            width:10px;
+            height:10px;
+            border-radius:50%;
+            margin-right:6px;
+        }
+        .status-online { background:#00ff00; box-shadow:0 0 5px #00ff00; }
+        .status-offline { background:#ff4444; }
         .info-panel {
             position:absolute; bottom:20px; right:20px; width:280px;
             background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); border-radius:12px;
@@ -180,10 +217,10 @@ cat > "$HTML_FILE" << 'HTMLEOF'
 <body>
 <div id="map"></div>
 <div class="controls">
+    <div class="stat"><span id="status-indicator" class="status-badge status-offline"></span> <span id="status-text">Bağlantı yok</span></div>
     <div class="stat">🚢 <span id="vessel-count">0</span> gemi</div>
     <div class="stat">🕒 <span id="last-update">-</span></div>
-    <div class="stat">📍 <span id="bbox-info">-</span></div>
-    <button id="refresh-btn">🔄 Şimdi Yenile</button>
+    <button id="refresh-btn">🔄 Yenile</button>
 </div>
 <div class="info-panel" id="info-panel">
     <span class="close" id="close-panel">&times;</span>
@@ -193,7 +230,8 @@ cat > "$HTML_FILE" << 'HTMLEOF'
 
 <script>
     const API_URL = "/api/vessels";
-    const map = L.map('map').setView([39.0, 33.0], 5);  // Türkiye merkez
+    const STATUS_URL = "/api/status";
+    const map = L.map('map').setView([39.0, 33.0], 5);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OSM & CartoDB'
     }).addTo(map);
@@ -208,22 +246,37 @@ cat > "$HTML_FILE" << 'HTMLEOF'
         popupAnchor: [0, -12]
     });
     
+    async function fetchStatus() {
+        try {
+            const res = await fetch(STATUS_URL);
+            const data = await res.json();
+            const indicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            if (data.connected) {
+                indicator.className = 'status-badge status-online';
+                statusText.innerText = 'Bağlantı aktif';
+            } else {
+                indicator.className = 'status-badge status-offline';
+                statusText.innerText = 'Bağlantı kuruluyor...';
+            }
+        } catch(e) {
+            console.log('Status check failed');
+        }
+    }
+    
     async function fetchVessels() {
         try {
             const res = await fetch(API_URL);
             const data = await res.json();
-            if (data.bounding_box) {
-                document.getElementById('bbox-info').innerText = 
-                    `Bölge: ${data.bounding_box[0]},${data.bounding_box[1]} - ${data.bounding_box[2]},${data.bounding_box[3]}`;
-            }
-            return data.vessels || [];
+            return data;
         } catch(e) {
             console.error(e);
-            return [];
+            return { vessels: [] };
         }
     }
     
-    function updateMap(vessels) {
+    function updateMap(data) {
+        const vessels = data.vessels || [];
         document.getElementById('vessel-count').innerText = vessels.length;
         document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
         
@@ -261,8 +314,9 @@ cat > "$HTML_FILE" << 'HTMLEOF'
     }
     
     async function refresh() {
-        const vessels = await fetchVessels();
-        if (vessels) updateMap(vessels);
+        await fetchStatus();
+        const data = await fetchVessels();
+        if (data.vessels) updateMap(data);
     }
     
     document.getElementById('refresh-btn').onclick = refresh;
@@ -270,7 +324,8 @@ cat > "$HTML_FILE" << 'HTMLEOF'
     map.on('click', () => document.getElementById('info-panel').classList.remove('visible'));
     
     refresh();
-    setInterval(refresh, 15000);  // 15 saniyede bir yenile
+    setInterval(refresh, 10000);
+    setInterval(fetchStatus, 5000);
 </script>
 </body>
 </html>
@@ -285,8 +340,6 @@ fi
 LOCAL_IP="localhost"
 if command -v ip &>/dev/null; then
     LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127.0.0.1 | head -1)
-elif command -v ifconfig &>/dev/null; then
-    LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v 127.0.0.1 | head -1)
 fi
 
 # Python paketleri
@@ -299,7 +352,11 @@ export PORT="$PORT"
 echo -e "\n${G}${B}🚢 AIS Gemi Takip Sunucu Başlatıldı${N}"
 echo -e "${C}📍 Adres:${N}"
 echo -e "  ${G}http://${LOCAL_IP}:${PORT}${N}"
-echo -e "${Y}🌊 Bölge: Akdeniz + Karadeniz (değiştirmek için betikteki BOUNDING_BOX'ı düzenleyin)${N}"
+echo -e "${Y}🌊 Bölge: Türkiye ve çevresi (Akdeniz, Ege, Karadeniz)${N}"
+echo -e "${C}📌 Düzeltmeler:${N}"
+echo -e "  • Subscription 3 saniye içinde gönderiliyor"
+echo -e "  • BoundingBox formatı düzeltildi [lat,lon]"
+echo -e "  • Ping/pong mekanizması eklendi"
 echo -e "${R}⏹️  Sunucuyu durdurmak için Ctrl+C${N}"
 
 cd "$CACHE_DIR"
