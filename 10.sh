@@ -5,6 +5,7 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
 echo -e "${CYAN}[+] Neon Exploit Panel - Otomatik Kurulum ve Çalıştırma${NC}"
@@ -12,37 +13,44 @@ echo -e "${CYAN}[+] Sadece eğitim ve yetkilendirilmiş testler için kullanın.
 
 # 1. Sistem güncelleme ve temel paketler
 echo -e "${GREEN}[1/6] Sistem güncelleniyor ve temel paketler yükleniyor...${NC}"
-pkg update -y
-pkg install -y python python-pip netcat-openbsd
+echo -e "${YELLOW}>> pkg update -y${NC}"
+pkg update -y | while IFS= read -r line; do echo "  $line"; done
+echo -e "${YELLOW}>> pkg install -y python python-pip netcat-openbsd${NC}"
+pkg install -y python python-pip netcat-openbsd | while IFS= read -r line; do echo "  $line"; done
 
 # 2. Rust kontrolü (cryptography derlemesi için)
 echo -e "${GREEN}[2/6] Rust kontrol ediliyor...${NC}"
 if ! command -v rustc &> /dev/null; then
     echo -e "${CYAN}Rust bulunamadı, kuruluyor...${NC}"
-    pkg install -y rust
+    echo -e "${YELLOW}>> pkg install rust${NC}"
+    pkg install -y rust | while IFS= read -r line; do echo "  $line"; done
 else
     echo -e "${CYAN}Rust zaten kurulu.${NC}"
 fi
 
-# 3. Python kütüphaneleri (flask, requests) ve paramiko
+# 3. Python kütüphaneleri (flask, requests)
 echo -e "${GREEN}[3/6] Python kütüphaneleri yükleniyor...${NC}"
-pip install flask requests --quiet
+echo -e "${YELLOW}>> pip install flask requests --progress-bar on${NC}"
+pip install flask requests --progress-bar on | while IFS= read -r line; do echo "  $line"; done
 
-# paramiko'yü pip ile dene, başarısız olursa Termux paketini kullan
-echo -e "${CYAN}Paramiko yükleniyor...${NC}"
-if pip install paramiko --quiet; then
+# 4. Paramiko (önce pip, başarısız olursa pkg)
+echo -e "${GREEN}[4/6] Paramiko yükleniyor...${NC}"
+echo -e "${YELLOW}>> Deneme: pip install paramiko --progress-bar on${NC}"
+if pip install paramiko --progress-bar on 2>&1 | while IFS= read -r line; do echo "  $line"; done; then
     echo -e "${GREEN}Paramiko pip ile başarıyla yüklendi.${NC}"
 else
-    echo -e "${CYAN}Pip başarısız oldu, Termux paketi deneniyor...${NC}"
-    pkg install -y python-paramiko
+    echo -e "${YELLOW}Pip başarısız oldu, Termux paketi deneniyor...${NC}"
+    echo -e "${YELLOW}>> pkg install python-paramiko${NC}"
+    pkg install -y python-paramiko | while IFS= read -r line; do echo "  $line"; done
+    echo -e "${GREEN}Paramiko Termux paketi ile yüklendi.${NC}"
 fi
 
-# 4. Rastgele port seç
+# 5. Rastgele port seç
 PANEL_PORT=$(( RANDOM % 1000 + 5000 ))
 
-# 5. Python kodunu geçici dosyaya yaz
-echo -e "${GREEN}[4/6] Python panel kodu oluşturuluyor...${NC}"
-cat > /data/data/com.termux/files/usr/tmp/neon_panel.py << 'EOF'
+# 6. Python kodunu geçici dosyaya yaz
+echo -e "${GREEN}[5/6] Python panel kodu oluşturuluyor...${NC}"
+cat > /data/data/com.termux/files/usr/tmp/neon_panel_progress.py << 'EOF'
 import random
 import socket
 import threading
@@ -66,9 +74,8 @@ app = Flask(__name__)
 
 # ---------- Yapılandırma ----------
 LOG_FILE = "exploit_log.txt"
-OPEN_PORTS = []          # (port, service_guess)
-SCAN_RESULTS = []        # list of dicts
-TARGET_IP = "127.0.0.1"  # varsayılan
+OPEN_PORTS = []
+TARGET_IP = "127.0.0.1"
 listener_process = None
 
 # ---------- Loglama ----------
@@ -77,7 +84,7 @@ def log(message):
         f.write(f"[{time.ctime()}] {message}\n")
     print(message)
 
-# ---------- Port tarayıcı (multi-thread) ----------
+# ---------- Port tarayıcı ----------
 def scan_port(ip, port, timeout=1):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -85,7 +92,6 @@ def scan_port(ip, port, timeout=1):
         result = sock.connect_ex((ip, port))
         sock.close()
         if result == 0:
-            # Servis tahmini (basit)
             service = "unknown"
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -107,7 +113,7 @@ def scan_port(ip, port, timeout=1):
         pass
     return None
 
-def scan_ports(ip, ports, progress_callback=None):
+def scan_ports(ip, ports):
     results = []
     threads = []
     lock = threading.Lock()
@@ -536,15 +542,15 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(port), debug=False)
 EOF
 
-# 6. Python dosyasındaki port değişkenini güncelle
-sed -i "s/\$PANEL_PORT/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_panel.py
+# 7. Python dosyasındaki port değişkenini güncelle
+sed -i "s/\$PANEL_PORT/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_panel_progress.py
 
-echo -e "${GREEN}[5/6] Panel başlatılıyor...${NC}"
+echo -e "${GREEN}[6/6] Panel başlatılıyor...${NC}"
 echo -e "${CYAN}Adres: http://localhost:$PANEL_PORT${NC}"
 echo -e "${RED}[!] Ctrl+C ile durdurabilirsiniz.${NC}"
 
-# 7. Python panelini çalıştır
-python /data/data/com.termux/files/usr/tmp/neon_panel.py
+# 8. Python panelini çalıştır
+python /data/data/com.termux/files/usr/tmp/neon_panel_progress.py
 
 # (İsteğe bağlı: çıkışta geçici dosyayı sil)
-# rm /data/data/com.termux/files/usr/tmp/neon_panel.py
+# rm /data/data/com.termux/files/usr/tmp/neon_panel_progress.py
