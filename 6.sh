@@ -1,4 +1,4 @@
-bash
+
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  SKYWATCH v4.0 ULTIMATE — Canli Ucak Takip Sistemi          ║
