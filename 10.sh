@@ -40,7 +40,7 @@ HTML_FILE="$CACHE_DIR/ais.html"
 
 echo -e "${C}📡 AISStream bağlantısı hazırlanıyor...${N}"
 
-# Python sunucu + WebSocket istemcisi
+# Python sunucu + WebSocket istemcisi (iyileştirilmiş)
 cat > "$SERVER_SCRIPT" << 'PYEOF'
 #!/usr/bin/env python3
 import asyncio
@@ -56,18 +56,21 @@ app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
 
 API_KEY = os.environ.get("AIS_API_KEY", "")
-BOUNDING_BOX = [-74.1, 40.6, -73.7, 40.9]  # [minLon, minLat, maxLon, maxLat] - New York Limanı
 
-# Paylaşılan veri
+# Geniş bölge: Akdeniz + Karadeniz (yaklaşık)
+BOUNDING_BOX = [25.0, 34.0, 42.0, 47.0]  # [minLon, minLat, maxLon, maxLat]
+# Daha geniş için:
+# BOUNDING_BOX = [-180.0, -90.0, 180.0, 90.0]   # tüm dünya (çok fazla veri)
+
 latest_vessels = {}
 last_update = 0
+message_count = 0
 
 async def listen_ais():
     """AISStream WebSocket'ine bağlan ve gemileri dinle"""
-    global latest_vessels, last_update
+    global latest_vessels, last_update, message_count
     uri = "wss://stream.aisstream.io/v0/stream"
     
-    # Abonelik ayarları - belirli bir bölgedeki gemiler
     subscription = {
         "APIKey": API_KEY,
         "BoundingBoxes": [[BOUNDING_BOX[0], BOUNDING_BOX[1], BOUNDING_BOX[2], BOUNDING_BOX[3]]],
@@ -79,9 +82,14 @@ async def listen_ais():
             async with websockets.connect(uri) as websocket:
                 await websocket.send(json.dumps(subscription))
                 print("✅ AISStream bağlantısı kuruldu, gemiler dinleniyor...")
+                print(f"   Bölge: {BOUNDING_BOX}")
                 
                 async for message in websocket:
                     data = json.loads(message)
+                    message_count += 1
+                    if message_count % 50 == 0:
+                        print(f"📨 {message_count} mesaj alındı, gemiler: {len(latest_vessels)}")
+                    
                     if "MessageType" in data and data["MessageType"] == "PositionReport":
                         meta = data.get("MetaData", {})
                         pos = data.get("Message", {})
@@ -99,8 +107,8 @@ async def listen_ais():
                             }
                             last_update = time.time()
         except Exception as e:
-            print(f"WebSocket hatası: {e}, 5 saniye sonra yeniden bağlanılıyor...")
-            await asyncio.sleep(5)
+            print(f"WebSocket hatası: {e}, 10 saniye sonra yeniden bağlanılıyor...")
+            await asyncio.sleep(10)
 
 @app.route('/')
 def index():
@@ -112,7 +120,8 @@ def get_vessels():
     return jsonify({
         "vessels": list(latest_vessels.values()),
         "count": len(latest_vessels),
-        "last_update": last_update
+        "last_update": last_update,
+        "bounding_box": BOUNDING_BOX
     })
 
 def start_websocket_thread():
@@ -122,12 +131,14 @@ def start_websocket_thread():
     loop.run_until_complete(listen_ais())
 
 if __name__ == '__main__':
+    print("🚢 AIS Sunucu başlatılıyor...")
+    print(f"   Bölge: {BOUNDING_BOX}")
     # WebSocket'i arka planda başlat
     thread = threading.Thread(target=start_websocket_thread, daemon=True)
     thread.start()
     
     port = int(os.environ.get("PORT", 8080))
-    print(f"🚢 AIS Sunucu başlatıldı: http://localhost:{port}")
+    print(f"   HTTP Sunucu: http://0.0.0.0:{port}")
     app.run(host='0.0.0.0', port=port, debug=False)
 PYEOF
 
@@ -156,13 +167,6 @@ cat > "$HTML_FILE" << 'HTMLEOF'
             background:#00aaff; border:none; color:white; padding:4px 12px;
             margin-top:8px; border-radius:4px; cursor:pointer;
         }
-        .ship-icon {
-            background: #1e88e5;
-            border-radius: 50%;
-            width: 12px;
-            height: 12px;
-            border: 2px solid white;
-        }
         .info-panel {
             position:absolute; bottom:20px; right:20px; width:280px;
             background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); border-radius:12px;
@@ -178,6 +182,7 @@ cat > "$HTML_FILE" << 'HTMLEOF'
 <div class="controls">
     <div class="stat">🚢 <span id="vessel-count">0</span> gemi</div>
     <div class="stat">🕒 <span id="last-update">-</span></div>
+    <div class="stat">📍 <span id="bbox-info">-</span></div>
     <button id="refresh-btn">🔄 Şimdi Yenile</button>
 </div>
 <div class="info-panel" id="info-panel">
@@ -188,7 +193,7 @@ cat > "$HTML_FILE" << 'HTMLEOF'
 
 <script>
     const API_URL = "/api/vessels";
-    const map = L.map('map').setView([40.7, -74.0], 11);
+    const map = L.map('map').setView([39.0, 33.0], 5);  // Türkiye merkez
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OSM & CartoDB'
     }).addTo(map);
@@ -207,6 +212,10 @@ cat > "$HTML_FILE" << 'HTMLEOF'
         try {
             const res = await fetch(API_URL);
             const data = await res.json();
+            if (data.bounding_box) {
+                document.getElementById('bbox-info').innerText = 
+                    `Bölge: ${data.bounding_box[0]},${data.bounding_box[1]} - ${data.bounding_box[2]},${data.bounding_box[3]}`;
+            }
             return data.vessels || [];
         } catch(e) {
             console.error(e);
@@ -261,7 +270,7 @@ cat > "$HTML_FILE" << 'HTMLEOF'
     map.on('click', () => document.getElementById('info-panel').classList.remove('visible'));
     
     refresh();
-    setInterval(refresh, 10000);  // 10 saniyede bir yenile
+    setInterval(refresh, 15000);  // 15 saniyede bir yenile
 </script>
 </body>
 </html>
@@ -276,6 +285,8 @@ fi
 LOCAL_IP="localhost"
 if command -v ip &>/dev/null; then
     LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127.0.0.1 | head -1)
+elif command -v ifconfig &>/dev/null; then
+    LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v 127.0.0.1 | head -1)
 fi
 
 # Python paketleri
@@ -288,7 +299,7 @@ export PORT="$PORT"
 echo -e "\n${G}${B}🚢 AIS Gemi Takip Sunucu Başlatıldı${N}"
 echo -e "${C}📍 Adres:${N}"
 echo -e "  ${G}http://${LOCAL_IP}:${PORT}${N}"
-echo -e "${Y}🌊 Bölge: New York Limanı (değiştirmek için betikteki BOUNDING_BOX'ı düzenleyin)${N}"
+echo -e "${Y}🌊 Bölge: Akdeniz + Karadeniz (değiştirmek için betikteki BOUNDING_BOX'ı düzenleyin)${N}"
 echo -e "${R}⏹️  Sunucuyu durdurmak için Ctrl+C${N}"
 
 cd "$CACHE_DIR"
