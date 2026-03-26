@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-HORUS-EYE ULTIMATE - Cyberpunk Uzay Takip Sistemi (Kompakt UI)
-Python sunucusu ile gerçek zamanlı uzay verileri
+HORUS-EYE ULTIMATE - Cyberpunk Uzay Takip Sistemi (Tam Özellikli)
+Rastgele port + Gelişmiş Siberpunk Tasarım + Tüm Modüller
 """
 
 import http.server
 import socketserver
 import json
 import urllib.parse
-import threading
 import webbrowser
 import time
 import random
 from datetime import datetime, timedelta
 
-# requests kütüphanesi kontrolü
 try:
     import requests
 except ImportError:
@@ -23,31 +21,29 @@ except ImportError:
     exit(1)
 
 # ==================== API YAPILANDIRMA ====================
-PORT = 8080
-NASA_API_KEY = "DEMO_KEY"  # https://api.nasa.gov/ adresinden ücretsiz anahtar alın
+NASA_API_KEY = "DEMO_KEY"  # https://api.nasa.gov/
+CACHE_TTL = 60  # saniye
 
-# Önbellek (cache) - API isteklerini azaltmak için
 cache = {
     "iss": {"data": None, "expires": 0},
     "spaceweather": {"data": None, "expires": 0},
     "apod": {"data": None, "expires": 0},
     "news": {"data": None, "expires": 0},
+    "neo": {"data": None, "expires": 0},
+    "aurora": {"data": None, "expires": 0},
+    "solarwind": {"data": None, "expires": 0},
 }
-CACHE_TTL = 60  # saniye
 
 # ==================== API FONKSİYONLARI ====================
 
 def fetch_iss():
-    """ISS konumu ve astronot sayısını getirir."""
     try:
         resp_iss = requests.get("http://api.open-notify.org/iss-now.json", timeout=10)
         resp_iss.raise_for_status()
         data_iss = resp_iss.json()
-        
         resp_ast = requests.get("http://api.open-notify.org/astros.json", timeout=10)
         resp_ast.raise_for_status()
         data_ast = resp_ast.json()
-        
         return {
             "latitude": float(data_iss["iss_position"]["latitude"]),
             "longitude": float(data_iss["iss_position"]["longitude"]),
@@ -58,13 +54,11 @@ def fetch_iss():
         return {"latitude": 0, "longitude": 0, "astronauts": 0, "error": str(e)}
 
 def fetch_space_weather():
-    """Son Kp indeksini ve son 24 saatlik geçmişi getirir."""
     try:
         url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        
         kp_values = []
         timestamps = []
         for row in data[-96:]:
@@ -74,9 +68,7 @@ def fetch_space_weather():
                 kp_values.append(float(row[1]))
             except:
                 continue
-        
         current_kp = kp_values[-1] if kp_values else 0.0
-        
         if current_kp >= 7:
             threat = "SEVERE"
         elif current_kp >= 5:
@@ -85,7 +77,6 @@ def fetch_space_weather():
             threat = "MODERATE"
         else:
             threat = "NOMINAL"
-        
         return {
             "kp_index": current_kp,
             "threat_level": threat,
@@ -108,7 +99,6 @@ def fetch_space_weather():
         }
 
 def fetch_apod():
-    """NASA APOD verisini getirir."""
     try:
         url = f"https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}"
         resp = requests.get(url, timeout=10)
@@ -131,7 +121,6 @@ def fetch_apod():
         }
 
 def fetch_news():
-    """Son uzay haberlerini getirir."""
     try:
         url = "https://api.spaceflightnewsapi.net/v4/articles/?limit=5&ordering=-published_at"
         resp = requests.get(url, timeout=10)
@@ -154,6 +143,70 @@ def fetch_news():
             {"title": "Mars'ta su bulundu", "summary": "Perseverance keşif aracı yeni kanıtlar topladı.", "published_at": (datetime.now() - timedelta(days=1)).isoformat(), "url": "#"},
         ]
 
+def fetch_neo():
+    """NASA NEO: Today's near earth objects"""
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        url = f"https://api.nasa.gov/neo/rest/v1/feed?start_date={today}&end_date={today}&api_key={NASA_API_KEY}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        neo_data = data.get("near_earth_objects", {}).get(today, [])
+        count = len(neo_data)
+        hazardous = sum(1 for obj in neo_data if obj.get("is_potentially_hazardous_asteroid", False))
+        closest = None
+        if neo_data:
+            # En yakın yaklaşım mesafesi (kilometre)
+            min_dist = min(float(obj["close_approach_data"][0]["miss_distance"]["kilometers"]) for obj in neo_data if obj["close_approach_data"])
+            closest = f"{min_dist:,.0f} km"
+        return {
+            "count": count,
+            "hazardous": hazardous,
+            "closest": closest,
+            "objects": neo_data[:3]  # ilk 3
+        }
+    except Exception as e:
+        print(f"NEO API hatası: {e}")
+        return {"count": random.randint(0, 5), "hazardous": random.randint(0, 2), "closest": "---", "error": str(e)}
+
+def fetch_aurora():
+    """NOAA Aurora 30-minute forecast"""
+    try:
+        url = "https://services.swpc.noaa.gov/products/aurora-30-minute-forecast.json"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        # format: [["Observation Date","Observation Time","foreptime","kp","aurora"], ...]
+        latest = data[-1] if len(data) > 1 else None
+        if latest:
+            kp = latest[3]
+            aurora = latest[4]
+            return {"kp": kp, "aurora": aurora}
+        return {"kp": "N/A", "aurora": "N/A"}
+    except Exception as e:
+        print(f"Aurora API hatası: {e}")
+        return {"kp": random.uniform(2, 7), "aurora": "MODERATE", "error": str(e)}
+
+def fetch_solarwind():
+    """NOAA Solar Wind Plasma 7-day"""
+    try:
+        url = "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        # data[0] headers, rest are values
+        latest = data[-1] if len(data) > 1 else None
+        if latest:
+            # time, density, speed, temperature
+            density = latest[1] if len(latest) > 1 else "N/A"
+            speed = latest[2] if len(latest) > 2 else "N/A"
+            temp = latest[3] if len(latest) > 3 else "N/A"
+            return {"density": density, "speed": speed, "temperature": temp}
+        return {"density": "N/A", "speed": "N/A", "temperature": "N/A"}
+    except Exception as e:
+        print(f"Solar Wind API hatası: {e}")
+        return {"density": random.randint(1, 10), "speed": random.randint(300, 800), "temperature": random.randint(50000, 200000), "error": str(e)}
+
 def get_cached_or_fetch(cache_key, fetch_func):
     now = time.time()
     if cache[cache_key]["data"] and cache[cache_key]["expires"] > now:
@@ -169,7 +222,6 @@ class HorusEyeHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
-        
         if path == "/":
             self.serve_html()
         elif path == "/api/iss":
@@ -180,6 +232,12 @@ class HorusEyeHandler(http.server.BaseHTTPRequestHandler):
             self.serve_json(get_cached_or_fetch("apod", fetch_apod))
         elif path == "/api/news":
             self.serve_json(get_cached_or_fetch("news", fetch_news))
+        elif path == "/api/neo":
+            self.serve_json(get_cached_or_fetch("neo", fetch_neo))
+        elif path == "/api/aurora":
+            self.serve_json(get_cached_or_fetch("aurora", fetch_aurora))
+        elif path == "/api/solarwind":
+            self.serve_json(get_cached_or_fetch("solarwind", fetch_solarwind))
         else:
             self.send_error(404, "Not Found")
     
@@ -198,7 +256,7 @@ class HorusEyeHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
 
-# ==================== HTML İÇERİĞİ (Kompakt Sidebar + Toggle) ====================
+# ==================== HTML İÇERİĞİ (GELİŞMİŞ SİBERPUNK + YENİ MODÜLLER) ====================
 
 HTML_CONTENT = r"""
 <!DOCTYPE html>
@@ -206,7 +264,7 @@ HTML_CONTENT = r"""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>HORUS-EYE ULTIMATE | Uzay Takip Sistemi</title>
+    <title>HORUS-EYE ULTIMATE | Cyberpunk Uzay Takip Sistemi</title>
     <style>
         * {
             margin: 0;
@@ -222,8 +280,8 @@ HTML_CONTENT = r"""
             height: 100vh;
         }
         
-        /* CRT efekti */
-        body::after {
+        /* CRT + VHS Efektleri */
+        body::before {
             content: "";
             position: fixed;
             top: 0;
@@ -235,6 +293,27 @@ HTML_CONTENT = r"""
             z-index: 999;
         }
         
+        /* Glitch efekti */
+        @keyframes glitch {
+            0% { text-shadow: -2px 0 #ff00ff, 2px 0 #00ffff; opacity: 1; }
+            25% { text-shadow: -3px 0 #ff00ff, 3px 0 #00ffff; }
+            50% { text-shadow: -1px 0 #ff00ff, 1px 0 #00ffff; }
+            75% { text-shadow: -4px 0 #ff00ff, 4px 0 #00ffff; }
+            100% { text-shadow: -2px 0 #ff00ff, 2px 0 #00ffff; }
+        }
+        
+        .glitch-text {
+            animation: glitch 0.2s infinite;
+        }
+        
+        /* Neon Border Animasyonu */
+        @keyframes borderPulse {
+            0% { border-color: rgba(0,255,255,0.3); box-shadow: 0 0 5px rgba(0,255,255,0.2); }
+            50% { border-color: rgba(0,255,255,0.8); box-shadow: 0 0 15px rgba(0,255,255,0.6); }
+            100% { border-color: rgba(0,255,255,0.3); box-shadow: 0 0 5px rgba(0,255,255,0.2); }
+        }
+        
+        /* Canvas */
         #canvas-container {
             position: fixed;
             top: 0;
@@ -244,66 +323,70 @@ HTML_CONTENT = r"""
             z-index: 0;
         }
         
-        /* Sidebar containers - daha küçük */
+        /* Sidebar genişliği artırıldı (280px) */
         .sidebar {
             position: fixed;
             top: 0;
             bottom: 0;
-            width: 240px;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px);
-            border-right: 1px solid rgba(0, 255, 255, 0.3);
-            border-left: 1px solid rgba(0, 255, 255, 0.3);
+            width: 280px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            box-shadow: 0 0 20px rgba(0,255,255,0.2);
             z-index: 20;
             overflow-y: auto;
-            padding: 8px 8px;
+            padding: 12px 10px;
             pointer-events: auto;
             transition: transform 0.3s ease;
+            animation: borderPulse 2s infinite;
         }
         
         .sidebar-left {
             left: 0;
-            border-right: 1px solid rgba(0, 255, 255, 0.3);
+            border-right: 2px solid #0ff;
         }
         
         .sidebar-right {
             right: 0;
-            border-left: 1px solid rgba(0, 255, 255, 0.3);
+            border-left: 2px solid #0ff;
         }
         
-        /* Sidebar gizleme */
-        .sidebar-left.hidden {
-            transform: translateX(-100%);
-        }
-        .sidebar-right.hidden {
-            transform: translateX(100%);
-        }
+        .sidebar-left.hidden { transform: translateX(-100%); }
+        .sidebar-right.hidden { transform: translateX(100%); }
         
-        /* Kartlar daha kompakt */
+        /* Kartlar neon glow */
         .card {
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.65);
+            border: 1px solid #0ff;
+            border-radius: 8px;
             padding: 8px;
-            margin-bottom: 10px;
-            box-shadow: 0 0 6px rgba(0, 255, 255, 0.2);
+            margin-bottom: 12px;
+            box-shadow: 0 0 8px rgba(0,255,255,0.3);
+            transition: all 0.2s ease;
+        }
+        
+        .card:hover {
+            border-color: #f0f;
+            box-shadow: 0 0 15px rgba(255,0,255,0.4);
         }
         
         .card-header {
             font-size: 0.85rem;
             font-weight: bold;
             margin-bottom: 6px;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.5);
+            border-bottom: 1px solid #0ff;
             padding-bottom: 3px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            text-transform: uppercase;
         }
         
         .card-header i {
             color: #f0f;
             font-style: normal;
             font-size: 0.65rem;
+            text-shadow: 0 0 3px #f0f;
         }
         
         .card-content {
@@ -317,12 +400,13 @@ HTML_CONTENT = r"""
             margin: 4px 0;
         }
         
-        /* Uzay hava durumu */
+        /* Kp */
         .kp-value {
             font-size: 1.2rem;
             font-weight: bold;
             text-align: center;
             margin: 4px 0;
+            text-shadow: 0 0 5px #0ff;
         }
         
         .threat {
@@ -331,13 +415,15 @@ HTML_CONTENT = r"""
             padding: 2px;
             border-radius: 3px;
             font-size: 0.65rem;
+            text-transform: uppercase;
         }
         
-        .threat-severe { background: #f00; color: black; }
+        .threat-severe { background: #f00; color: black; box-shadow: 0 0 5px red; }
         .threat-high { background: #f60; color: black; }
         .threat-moderate { background: #ff0; color: black; }
         .threat-nominal { background: #0f0; color: black; }
         
+        /* Grafik */
         canvas.chart {
             width: 100%;
             height: 100px;
@@ -347,7 +433,7 @@ HTML_CONTENT = r"""
         /* Haberler */
         .news-item {
             margin-bottom: 8px;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+            border-bottom: 1px solid rgba(0,255,255,0.3);
             padding-bottom: 5px;
         }
         
@@ -368,10 +454,11 @@ HTML_CONTENT = r"""
             max-height: 140px;
             overflow-y: auto;
             margin-bottom: 6px;
+            font-family: monospace;
         }
         
         .comment {
-            background: rgba(0, 255, 255, 0.1);
+            background: rgba(0,255,255,0.1);
             border-left: 2px solid #0ff;
             padding: 3px;
             margin-bottom: 4px;
@@ -381,32 +468,6 @@ HTML_CONTENT = r"""
         .comment-user {
             font-weight: bold;
             color: #f0f;
-        }
-        
-        .comment-input {
-            display: flex;
-            gap: 4px;
-            margin-top: 6px;
-        }
-        
-        .comment-input input {
-            flex: 1;
-            background: #111;
-            border: 1px solid #0ff;
-            color: #0ff;
-            padding: 3px;
-            font-family: monospace;
-            font-size: 0.65rem;
-        }
-        
-        .comment-input button {
-            background: #0ff;
-            border: none;
-            color: black;
-            padding: 3px 6px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.65rem;
         }
         
         /* Kontroller */
@@ -425,10 +486,11 @@ HTML_CONTENT = r"""
             width: 100%;
             background: #0ff;
             height: 2px;
+            -webkit-appearance: none;
         }
         
         button {
-            background: rgba(0, 255, 255, 0.2);
+            background: rgba(0,255,255,0.2);
             border: 1px solid #0ff;
             color: #0ff;
             padding: 3px 6px;
@@ -437,136 +499,153 @@ HTML_CONTENT = r"""
             width: 100%;
             transition: 0.2s;
             font-size: 0.65rem;
+            text-transform: uppercase;
         }
         
         button:hover {
             background: #0ff;
             color: black;
+            box-shadow: 0 0 8px #0ff;
         }
         
-        /* Sidebar toggle butonları */
+        /* Console log */
+        .console-log {
+            font-family: monospace;
+            background: #000000aa;
+            border: 1px solid #0ff;
+            border-radius: 4px;
+            padding: 4px;
+            height: 100px;
+            overflow-y: auto;
+            font-size: 0.6rem;
+            color: #0f0;
+        }
+        
+        .console-line {
+            border-bottom: 1px solid #0ff3;
+            padding: 2px;
+            white-space: nowrap;
+            overflow-x: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Toggle butonları */
         .toggle-btn {
             position: fixed;
-            top: 10px;
+            top: 12px;
             z-index: 30;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.7);
             border: 1px solid #0ff;
             color: #0ff;
-            padding: 4px 8px;
+            padding: 4px 10px;
             cursor: pointer;
             font-size: 0.7rem;
-            border-radius: 4px;
+            border-radius: 20px;
             backdrop-filter: blur(5px);
+            font-weight: bold;
+            transition: 0.2s;
         }
-        .toggle-left {
-            left: 10px;
-        }
-        .toggle-right {
-            right: 10px;
+        .toggle-left { left: 10px; }
+        .toggle-right { right: 10px; }
+        .toggle-btn:hover { background: #0ff; color: black; box-shadow: 0 0 8px #0ff; }
+        
+        /* Glitch başlık */
+        .glitch-title {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 35;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid #0ff;
+            backdrop-filter: blur(8px);
+            white-space: nowrap;
+            letter-spacing: 2px;
+            pointer-events: none;
         }
         
+        /* Responsive */
         @media (max-width: 768px) {
-            .sidebar {
-                width: 220px;
-            }
-            .toggle-left, .toggle-right {
-                top: 5px;
-            }
+            .sidebar { width: 260px; }
+            .glitch-title { font-size: 0.8rem; top: 5px; }
+            .toggle-btn { top: 5px; }
         }
         
-        ::-webkit-scrollbar {
-            width: 3px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #111;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #0ff;
-        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #0ff; border-radius: 2px; }
     </style>
-    <!-- Three.js ve Chart.js -->
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js" } }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div id="canvas-container"></div>
     
-    <!-- Toggle butonları -->
-    <button class="toggle-btn toggle-left" id="toggle-left">☰ Sol</button>
-    <button class="toggle-btn toggle-right" id="toggle-right">☰ Sağ</button>
+    <div class="glitch-title glitch-text">🛸 HORUS-EYE ULTIMATE ⚡</div>
+    <button class="toggle-btn toggle-left" id="toggle-left">◀ SOL</button>
+    <button class="toggle-btn toggle-right" id="toggle-right">SAĞ ▶</button>
     
     <!-- Sol Sidebar -->
     <div class="sidebar sidebar-left" id="sidebar-left">
-        <!-- ISS Takip -->
         <div class="card">
-            <div class="card-header">
-                🛰️ ISS TRACKER
-                <i>● LIVE</i>
-            </div>
+            <div class="card-header">🛰️ ISS TRACKER <i>● LIVE</i></div>
             <div class="card-content">
-                <div class="iss-coord">
-                    🌍 Enlem: <span id="iss-lat">--</span>°<br>
-                    🌐 Boylam: <span id="iss-lon">--</span>°
-                </div>
-                <div>👨‍🚀 Uzayda: <span id="astronauts" class="astronaut-count">--</span></div>
+                <div class="iss-coord">🌍 Enlem: <span id="iss-lat">--</span>°<br>🌐 Boylam: <span id="iss-lon">--</span>°</div>
+                <div>👨‍🚀 Uzayda: <span id="astronauts">--</span></div>
                 <div style="font-size:0.55rem;">🕒 <span id="iss-time">--</span></div>
             </div>
         </div>
         
-        <!-- Uzay Hava Durumu -->
         <div class="card">
-            <div class="card-header">
-                ⚡ SPACE WEATHER
-                <i>Kp</i>
-            </div>
+            <div class="card-header">⚡ SPACE WEATHER <i>Kp INDEX</i></div>
             <div class="card-content">
-                <div class="kp-value">
-                    <span id="kp-index">--</span>
-                </div>
+                <div class="kp-value"><span id="kp-index">--</span></div>
                 <div id="threat" class="threat">--</div>
                 <canvas id="kp-chart" class="chart" width="300" height="90"></canvas>
             </div>
         </div>
         
-        <!-- Kontroller -->
         <div class="card">
-            <div class="card-header">
-                🎮 CONTROLS
-                <i></i>
-            </div>
+            <div class="card-header">☄️ NEO MONITOR <i>asteroid</i></div>
             <div class="card-content">
-                <div class="control-group">
-                    <label>🔄 Yörüngeler <input type="checkbox" id="toggle-orbits" checked></label>
-                </div>
-                <div class="control-group">
-                    <label>🌙 Ay <input type="checkbox" id="toggle-moon" checked></label>
-                </div>
-                <div class="control-group">
-                    <label>🔊 Ses <input type="checkbox" id="toggle-sounds"></label>
-                </div>
-                <div class="control-group">
-                    <label>⭐ Yıldız yoğunluğu <input type="range" id="star-density" min="500" max="2500" step="100" value="1500"></label>
-                </div>
-                <button id="screenshot-btn">📸 Ekran Görüntüsü</button>
-                <button id="reset-camera">🎥 Kamera Sıfırla</button>
+                <div>☄️ Bugünkü NEO: <span id="neo-count">--</span></div>
+                <div>⚠️ Tehlikeli: <span id="neo-hazardous">--</span></div>
+                <div>📏 En yakın: <span id="neo-closest">--</span></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">🌬️ SOLAR WIND</div>
+            <div class="card-content">
+                <div>💨 Hız: <span id="solar-speed">--</span> km/s</div>
+                <div>📊 Yoğunluk: <span id="solar-density">--</span> p/cc</div>
+                <div>🌡️ Sıcaklık: <span id="solar-temp">--</span> K</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">🎮 CONTROLS</div>
+            <div class="card-content">
+                <div class="control-group"><label>🔄 Yörüngeler <input type="checkbox" id="toggle-orbits" checked></label></div>
+                <div class="control-group"><label>🌙 Ay <input type="checkbox" id="toggle-moon" checked></label></div>
+                <div class="control-group"><label>🔊 Ses <input type="checkbox" id="toggle-sounds"></label></div>
+                <div class="control-group"><label>⭐ Yıldız yoğunluğu <input type="range" id="star-density" min="500" max="2500" step="100" value="1500"></label></div>
+                <button id="screenshot-btn">📸 EKRAN GÖRÜNTÜSÜ</button>
+                <button id="reset-camera">🎥 KAMERA SIFIRLA</button>
             </div>
         </div>
     </div>
     
     <!-- Sağ Sidebar -->
     <div class="sidebar sidebar-right" id="sidebar-right">
-        <!-- NASA APOD -->
         <div class="card">
-            <div class="card-header">
-                🌌 NASA APOD
-                <i>günlük</i>
-            </div>
+            <div class="card-header">🌌 NASA APOD <i>günlük</i></div>
             <div class="card-content">
                 <div id="apod-title" style="font-weight:bold; font-size:0.7rem;">--</div>
                 <img id="apod-img" src="" style="width:100%; margin:4px 0; border-radius:3px;" alt="APOD">
@@ -574,31 +653,34 @@ HTML_CONTENT = r"""
             </div>
         </div>
         
-        <!-- Uzay Haberleri -->
         <div class="card">
-            <div class="card-header">
-                📰 SPACE NEWS
-                <i>son 5</i>
-            </div>
-            <div class="card-content" id="news-list">
-                Yükleniyor...
+            <div class="card-header">📰 SPACE NEWS <i>son 5</i></div>
+            <div class="card-content" id="news-list">Yükleniyor...</div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">💬 COMMUNITY</div>
+            <div class="card-content">
+                <div class="comments-list" id="comments-list"></div>
+                <div class="comment-input" style="display:flex; gap:4px; margin-top:6px;">
+                    <input type="text" id="comment-name" placeholder="Ad" value="Anonim" style="flex:1; background:#111; border:1px solid #0ff; color:#0ff; padding:3px;">
+                    <input type="text" id="comment-text" placeholder="Yorum..." style="flex:2; background:#111; border:1px solid #0ff; color:#0ff; padding:3px;">
+                    <button id="send-comment" style="width:auto;">Gönder</button>
+                </div>
             </div>
         </div>
         
-        <!-- Yorumlar -->
         <div class="card">
-            <div class="card-header">
-                💬 COMMUNITY
-                <i></i>
-            </div>
+            <div class="card-header">💡 AURORA FORECAST</div>
             <div class="card-content">
-                <div class="comments-list" id="comments-list"></div>
-                <div class="comment-input">
-                    <input type="text" id="comment-name" placeholder="Ad" value="Anonim">
-                    <input type="text" id="comment-text" placeholder="Yorum...">
-                    <button id="send-comment">Gönder</button>
-                </div>
+                <div>Kp: <span id="aurora-kp">--</span></div>
+                <div>🌌 Aktivite: <span id="aurora-level">--</span></div>
             </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">🖥️ SYSTEM CONSOLE</div>
+            <div class="console-log" id="console-log"></div>
         </div>
     </div>
 
@@ -606,7 +688,7 @@ HTML_CONTENT = r"""
         import * as THREE from 'three';
         import { OrbitControls } from 'https://unpkg.com/three@0.128.0/examples/jsm/controls/OrbitControls.js';
         
-        // ---------- Three.js Sahnesi (Aynı) ----------
+        // ---------- Three.js Sahnesi ----------
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x000000);
@@ -635,7 +717,7 @@ HTML_CONTENT = r"""
         const earth = new THREE.Mesh(earthGeometry, earthMaterial);
         scene.add(earth);
         
-        // Atmosfer
+        // Atmosfer glow
         const atmGeometry = new THREE.SphereGeometry(1.01, 64, 64);
         const atmMaterial = new THREE.MeshPhongMaterial({ color: 0x00aaff, transparent: true, opacity: 0.15 });
         const atmosphere = new THREE.Mesh(atmGeometry, atmMaterial);
@@ -648,9 +730,7 @@ HTML_CONTENT = r"""
         const segments = 200;
         for (let i = 0; i <= segments; i++) {
             const angle = (i / segments) * Math.PI * 2;
-            const x = ringRadius * Math.cos(angle);
-            const z = ringRadius * Math.sin(angle);
-            ringPoints.push(new THREE.Vector3(x, 0, z));
+            ringPoints.push(new THREE.Vector3(ringRadius * Math.cos(angle), 0, ringRadius * Math.sin(angle)));
         }
         const ringGeometry = new THREE.BufferGeometry().setFromPoints(ringPoints);
         const orbitRing = new THREE.LineLoop(ringGeometry, ringMaterial);
@@ -659,10 +739,7 @@ HTML_CONTENT = r"""
         const ringPoints2 = [];
         for (let i = 0; i <= segments; i++) {
             const angle = (i / segments) * Math.PI * 2;
-            const x = ringRadius * Math.cos(angle);
-            const y = ringRadius * 0.5 * Math.sin(angle);
-            const z = ringRadius * Math.cos(angle);
-            ringPoints2.push(new THREE.Vector3(x, y, z));
+            ringPoints2.push(new THREE.Vector3(ringRadius * Math.cos(angle), ringRadius * 0.5 * Math.sin(angle), ringRadius * Math.cos(angle)));
         }
         const ringGeometry2 = new THREE.BufferGeometry().setFromPoints(ringPoints2);
         const orbitRing2 = new THREE.LineLoop(ringGeometry2, new THREE.LineBasicMaterial({ color: 0xff00ff }));
@@ -671,9 +748,7 @@ HTML_CONTENT = r"""
         const ringPoints3 = [];
         for (let i = 0; i <= segments; i++) {
             const angle = (i / segments) * Math.PI * 2;
-            const x = ringRadius * Math.cos(angle);
-            const y = ringRadius * Math.sin(angle);
-            ringPoints3.push(new THREE.Vector3(x, y, 0));
+            ringPoints3.push(new THREE.Vector3(ringRadius * Math.cos(angle), ringRadius * Math.sin(angle), 0));
         }
         const ringGeometry3 = new THREE.BufferGeometry().setFromPoints(ringPoints3);
         const orbitRing3 = new THREE.LineLoop(ringGeometry3, new THREE.LineBasicMaterial({ color: 0x00ff00 }));
@@ -700,8 +775,8 @@ HTML_CONTENT = r"""
         }
         generateStars(1500);
         
-        // Nebula
-        const nebulaCount = 600;
+        // Nebula parçacıkları
+        const nebulaCount = 800;
         const nebulaGeometry = new THREE.BufferGeometry();
         const nebulaPositions = [];
         for (let i = 0; i < nebulaCount; i++) {
@@ -711,7 +786,7 @@ HTML_CONTENT = r"""
         const nebulaPoints = new THREE.Points(nebulaGeometry, new THREE.PointsMaterial({ color: 0xff44aa, size: 0.2, transparent: true, opacity: 0.5 }));
         scene.add(nebulaPoints);
         
-        // Işıklandırma
+        // Işık
         const ambientLight = new THREE.AmbientLight(0x111111);
         scene.add(ambientLight);
         const dirLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -724,12 +799,8 @@ HTML_CONTENT = r"""
             orbitRing2.visible = e.target.checked;
             orbitRing3.visible = e.target.checked;
         });
-        document.getElementById('toggle-moon').addEventListener('change', (e) => {
-            moon.visible = e.target.checked;
-        });
-        document.getElementById('star-density').addEventListener('input', (e) => {
-            generateStars(parseInt(e.target.value));
-        });
+        document.getElementById('toggle-moon').addEventListener('change', (e) => { moon.visible = e.target.checked; });
+        document.getElementById('star-density').addEventListener('input', (e) => generateStars(parseInt(e.target.value)));
         document.getElementById('reset-camera').addEventListener('click', () => {
             camera.position.set(0, 0, 3);
             controls.target.set(0, 0, 0);
@@ -738,19 +809,18 @@ HTML_CONTENT = r"""
         document.getElementById('screenshot-btn').addEventListener('click', () => {
             const left = document.getElementById('sidebar-left');
             const right = document.getElementById('sidebar-right');
-            const leftVis = left.classList.contains('hidden');
-            const rightVis = right.classList.contains('hidden');
-            if (!leftVis) left.style.opacity = '0';
-            if (!rightVis) right.style.opacity = '0';
+            const leftVis = !left.classList.contains('hidden');
+            const rightVis = !right.classList.contains('hidden');
+            if (leftVis) left.style.opacity = '0';
+            if (rightVis) right.style.opacity = '0';
             renderer.render(scene, camera);
-            const canvas = renderer.domElement;
-            const dataURL = canvas.toDataURL('image/png');
+            const dataURL = renderer.domElement.toDataURL('image/png');
             const link = document.createElement('a');
             link.href = dataURL;
             link.download = 'horus_eye_screenshot.png';
             link.click();
-            if (!leftVis) left.style.opacity = '1';
-            if (!rightVis) right.style.opacity = '1';
+            if (leftVis) left.style.opacity = '1';
+            if (rightVis) right.style.opacity = '1';
         });
         
         // Ay animasyonu
@@ -780,12 +850,22 @@ HTML_CONTENT = r"""
             try {
                 const res = await fetch(endpoint);
                 return await res.json();
-            } catch(e) {
-                console.error(e);
-                return null;
-            }
+            } catch(e) { console.error(e); return null; }
         }
         
+        // Console log
+        function addLog(message, type = "info") {
+            const logDiv = document.getElementById('console-log');
+            const line = document.createElement('div');
+            line.className = 'console-line';
+            const time = new Date().toLocaleTimeString();
+            line.innerHTML = `[${time}] ${message}`;
+            logDiv.appendChild(line);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            if (logDiv.children.length > 30) logDiv.removeChild(logDiv.children[0]);
+        }
+        
+        // ISS
         async function updateISS() {
             const data = await fetchAPI('/api/iss');
             if (data) {
@@ -793,9 +873,11 @@ HTML_CONTENT = r"""
                 document.getElementById('iss-lon').innerText = data.longitude.toFixed(2);
                 document.getElementById('astronauts').innerText = data.astronauts;
                 document.getElementById('iss-time').innerText = new Date().toLocaleTimeString();
-            }
+                addLog(`ISS konumu güncellendi: ${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}°`);
+            } else addLog("ISS verisi alınamadı", "error");
         }
         
+        // Uzay hava durumu
         let kpChart = null;
         async function updateSpaceWeather() {
             const data = await fetchAPI('/api/spaceweather');
@@ -830,9 +912,11 @@ HTML_CONTENT = r"""
                         }
                     });
                 }
-            }
+                addLog(`Kp indeksi: ${data.kp_index.toFixed(1)} - ${data.threat_level}`);
+            } else addLog("Uzay hava durumu alınamadı", "error");
         }
         
+        // APOD
         async function updateAPOD() {
             const data = await fetchAPI('/api/apod');
             if (data) {
@@ -841,9 +925,11 @@ HTML_CONTENT = r"""
                 if (expl.length > 150) expl = expl.substring(0,150)+'...';
                 document.getElementById('apod-explanation').innerHTML = expl;
                 if (data.url) document.getElementById('apod-img').src = data.url;
-            }
+                addLog(`APOD: ${data.title}`);
+            } else addLog("APOD alınamadı", "error");
         }
         
+        // Haberler
         async function updateNews() {
             const data = await fetchAPI('/api/news');
             if (data && data.length) {
@@ -854,9 +940,40 @@ HTML_CONTENT = r"""
                         <div style="font-size:0.6rem;">${a.summary.substring(0,70)}...</div>
                     </div>
                 `).join('');
-            } else {
-                document.getElementById('news-list').innerHTML = 'Yüklenemedi.';
-            }
+                addLog(`${data.length} haber yüklendi`);
+            } else { document.getElementById('news-list').innerHTML = 'Yüklenemedi.'; addLog("Haberler alınamadı", "error"); }
+        }
+        
+        // NEO
+        async function updateNEO() {
+            const data = await fetchAPI('/api/neo');
+            if (data) {
+                document.getElementById('neo-count').innerText = data.count;
+                document.getElementById('neo-hazardous').innerText = data.hazardous;
+                document.getElementById('neo-closest').innerText = data.closest || '---';
+                addLog(`${data.count} NEO, ${data.hazardous} tehlikeli`);
+            } else addLog("NEO verisi alınamadı", "error");
+        }
+        
+        // Aurora
+        async function updateAurora() {
+            const data = await fetchAPI('/api/aurora');
+            if (data) {
+                document.getElementById('aurora-kp').innerText = data.kp;
+                document.getElementById('aurora-level').innerText = data.aurora;
+                addLog(`Aurora Kp: ${data.kp} - ${data.aurora}`);
+            } else addLog("Aurora verisi alınamadı", "error");
+        }
+        
+        // Solar Wind
+        async function updateSolarWind() {
+            const data = await fetchAPI('/api/solarwind');
+            if (data) {
+                document.getElementById('solar-speed').innerText = data.speed;
+                document.getElementById('solar-density').innerText = data.density;
+                document.getElementById('solar-temp').innerText = data.temperature;
+                addLog(`Güneş rüzgarı: ${data.speed} km/s`);
+            } else addLog("Güneş rüzgarı verisi alınamadı", "error");
         }
         
         // Yorumlar
@@ -877,6 +994,7 @@ HTML_CONTENT = r"""
             if (comments.length > 30) comments.pop();
             localStorage.setItem('horus_comments', JSON.stringify(comments));
             renderComments();
+            addLog(`Yorum eklendi: ${user}`);
         }
         function escapeHtml(str) {
             return str.replace(/[&<>]/g, function(m) {
@@ -913,14 +1031,23 @@ HTML_CONTENT = r"""
             updateSpaceWeather();
             updateAPOD();
             updateNews();
+            updateNEO();
+            updateAurora();
+            updateSolarWind();
         }, 10000);
         
+        // İlk yüklemeler
         updateISS();
         updateSpaceWeather();
         updateAPOD();
         updateNews();
+        updateNEO();
+        updateAurora();
+        updateSolarWind();
         loadComments();
+        addLog("HORUS-EYE ULTIMATE başlatıldı. Tüm sistemler aktif.");
         
+        // Pencere yeniden boyutlandırma
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -931,13 +1058,15 @@ HTML_CONTENT = r"""
 </html>
 """
 
-# ==================== SUNUCUYU BAŞLAT ====================
+# ==================== SUNUCUYU BAŞLAT (RANDOM PORT) ====================
 
 def start_server():
-    with socketserver.TCPServer(("", PORT), HorusEyeHandler) as httpd:
-        print(f"🚀 HORUS-EYE ULTIMATE sunucusu başlatıldı: http://localhost:{PORT}")
+    # Rastgele bir port bulmak için 0 veriyoruz, TCPServer otomatik atar
+    with socketserver.TCPServer(("", 0), HorusEyeHandler) as httpd:
+        port = httpd.server_address[1]
+        print(f"🚀 HORUS-EYE ULTIMATE sunucusu başlatıldı: http://localhost:{port}")
         print("🔗 Tarayıcı otomatik açılacak...")
-        webbrowser.open(f"http://localhost:{PORT}")
+        webbrowser.open(f"http://localhost:{port}")
         httpd.serve_forever()
 
 if __name__ == "__main__":
