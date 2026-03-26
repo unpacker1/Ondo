@@ -8,7 +8,7 @@ CYAN='\033[0;36m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${CYAN}[+] Neon Mega Exploit Panel - Son Sürüm${NC}"
+echo -e "${CYAN}[+] Neon Mega Exploit Panel - Son Sürüm (Düzeltilmiş)${NC}"
 echo -e "${CYAN}[+] Sadece eğitim ve yetkilendirilmiş testler için kullanın.${NC}"
 
 # Android API seviyesi (Rust derlemesi için)
@@ -49,7 +49,7 @@ PANEL_PORT=$(( RANDOM % 1000 + 5000 ))
 
 # 5. Python panel kodunu geçici dosyaya yaz
 echo -e "${GREEN}[4/5] Python panel kodu oluşturuluyor...${NC}"
-cat > /data/data/com.termux/files/usr/tmp/neon_mega_panel_final.py << 'EOF'
+cat > /data/data/com.termux/files/usr/tmp/neon_mega_panel_final_v2.py << 'EOF'
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -68,7 +68,6 @@ import aiohttp
 import requests
 import dns.resolver
 from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
-from cryptography.fernet import Fernet
 
 # ----- Opsiyonel kütüphaneler -----
 try:
@@ -603,7 +602,7 @@ def show_log():
     except:
         return "Log dosyası henüz oluşturulmadı."
 
-# ---------- HTML Şablonu (Neon Tema, kısaltılmış ama önceki ile aynı) ----------
+# ---------- HTML Şablonu (Neon Tema) ----------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -872,10 +871,10 @@ if __name__ == '__main__':
 EOF
 
 # 6. Port değişkenini Python dosyasına yaz
-sed -i "s/'''\$PANEL_PORT'''/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_mega_panel_final.py
+sed -i "s/'''\$PANEL_PORT'''/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_mega_panel_final_v2.py
 
 echo -e "${GREEN}[5/5] Panel başlatılıyor...${NC}"
 echo -e "${CYAN}Adres: http://localhost:$PANEL_PORT${NC}"
 echo -e "${RED}[!] Ctrl+C ile durdurabilirsiniz.${NC}"
 
-python /data/data/com.termux/files/usr/tmp/neon_mega_panel_final.py
+python /data/data/com.termux/files/usr/tmp/neon_mega_panel_final_v2.py
