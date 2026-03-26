@@ -1,6 +1,3 @@
-Sorun, JavaScript'te oluşabilecek hataların yakalanmaması ve boot işleminin başarısız olması durumunda modal'ın kapanıp butonların aktif kalmamasından kaynaklanıyor olabilir. Aşağıdaki düzeltilmiş script, tüm adımlarda hata yakalama, konsol logları ve modal yönetimini sağlamlaştırır. Termux'ta çalıştırmak için kopyalayıp skywatch.sh olarak kaydedin ve bash skywatch.sh ile çalıştırın.
-
-```bash
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  SKYWATCH v4.0 ULTIMATE — Canli Ucak Takip Sistemi          ║
