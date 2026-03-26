@@ -1,297 +1,605 @@
-#!/bin/bash
-# SKYWATCH v6 — bash skywatch.sh
-G='\033[0;32m'; C='\033[0;36m'; N='\033[0m'; B='\033[1m'
-clear
-printf "\n${G}${B}  SKYWATCH v6.0${N}\n  ${C}Garantili calisir — Eski WebView uyumlu${N}\n\n"
+#!/usr/bin/env python3
+"""
+HORUS-EYE Global Asset Tracker
+Termux uyumlu, random port ile erişilebilen 3D orbit görselleştirmeli web arayüzü.
+"""
 
-PY=$(command -v python3 || command -v python)
-[ -z "$PY" ] && { pkg install python -y; PY=$(command -v python3); }
-
-TMPD="${TMPDIR:-/tmp}"
-HTML="$TMPD/sw6.html"
-printf "  ${C}HTML yaziliyor...${N}\n"
-
-$PY - << 'WRITEPY'
+import http.server
+import socketserver
+import socket
+import webbrowser
+import threading
 import os
-D = os.environ.get("TMPDIR", "/tmp")
-P = os.path.join(D, "sw6.html")
+import sys
+import json
+from urllib.parse import urlparse
 
-# Write HTML line by line to avoid ANY Python string escaping issues
-lines = []
-a = lines.append
+# ======================= HTML İÇERİĞİ =======================
+HTML_PAGE = """<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>HORUS-EYE · Global Asset Tracking</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            color: #0ff;
+            background-color: #000;
+        }
 
-a('<!DOCTYPE html>')
-a('<html lang="tr"><head>')
-a('<meta charset="UTF-8">')
-a('<meta name="viewport" content="width=device-width,initial-scale=1.0">')
-a('<title>SKYWATCH v6</title>')
-a('<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">')
-a('<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>')
-a('<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">')
-a('<style>')
+        /* Genel overlay stilleri */
+        .dashboard {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* tıklamaları canvas'a geçir */
+            z-index: 10;
+        }
 
-# CSS - NO inset:, NO gap: - full browser compat
-css = """
-* { margin:0; padding:0; box-sizing:border-box; }
-html, body { width:100%; height:100%; overflow:hidden; background:#020810; color:#a8ffd4; font-family:'Share Tech Mono',monospace; }
-#map { position:absolute; top:0; left:0; width:100%; height:100%; }
+        /* Sol panel - veri kartları */
+        .data-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            border-left: 3px solid #0ff;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+            padding: 16px 20px;
+            pointer-events: auto;
+            font-size: 13px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            font-weight: 500;
+        }
 
-/* MODAL - guaranteed visible, no inset shorthand */
-#modal {
-  position:fixed; top:0; left:0; right:0; bottom:0;
-  background:rgba(2,8,16,0.97);
-  z-index:10000;
-  display:-webkit-box; display:-ms-flexbox; display:flex;
-  -webkit-box-align:center; -ms-flex-align:center; align-items:center;
-  -webkit-box-pack:center; -ms-flex-pack:center; justify-content:center;
-}
-#modal.hide { display:none !important; }
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+            text-shadow: 0 0 5px #0ff;
+        }
 
-.mwrap {
-  background:#041220; border:1px solid rgba(0,255,136,0.3);
-  padding:28px; width:440px; max-width:93vw; position:relative;
-}
-.mwrap:before {
-  content:'SKYWATCH v6'; position:absolute; top:-11px; left:16px;
-  background:#041220; padding:0 10px;
-  font-family:'Orbitron',sans-serif; font-size:9px; color:#00ff88; letter-spacing:4px;
-}
-.m-title { font-family:'Orbitron',sans-serif; font-size:15px; color:#00e5ff; letter-spacing:3px; margin-bottom:4px; }
-.m-sub { font-size:9px; color:rgba(168,255,212,0.35); letter-spacing:2px; margin-bottom:16px; }
-.m-desc { font-size:11px; color:rgba(168,255,212,0.55); line-height:1.8; margin-bottom:18px; }
-.m-desc a { color:#00e5ff; text-decoration:none; }
-.m-saved { font-size:10px; color:#00ff88; padding:7px 12px; border:1px solid rgba(0,255,136,0.2); margin-bottom:10px; display:none; }
-.m-saved.show { display:block; }
-.m-lbl { font-size:9px; color:rgba(168,255,212,0.35); letter-spacing:2px; margin-bottom:5px; }
-.m-input {
-  width:100%; background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.25);
-  color:#00e5ff; font-family:'Share Tech Mono',monospace; font-size:12px;
-  padding:11px 14px; outline:none; letter-spacing:0.5px;
-  margin-bottom:8px; -webkit-appearance:none;
-}
-.m-input:focus { border-color:#00e5ff; }
-.m-err { font-size:10px; color:#ff4466; min-height:18px; margin-bottom:8px; letter-spacing:1px; }
-.m-btns { display:-webkit-box; display:-ms-flexbox; display:flex; }
-.m-btn-start {
-  -webkit-box-flex:1; -ms-flex:1; flex:1;
-  background:rgba(0,255,136,0.1); border:1px solid #00ff88; color:#00ff88;
-  font-family:'Share Tech Mono',monospace; font-size:12px; padding:12px;
-  cursor:pointer; letter-spacing:2px; margin-right:8px;
-}
-.m-btn-start:hover { background:rgba(0,255,136,0.2); }
-.m-btn-demo {
-  background:rgba(0,229,255,0.07); border:1px solid rgba(0,229,255,0.3); color:#00e5ff;
-  font-family:'Share Tech Mono',monospace; font-size:12px; padding:12px 16px;
-  cursor:pointer; letter-spacing:2px;
-}
-.m-btn-demo:hover { background:rgba(0,229,255,0.15); }
-button:disabled { opacity:0.4; cursor:default; }
-.m-hint { font-size:9px; color:rgba(168,255,212,0.3); letter-spacing:1px; margin-top:12px; text-align:center; }
+        .sub {
+            font-size: 11px;
+            color: #8aa;
+            border-bottom: 1px dashed #2a6;
+            margin-bottom: 12px;
+            padding-bottom: 5px;
+        }
 
-/* LOADING - starts HIDDEN */
-#loading {
-  position:fixed; top:0; left:0; right:0; bottom:0;
-  background:#020810; z-index:9999;
-  display:none;
-  -webkit-box-orient:vertical; -webkit-box-direction:normal;
-  -ms-flex-direction:column; flex-direction:column;
-  -webkit-box-align:center; -ms-flex-align:center; align-items:center;
-  -webkit-box-pack:center; -ms-flex-pack:center; justify-content:center;
-}
-#loading.show { display:-webkit-box; display:-ms-flexbox; display:flex; }
-.ld-logo { font-family:'Orbitron',sans-serif; font-size:32px; font-weight:900; color:#00ff88; letter-spacing:8px; margin-bottom:6px; }
-.ld-sub { font-size:9px; color:rgba(168,255,212,0.35); letter-spacing:4px; margin-bottom:20px; }
-.ld-bar-bg { width:260px; height:2px; background:rgba(0,255,136,0.12); overflow:hidden; }
-.ld-bar { height:100%; width:0%; background:#00ff88; -webkit-transition:width 0.3s; transition:width 0.3s; }
-.ld-st { font-size:10px; color:rgba(168,255,212,0.4); letter-spacing:3px; margin-top:12px; text-transform:uppercase; }
+        .threat {
+            background: rgba(255, 30, 30, 0.2);
+            border-left: 4px solid #f44;
+            padding: 8px 12px;
+            margin: 12px 0;
+            font-family: monospace;
+        }
+        .threat-level {
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff8888;
+        }
 
-/* TOPBAR */
-#topbar {
-  position:fixed; top:0; left:0; right:0; height:50px;
-  background:rgba(3,14,24,0.97); border-bottom:1px solid rgba(0,255,136,0.18);
-  display:-webkit-box; display:-ms-flexbox; display:flex;
-  -webkit-box-align:center; -ms-flex-align:center; align-items:center;
-  padding:0 12px; z-index:500;
-}
-.t-logo { font-family:'Orbitron',sans-serif; font-weight:900; font-size:15px; color:#00ff88; letter-spacing:5px; white-space:nowrap; display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-align:center; -ms-flex-align:center; align-items:center; }
-.t-logo svg { margin-right:7px; }
-.t-div { width:1px; height:20px; background:rgba(0,255,136,0.18); margin:0 10px; -ms-flex-negative:0; flex-shrink:0; }
-.t-stats { display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-flex:1; -ms-flex:1; flex:1; overflow:hidden; -webkit-box-align:center; -ms-flex-align:center; align-items:center; }
-.t-stat { display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-align:center; -ms-flex-align:center; align-items:center; font-size:10px; color:rgba(168,255,212,0.55); white-space:nowrap; margin-right:12px; }
-.t-val { color:#00e5ff; font-family:'Orbitron',sans-serif; font-size:11px; margin-left:3px; }
-.sdot { width:7px; height:7px; border-radius:50%; background:#00ff88; -webkit-box-shadow:0 0 7px #00ff88; box-shadow:0 0 7px #00ff88; margin-right:5px; }
-.sdot.ld { background:#ff6b35; -webkit-box-shadow:0 0 7px #ff6b35; box-shadow:0 0 7px #ff6b35; }
-.sdot.er { background:#ff4466; -webkit-box-shadow:0 0 7px #ff4466; box-shadow:0 0 7px #ff4466; }
-.sdot.dm { background:#ffcc00; -webkit-box-shadow:0 0 7px #ffcc00; box-shadow:0 0 7px #ffcc00; }
-.t-right { display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-align:center; -ms-flex-align:center; align-items:center; margin-left:auto; -ms-flex-negative:0; flex-shrink:0; }
-.t-clock { font-size:13px; color:#00e5ff; letter-spacing:2px; font-family:'Orbitron',sans-serif; margin-right:8px; }
-.tbtn {
-  background:transparent; border:1px solid rgba(0,255,136,0.2); color:#00ff88;
-  font-family:'Share Tech Mono',monospace; font-size:10px; padding:4px 8px;
-  cursor:pointer; letter-spacing:1px; white-space:nowrap; margin-left:4px;
-}
-.tbtn:hover, .tbtn.on { background:rgba(0,255,136,0.1); border-color:#00ff88; }
+        .pattern {
+            background: rgba(0, 20, 40, 0.7);
+            margin: 8px 0;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            border: 1px solid #1fa;
+        }
+        .pattern-name {
+            color: #ffaa44;
+            font-weight: bold;
+        }
+        .pattern-deg {
+            float: right;
+            color: #8cf;
+        }
 
-/* SEARCH */
-#searchbar {
-  position:fixed; top:60px; left:50%; margin-left:-175px;
-  width:350px; z-index:501;
-  display:-webkit-box; display:-ms-flexbox; display:flex;
-  opacity:0; pointer-events:none; -webkit-transition:opacity 0.2s; transition:opacity 0.2s;
-}
-#searchbar.open { opacity:1; pointer-events:all; }
-#sinput {
-  -webkit-box-flex:1; -ms-flex:1; flex:1;
-  background:rgba(4,18,32,0.99); border:1px solid rgba(0,229,255,0.25); border-right:none;
-  color:#00e5ff; font-family:'Share Tech Mono',monospace; font-size:12px; padding:9px 14px; outline:none;
-}
-#sinput:focus { border-color:#00e5ff; }
-.s-close { background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25); color:#00e5ff; font-size:16px; padding:9px 12px; cursor:pointer; }
-#sresults { position:absolute; top:100%; left:0; right:0; background:rgba(4,18,32,0.99); border:1px solid rgba(0,229,255,0.2); border-top:none; max-height:200px; overflow-y:auto; display:none; }
-#sresults.open { display:block; }
-.sr-item { padding:9px 14px; font-size:11px; cursor:pointer; border-bottom:1px solid rgba(0,255,136,0.05); }
-.sr-item:hover { background:rgba(0,255,136,0.07); color:#00ff88; }
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 15px 0;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 12px;
+        }
+        .data-item {
+            font-size: 12px;
+        }
+        .data-label {
+            color: #7af;
+            letter-spacing: 0.5px;
+        }
+        .data-value {
+            font-weight: bold;
+            font-size: 16px;
+            color: #fff;
+        }
+        .highlight {
+            color: #0ff;
+            text-shadow: 0 0 2px #0ff;
+        }
 
-/* PANEL TOGGLE */
-#ptog {
-  position:fixed; top:64px; left:264px; width:15px; height:40px;
-  background:rgba(3,14,24,0.97); border:1px solid rgba(0,255,136,0.18); border-left:none;
-  z-index:201; display:-webkit-box; display:-ms-flexbox; display:flex;
-  -webkit-box-align:center; -ms-flex-align:center; align-items:center;
-  -webkit-box-pack:center; -ms-flex-pack:center; justify-content:center;
-  font-size:10px; color:#00ff88; cursor:pointer;
-  -webkit-transition:left 0.3s; transition:left 0.3s;
-}
-#ptog:hover { background:rgba(0,255,136,0.1); }
-#ptog.cl { left:0; }
+        /* Sağ alt sosyal panel */
+        .social-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 280px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            border-right: 2px solid #0ff;
+            padding: 12px 16px;
+            pointer-events: auto;
+            font-size: 13px;
+            font-family: monospace;
+        }
+        .user-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #2a4;
+            padding-bottom: 8px;
+        }
+        .avatar {
+            width: 42px;
+            height: 42px;
+            background: #124;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            border: 1px solid #0ff;
+        }
+        .username {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .handle {
+            color: #9cf;
+            font-size: 11px;
+        }
+        .follow-btn {
+            background: none;
+            border: 1px solid #0ff;
+            border-radius: 20px;
+            padding: 4px 12px;
+            color: #0ff;
+            font-size: 11px;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        .comment-box {
+            margin-top: 10px;
+            background: #112;
+            border-radius: 24px;
+            padding: 8px 12px;
+            color: #ccc;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .comment-input {
+            background: transparent;
+            border: none;
+            color: #0ff;
+            outline: none;
+            width: 80%;
+        }
+        .btn-send {
+            background: none;
+            border: none;
+            color: #0ff;
+            cursor: pointer;
+        }
 
-/* LEFT PANEL */
-#lpanel {
-  position:fixed; top:50px; left:0; bottom:0; width:264px;
-  background:rgba(3,14,24,0.97); border-right:1px solid rgba(0,255,136,0.18);
-  z-index:200; display:-webkit-box; display:-ms-flexbox; display:flex;
-  -webkit-box-orient:vertical; -webkit-box-direction:normal; -ms-flex-direction:column; flex-direction:column;
-  -webkit-transition:-webkit-transform 0.3s; transition:transform 0.3s;
-}
-#lpanel.cl { -webkit-transform:translateX(-264px); transform:translateX(-264px); }
+        /* sağ üstte küçük bilgi */
+        .corner-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+        @media (max-width: 700px) {
+            .data-panel { width: 260px; font-size: 10px; top: 10px; left: 10px; padding: 12px; }
+            .social-panel { width: 240px; bottom: 10px; right: 10px; }
+        }
+    </style>
+    <!-- Three.js ve yardımcılar -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Sol Panel -->
+        <div class="data-panel">
+            <div class="title">HORUS-EYE</div>
+            <div class="sub">GLOBAL ASSET TRACKING · SECURE LINK</div>
+            <div class="threat">
+                <span>⚠ THREAT LEVEL</span><br>
+                <span class="threat-level">12:26-03-03 · CRITICAL MONITOR</span>
+            </div>
+            <div style="margin: 10px 0 5px 0; font-size: 12px;">🔍 PATTERN DETECTED</div>
+            <div class="pattern">
+                <span class="pattern-name">ORBIT pattern: GSPOG</span>
+                <span class="pattern-deg">273deg cumulative turn</span>
+            </div>
+            <div class="pattern">
+                <span class="pattern-name">ORBIT pattern: FCK1EL</span>
+                <span class="pattern-deg">312deg cumulative turn</span>
+            </div>
+            <div class="pattern">
+                <span class="pattern-name">ORBIT pattern: HAMIC</span>
+                <span class="pattern-deg">295deg cumulative turn</span>
+            </div>
+            <div class="data-grid">
+                <div class="data-item"><span class="data-label">SIG/FRQ</span><br><span class="data-value">2.159</span></div>
+                <div class="data-item"><span class="data-label">AZ/ELEV</span><br><span class="data-value">64°</span></div>
+                <div class="data-item"><span class="data-label">STATUS</span><br><span class="data-value">5YS · NOMINAL</span></div>
+                <div class="data-item"><span class="data-label">UPLINK</span><br><span class="data-value">ACTIVE</span></div>
+                <div class="data-item"><span class="data-label">FEEDS</span><br><span class="data-value">2/3</span></div>
+                <div class="data-item"><span class="data-label">TOTAL</span><br><span class="data-value">6870</span></div>
+                <div class="data-item"><span class="data-label">TOTAL</span><br><span class="data-value">6870</span></div>
+                <div class="data-item"><span class="data-label">TTL/TVL</span><br><span class="data-value">2436 / 4434</span></div>
+            </div>
+            <div style="font-size: 11px; margin-top: 5px;">
+                📡 openSky + adsbexcha &nbsp;|&nbsp; <span class="highlight">930</span> / <span class="highlight">1.307</span>
+            </div>
+        </div>
 
-/* TABS */
-.tabs { display:-webkit-box; display:-ms-flexbox; display:flex; border-bottom:1px solid rgba(0,255,136,0.18); -ms-flex-negative:0; flex-shrink:0; }
-.tbt {
-  -webkit-box-flex:1; -ms-flex:1; flex:1; padding:9px 0;
-  font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:2px; color:rgba(168,255,212,0.4);
-  background:transparent; border:none; border-bottom:2px solid transparent; cursor:pointer; text-transform:uppercase;
-}
-.tbt.on { color:#00ff88; border-bottom-color:#00ff88; background:rgba(0,255,136,0.04); }
-.tbt:hover { color:#a8ffd4; }
-.tp { display:none; -webkit-box-flex:1; -ms-flex:1; flex:1; overflow-y:auto; -webkit-box-orient:vertical; -webkit-box-direction:normal; -ms-flex-direction:column; flex-direction:column; }
-.tp.on { display:-webkit-box; display:-ms-flexbox; display:flex; }
-.tp::-webkit-scrollbar { width:3px; }
-.tp::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.18); }
+        <!-- Sosyal panel -->
+        <div class="social-panel">
+            <div class="user-row">
+                <div class="avatar">👁️</div>
+                <div>
+                    <div class="username">alican.kirazo</div>
+                    <div class="handle">@alican_kirazo • 3h</div>
+                </div>
+                <button class="follow-btn" id="followBtn">Takip Et</button>
+            </div>
+            <div style="margin: 6px 0;">
+                👋 Hello Rafael Krux · Dark Dystr <span style="color:#0ff;">Takip Et</span>
+            </div>
+            <div style="font-size: 11px; color:#9cf;">
+                EN & TR | Friends, if you won’t get spooked, let me share the vid
+            </div>
+            <div style="margin: 10px 0 5px 0; color:#9aa; font-size:11px;">
+                hakkı_alkan ve 1 diğer kişi takip ediyor
+            </div>
+            <div class="comment-box">
+                <input type="text" class="comment-input" placeholder="Yorum Ekle...">
+                <button class="btn-send">➤</button>
+            </div>
+        </div>
+        <div class="corner-status">
+            🛰️ LIVE · 5YS NOMINAL | FEEDS 2/3
+        </div>
+    </div>
 
-/* SLIDER SECTION */
-.sl-sec { padding:10px 12px; border-bottom:1px solid rgba(0,255,136,0.07); -ms-flex-negative:0; flex-shrink:0; background:rgba(0,255,136,0.02); }
-.sl-row { display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-pack:justify; -ms-flex-pack:justify; justify-content:space-between; -webkit-box-align:center; -ms-flex-align:center; align-items:center; margin-bottom:7px; }
-.sl-lbl { font-size:9px; color:rgba(168,255,212,0.35); letter-spacing:2px; text-transform:uppercase; }
-.sl-val { font-family:'Orbitron',sans-serif; font-size:12px; color:#00ff88; }
-input[type=range] {
-  width:100%; height:3px; background:rgba(0,255,136,0.12); outline:none; border:none; cursor:pointer;
-  -webkit-appearance:none; appearance:none; display:block;
-}
-input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; background:#00ff88; cursor:pointer; border-radius:0; -webkit-box-shadow:0 0 8px #00ff88; box-shadow:0 0 8px #00ff88; }
-input[type=range]::-moz-range-thumb { width:14px; height:14px; background:#00ff88; cursor:pointer; border:none; border-radius:0; }
-.pm-row { display:-webkit-box; display:-ms-flexbox; display:flex; margin-top:6px; }
-.pm-btn { -webkit-box-flex:1; -ms-flex:1; flex:1; font-size:9px; padding:4px 0; border:1px solid rgba(0,255,136,0.18); color:rgba(168,255,212,0.5); background:transparent; cursor:pointer; font-family:'Share Tech Mono',monospace; letter-spacing:1px; text-align:center; }
-.pm-btn:first-child { margin-right:4px; }
-.pm-btn:last-child { margin-left:4px; }
-.pm-btn + .pm-btn { margin-left:0; margin-right:0; }
-.pm-btn.on { color:#00ff88; border-color:#00ff88; background:rgba(0,255,136,0.07); }
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-/* FILTERS */
-.f-bar { padding:7px 10px; border-bottom:1px solid rgba(0,255,136,0.06); -ms-flex-negative:0; flex-shrink:0; }
-.fc { font-size:9px; padding:3px 8px; border:1px solid rgba(0,255,136,0.18); color:rgba(168,255,212,0.5); background:transparent; cursor:pointer; font-family:'Share Tech Mono',monospace; letter-spacing:1px; margin:2px; display:inline-block; }
-.fc.on { background:rgba(0,229,255,0.1); border-color:#00e5ff; color:#00e5ff; }
-.fc.red.on { background:rgba(255,68,102,0.1); border-color:#ff4466; color:#ff4466; }
-.f-cnt { padding:3px 10px 5px; font-size:9px; color:rgba(168,255,212,0.35); border-bottom:1px solid rgba(0,255,136,0.04); -ms-flex-negative:0; flex-shrink:0; }
+        // --- Setup Sahne ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x010118);
+        scene.fog = new THREE.FogExp2(0x010118, 0.0008);
 
-/* FLIGHT ITEMS */
-.fi { padding:9px 12px; border-bottom:1px solid rgba(0,255,136,0.05); cursor:pointer; position:relative; -ms-flex-negative:0; flex-shrink:0; }
-.fi:before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; opacity:0; background:#00ff88; }
-.fi:hover { background:rgba(0,255,136,0.05); }
-.fi:hover:before, .fi.sel:before { opacity:1; }
-.fi.sel { background:rgba(0,229,255,0.05); }
-.fi.sel:before { background:#00e5ff; }
-.fi.emg { background:rgba(255,68,102,0.04); }
-.fi.emg:before { opacity:1; background:#ff4466; }
-.fi-call { font-family:'Orbitron',sans-serif; font-size:11px; color:#00e5ff; }
-.fi-det { font-size:9px; color:rgba(168,255,212,0.5); margin-top:3px; }
-.fi-det span { color:#a8ffd4; }
-.fi-bar { height:2px; background:rgba(0,255,136,0.07); margin-top:5px; overflow:hidden; }
-.fi-fill { height:100%; }
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 18);
+        camera.lookAt(0, 0, 0);
 
-/* STATS */
-.st-blk { padding:12px; border-bottom:1px solid rgba(0,255,136,0.06); -ms-flex-negative:0; flex-shrink:0; }
-.st-h { font-size:8px; color:rgba(168,255,212,0.35); letter-spacing:3px; text-transform:uppercase; margin-bottom:9px; }
-.bs-grid { overflow:hidden; margin-bottom:6px; }
-.bs-grid:after { content:''; display:table; clear:both; }
-.bsi { float:left; width:50%; padding:0 3px 6px 0; box-sizing:border-box; }
-.bsi:nth-child(even) { padding:0 0 6px 3px; }
-.bsi-inner { background:rgba(0,255,136,0.04); border:1px solid rgba(0,255,136,0.1); padding:9px 10px; }
-.bsv { font-family:'Orbitron',sans-serif; font-size:18px; color:#00e5ff; }
-.bsl { font-size:8px; color:rgba(168,255,212,0.35); letter-spacing:2px; text-transform:uppercase; margin-top:3px; }
-.st-row { display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-align:center; -ms-flex-align:center; align-items:center; margin-bottom:5px; }
-.st-lbl { -webkit-box-flex:1; -ms-flex:1; flex:1; font-size:10px; color:rgba(168,255,212,0.5); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.st-trk { width:70px; height:3px; background:rgba(0,255,136,0.08); -ms-flex-negative:0; flex-shrink:0; overflow:hidden; }
-.st-fill { height:100%; -webkit-transition:width 0.7s; transition:width 0.7s; }
-.st-num { font-size:10px; width:28px; text-align:right; -ms-flex-negative:0; flex-shrink:0; color:#00ff88; margin-left:4px; }
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
 
-/* ALERTS */
-.al-item { padding:9px 12px; border-bottom:1px solid rgba(255,68,102,0.08); display:-webkit-box; display:-ms-flexbox; display:flex; -ms-flex-negative:0; flex-shrink:0; }
-.al-pip { width:7px; height:7px; border-radius:50%; -ms-flex-negative:0; flex-shrink:0; margin-top:4px; margin-right:8px; }
-.al-pip.hi { background:#ff4466; -webkit-box-shadow:0 0 6px #ff4466; box-shadow:0 0 6px #ff4466; }
-.al-pip.md { background:#ffcc00; -webkit-box-shadow:0 0 5px #ffcc00; box-shadow:0 0 5px #ffcc00; }
-.al-msg { font-size:10px; color:#a8ffd4; line-height:1.5; }
-.al-tm { font-size:9px; color:rgba(168,255,212,0.35); margin-top:2px; }
-.no-al { padding:24px; text-align:center; font-size:10px; color:rgba(168,255,212,0.25); letter-spacing:2px; }
+        // CSS2 renderer için etiketler
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.left = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
 
-/* SETTINGS */
-.st-sec { padding:8px 12px 2px; font-size:8px; color:rgba(168,255,212,0.3); letter-spacing:3px; text-transform:uppercase; border-bottom:1px solid rgba(0,255,136,0.04); -ms-flex-negative:0; flex-shrink:0; }
-.srow { padding:10px 12px; border-bottom:1px solid rgba(0,255,136,0.05); display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-align:center; -ms-flex-align:center; align-items:center; -webkit-box-pack:justify; -ms-flex-pack:justify; justify-content:space-between; -ms-flex-negative:0; flex-shrink:0; }
-.s-lbl { font-size:10px; color:rgba(168,255,212,0.5); letter-spacing:1px; }
-.tog { width:32px; height:16px; background:rgba(0,255,136,0.12); border:1px solid rgba(0,255,136,0.3); position:relative; cursor:pointer; }
-.tog.on { background:rgba(0,255,136,0.25); border-color:#00ff88; }
-.tog:after { content:''; position:absolute; width:10px; height:10px; background:rgba(168,255,212,0.5); top:2px; left:2px; -webkit-transition:left 0.2s; transition:left 0.2s; }
-.tog.on:after { left:18px; background:#00ff88; }
-.ex-btn { font-size:9px; padding:4px 10px; border:1px solid rgba(0,255,136,0.2); color:rgba(168,255,212,0.5); background:transparent; cursor:pointer; font-family:'Share Tech Mono',monospace; letter-spacing:1px; }
-.ex-btn:hover { color:#00ff88; border-color:#00ff88; }
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = false;
+        controls.enableZoom = true;
+        controls.zoomSpeed = 1.2;
+        controls.rotateSpeed = 0.8;
+        controls.target.set(0, 0, 0);
 
-/* INFO PANEL */
-#infopanel {
-  position:fixed; bottom:14px; right:14px; width:292px;
-  background:rgba(4,18,32,0.99); border:1px solid rgba(0,229,255,0.22);
-  z-index:200; display:none;
-}
-#infopanel.vis { display:block; }
-.ip-head { padding:10px 13px; background:rgba(0,229,255,0.05); border-bottom:1px solid rgba(0,229,255,0.2); font-family:'Orbitron',sans-serif; font-size:12px; color:#00e5ff; letter-spacing:2px; display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-pack:justify; -ms-flex-pack:justify; justify-content:space-between; -webkit-box-align:center; -ms-flex-align:center; align-items:center; }
-.ip-acts { display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-align:center; -ms-flex-align:center; align-items:center; }
-.tr-btn { font-size:9px; padding:2px 7px; border:1px solid rgba(0,229,255,0.25); color:rgba(0,229,255,0.6); background:transparent; cursor:pointer; font-family:'Share Tech Mono',monospace; letter-spacing:1px; margin-right:8px; }
-.tr-btn.on { background:rgba(0,229,255,0.12); border-color:#00e5ff; color:#00e5ff; }
-.cl-x { color:rgba(168,255,212,0.4); font-size:18px; cursor:pointer; line-height:1; }
-.cl-x:hover { color:#ff4466; }
-.ip-grid { padding:10px 13px; overflow:hidden; }
-.ip-grid:after { content:''; display:table; clear:both; }
-.ifd { float:left; width:50%; padding:0 4px 8px 0; box-sizing:border-box; }
-.ifd:nth-child(even) { padding:0 0 8px 4px; }
-.i-lbl { font-size:8px; color:rgba(168,255,212,0.35); letter-spacing:2px; text-transform:uppercase; }
-.i-val { font-size:12px; color:#00ff88; font-family:'Orbitron',sans-serif; }
-.i-val.b { color:#00e5ff; }
-.i-val.y { color:#ffcc00; }
-.i-val.r { color:#ff4466; }
-.spd-row { padding:0 13px 8px; display:-webkit-box; display:-ms-flexbox; display:flex; -webkit-box-align:center; -ms-flex-align:center; align-items:center; }
-.spd-trk { -webkit-box-flex:1; -ms-flex:1; flex:1; height:3px; background:rgba(0,255,136,0.08); margin:0 6px; overflow:hidden; }
-.spd-fill { height:100%; background:-webkit-linear-gradient(left,#00ff88,#00e5ff,#ffcc00,#ff4466); background:linear-gradient(to right,#00ff88,#00e5ff,#ffcc00,#ff4466); -webkit-transition:width 0.5s; transition:width 0.5s; }
-.spd-lbl { font-size:9px; color:rgba(168,255,212,0.4); white-space:nowrap; }
-.hist-wrap { padding:0 13px 8px; }
-.hist-lbl { font-size:8px; color:rgba(168,255,212,0.35); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; }
-.ip-btns { padding:0 13px 10px; display:-webkit-box; display:-ms-flexbox; display:flex; }
-.ip-btn { -webkit-box-flex:1; -ms-flex:1; flex:1; font-size:9px; padding:5px 3px; border:1px solid rgba(0,255,136,0.18); color:rgba(168,255,212,0.5); background:transparent; cursor:pointer; font-family:'Share Tech Mono',monosp
+        // --- Yıldızlar (basit) ---
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 1800;
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            starPositions[i*3] = (Math.random() - 0.5) * 800;
+            starPositions[i*3+1] = (Math.random() - 0.5) * 800;
+            starPositions[i*3+2] = (Math.random() - 0.5) * 150 - 50;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, transparent: true, opacity: 0.6 });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // --- Dünya ---
+        const earthGeometry = new THREE.SphereGeometry(3.2, 128, 128);
+        const textureLoader = new THREE.TextureLoader();
+        // Yüksek çözünürlüklü Dünya dokusu (Three.js example'dan)
+        const earthMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg');
+        const earthSpecularMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg');
+        const earthNormalMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg');
+        const cloudMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png');
+        
+        const earthMaterial = new THREE.MeshPhongMaterial({
+            map: earthMap,
+            specularMap: earthSpecularMap,
+            specular: new THREE.Color('grey'),
+            shininess: 5,
+            normalMap: earthNormalMap,
+            normalScale: new THREE.Vector2(0.8, 0.8)
+        });
+        const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+        scene.add(earth);
+        
+        // Bulut katmanı
+        const cloudGeometry = new THREE.SphereGeometry(3.23, 128, 128);
+        const cloudMaterial = new THREE.MeshPhongMaterial({
+            map: cloudMap,
+            transparent: true,
+            opacity: 0.12,
+            blending: THREE.AdditiveBlending
+        });
+        const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
+        scene.add(clouds);
+
+        // --- Işıklandırma ---
+        const ambientLight = new THREE.AmbientLight(0x222222);
+        scene.add(ambientLight);
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        mainLight.position.set(5, 10, 7);
+        scene.add(mainLight);
+        const fillLight = new THREE.PointLight(0x4466cc, 0.5);
+        fillLight.position.set(-3, 2, 4);
+        scene.add(fillLight);
+        const backLight = new THREE.PointLight(0xffaa66, 0.4);
+        backLight.position.set(0, 0, -6);
+        scene.add(backLight);
+
+        // --- Yörünge Tanımları (3 farklı yörünge, eğiklik ve renk) ---
+        // Her yörünge için radius, inclination (rad), renk, isim ve açı bilgisi
+        const orbitsData = [
+            { name: "GSPOG", radius: 5.4, inclination: 0.32, color: 0x33ffff, deg: "273°", turn: 273 },
+            { name: "FCK1EL", radius: 6.7, inclination: 0.75, color: 0xffaa44, deg: "312°", turn: 312 },
+            { name: "HAMIC", radius: 8.1, inclination: 1.08, color: 0xff66cc, deg: "295°", turn: 295 }
+        ];
+        
+        // Yörünge çizgilerini oluştur
+        const orbitLines = [];
+        orbitsData.forEach((orb, idx) => {
+            const points = [];
+            const segments = 180;
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                let x = orb.radius * Math.cos(angle);
+                let z = orb.radius * Math.sin(angle);
+                let y = 0;
+                // Eğiklik (X ekseni etrafında döndürme)
+                const cosInc = Math.cos(orb.inclination);
+                const sinInc = Math.sin(orb.inclination);
+                const newY = y * cosInc - z * sinInc;
+                const newZ = y * sinInc + z * cosInc;
+                const newX = x;
+                points.push(new THREE.Vector3(newX, newY, newZ));
+            }
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color: orb.color, linewidth: 1 }); // linewidth webgl'de genelde 1, ancak neon efekt
+            const orbitLine = new THREE.LineLoop(geometry, material);
+            scene.add(orbitLine);
+            orbitLines.push(orbitLine);
+            
+            // İsim etiketi (CSS2D)
+            const div = document.createElement('div');
+            div.textContent = `${orb.name} | ${orb.deg} turn`;
+            div.style.color = `#${orb.color.toString(16)}`;
+            div.style.fontSize = '12px';
+            div.style.fontWeight = 'bold';
+            div.style.backgroundColor = 'rgba(0,0,0,0.6)';
+            div.style.padding = '2px 8px';
+            div.style.borderRadius = '20px';
+            div.style.borderLeft = `3px solid #${orb.color.toString(16)}`;
+            div.style.fontFamily = 'monospace';
+            div.style.backdropFilter = 'blur(4px)';
+            const labelObj = new CSS2DObject(div);
+            // etiketi yörünge üzerinde bir konuma koy (45 derece açıda)
+            const angleRad = Math.PI / 4;
+            let xPos = orb.radius * Math.cos(angleRad);
+            let zPos = orb.radius * Math.sin(angleRad);
+            let yPos = 0;
+            const cosI = Math.cos(orb.inclination);
+            const sinI = Math.sin(orb.inclination);
+            const rotY = yPos * cosI - zPos * sinI;
+            const rotZ = yPos * sinI + zPos * cosI;
+            labelObj.position.set(xPos, rotY, rotZ);
+            scene.add(labelObj);
+        });
+        
+        // Ek olarak: küçük uydu noktacıkları (hareketli efekt)
+        const satellites = [];
+        for (let i = 0; i < 45; i++) {
+            const satGeo = new THREE.SphereGeometry(0.04, 8, 8);
+            const satMat = new THREE.MeshStandardMaterial({ color: 0x88aaff, emissive: 0x2266aa });
+            const sat = new THREE.Mesh(satGeo, satMat);
+            scene.add(sat);
+            satellites.push({
+                mesh: sat,
+                radius: 4.5 + Math.random() * 4,
+                speed: 0.002 + Math.random() * 0.003,
+                angle: Math.random() * Math.PI * 2,
+                inclination: (Math.random() - 0.5) * 1.2,
+                yOffset: (Math.random() - 0.5) * 1.5
+            });
+        }
+        
+        // Basit ışık halkaları efekti için birkaç nokta ışık
+        const glowPoints = [];
+        for (let i=0; i<12; i++) {
+            const pointLight = new THREE.PointLight(0x2266ff, 0.4, 12);
+            pointLight.position.set(Math.sin(i)*5, Math.cos(i*2)*2, Math.cos(i)*5);
+            scene.add(pointLight);
+            glowPoints.push(pointLight);
+        }
+        
+        // Animasyon döngüsü
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.005;
+            
+            // Dünya ve bulutlar yavaş dönsün
+            earth.rotation.y += 0.0008;
+            clouds.rotation.y += 0.0009;
+            
+            // Yapay uyduları hareket ettir (dekoratif)
+            satellites.forEach(sat => {
+                sat.angle += sat.speed;
+                const x = sat.radius * Math.cos(sat.angle);
+                const z = sat.radius * Math.sin(sat.angle);
+                const incl = sat.inclination;
+                const y = Math.sin(sat.angle * 1.7) * 0.8 + sat.yOffset;
+                // eğiklik basit
+                sat.mesh.position.set(x, y * 0.7 + Math.sin(sat.angle * 2)*0.2, z);
+            });
+            
+            // Işık noktalarını hareket ettir
+            glowPoints.forEach((light, idx) => {
+                light.position.x = Math.sin(time + idx) * 5.2;
+                light.position.z = Math.cos(time * 0.7 + idx) * 5.5;
+                light.position.y = Math.sin(time * 1.2 + idx) * 2;
+            });
+            
+            controls.update(); // Kamera kontrol
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // Pencere yeniden boyutlandırma
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Takip Et butonu etkileşimi (minik)
+        document.getElementById('followBtn').addEventListener('click', () => {
+            alert('✅ Takip ediliyor (demo) - HORUS-EYE');
+        });
+        
+        // Yorum gönderimi demo
+        const sendBtn = document.querySelector('.btn-send');
+        const commentInput = document.querySelector('.comment-input');
+        if(sendBtn) {
+            sendBtn.addEventListener('click', () => {
+                if(commentInput.value.trim() !== "") {
+                    alert(`💬 Yorum eklendi: "${commentInput.value}"`);
+                    commentInput.value = "";
+                } else {
+                    alert("Bir yorum yazın.");
+                }
+            });
+        }
+        
+        // Konsola başarı logu
+        console.log("HORUS-EYE 3D Orbit Tracker Aktif | GSPOG | FCK1EL | HAMIC");
+    </script>
+</body>
+</html>
+"""
+
+# ======================= HTTP SUNUCU =======================
+class CustomHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/" or parsed.path == "/index.html":
+            self.send_response(200)
+            self.send_header("Content-type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(HTML_PAGE.encode("utf-8"))
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"404 - Not Found")
+    
+    def log_message(self, format, *args):
+        # Daha temiz konsol çıktısı
+        sys.stdout.write(f"[{self.address_string()}] {args[0]}\n")
+
+def start_server(port):
+    with socketserver.TCPServer(("", port), CustomHandler) as httpd:
+        print(f"\n🚀 HORUS-EYE sunucusu başlatıldı!")
+        print(f"🌐 Yerel erişim: http://localhost:{port}")
+        # Ağ IP'sini bulmaya çalış (Termux için)
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            print(f"📡 Ağ üzerinden: http://{local_ip}:{port}")
+        except:
+            pass
+        print("⏎ Çıkmak için Ctrl+C tuşlayın.\n")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\n⛔ Sunucu durduruldu.")
+
+def get_random_port():
+    """Sistem tarafından rastgele atanmış bir port döndürür."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+def main():
+    port = get_random_port()
+    # opsiyonel olarak tarayıcı aç (termux'da çalışmayabilir, ama dene)
+    try:
+        webbrowser.open(f"http://localhost:{port}")
+    except:
+        pass
+    start_server(port)
+
+if __name__ == "__main__":
+    main()
