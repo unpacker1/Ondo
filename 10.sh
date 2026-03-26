@@ -1,21 +1,21 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  SKYWATCH v5.2 — OpenSky Kimlik Doğrulamalı                 ║
-# ║  Calistir: bash skywatch_opensky.sh                          ║
+# ║  D1A3L0Eye v1 — Canli Ucak Takip Sistemi                    ║
+# ║  Calistir: bash d1a3l0eye.sh                                 ║
 # ╚══════════════════════════════════════════════════════════════╝
 
 G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
 
 clear
 printf "\n${G}${B}"
-printf "  ███████╗██╗  ██╗██╗   ██╗██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗\n"
-printf "  ██╔════╝██║ ██╔╝╚██╗ ██╔╝██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║\n"
-printf "  ███████╗█████╔╝  ╚████╔╝ ██║ █╗ ██║███████║   ██║   ██║     ███████║\n"
-printf "  ╚════██║██╔═██╗   ╚██╔╝  ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║\n"
-printf "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
-printf "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
+printf "  ██████╗ ██╗ █████╗ ██╗     ██████╗ ███████╗██╗   ██╗███████╗\n"
+printf "  ██╔══██╗██║██╔══██╗██║    ██╔════╝ ██╔════╝╚██╗ ██╔╝██╔════╝\n"
+printf "  ██║  ██║██║███████║██║    ██║  ███╗█████╗   ╚████╔╝ █████╗  \n"
+printf "  ██║  ██║██║██╔══██║██║    ██║   ██║██╔══╝    ╚██╔╝  ██╔══╝  \n"
+printf "  ██████╔╝██║██║  ██║███████╗╚██████╔╝███████╗   ██║   ███████╗\n"
+printf "  ╚═════╝ ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝   ╚═╝   ╚══════╝\n"
 printf "${N}"
-printf "  ${C}v5.2 — OpenSky Kimlik Dogrulamali + Orbit + Tum Ozellikler${N}\n"
+printf "  ${C}v1 — OpenSky Kimlik Dogrulamali + Orbit + Tum Ozellikler${N}\n"
 printf "  ──────────────────────────────────────────────────────────\n\n"
 
 PY=$(command -v python3 || command -v python)
@@ -26,9 +26,9 @@ if [ -z "$PY" ]; then
 fi
 
 TMPD="${TMPDIR:-/tmp}"
-HTML="$TMPD/skywatch_opensky.html"
+HTML="$TMPD/d1a3l0eye.html"
 
-printf "  ${C}HTML olusturuluyor (v5.2 OpenSky Kimlik)...${N}\n"
+printf "  ${C}HTML olusturuluyor (D1A3L0Eye v1)...${N}\n"
 
 cat > "$HTML" << 'EOF'
 <!DOCTYPE html>
@@ -36,13 +36,12 @@ cat > "$HTML" << 'EOF'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>SKYWATCH v5.2 — OpenSky Kimlik Doğrulamalı</title>
+    <title>D1A3L0Eye v1 — Canli Uçak Takip</title>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        /* Tüm CSS (önceki v5.1 ile aynı, yeni eklenenler için aşağıya eklemeler) */
         :root {
             --g:#00ff88; --c:#00e5ff; --o:#ff6b35; --w:#ffcc00; --r:#ff4466;
             --bg:#020810; --bg2:#030f1a; --bg3:#041220;
@@ -56,7 +55,7 @@ cat > "$HTML" << 'EOF'
         #modal{position:fixed;inset:0;background:rgba(2,8,16,0.98);z-index:10000;display:flex;align-items:center;justify-content:center}
         #modal.gone{display:none!important}
         .mbox{background:var(--bg3);border:1px solid rgba(0,255,136,0.28);padding:34px;width:480px;max-width:95vw;position:relative}
-        .mbox::before{content:'SKYWATCH v5.2';position:absolute;top:-11px;left:20px;background:var(--bg3);padding:0 12px;font-family:'Orbitron',sans-serif;font-size:9px;color:var(--g);letter-spacing:5px}
+        .mbox::before{content:'D1A3L0Eye v1';position:absolute;top:-11px;left:20px;background:var(--bg3);padding:0 12px;font-family:'Orbitron',sans-serif;font-size:9px;color:var(--g);letter-spacing:5px}
         .mtitle{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--c);letter-spacing:3px;margin-bottom:4px}
         .msub{font-size:10px;color:var(--text3);letter-spacing:2px;margin-bottom:18px}
         .mdesc{font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:20px}
@@ -247,22 +246,16 @@ cat > "$HTML" << 'EOF'
         .label-toggle{bottom:140px}
         .orbit-toggle{bottom:180px}
         @media(max-width:620px){.tstats .tsc:nth-child(n+4){display:none}.layerpanel{display:none}.hud{display:none}.radarwrap{display:none}}
-        /* OpenSky ayar satırları için ek stiller */
-        .cred-row { padding: 10px 12px; border-bottom: 1px solid rgba(0,255,136,.05); display: flex; justify-content: space-between; align-items: center; }
-        .cred-label { font-size: 10px; color: var(--text2); }
-        .cred-input { background: rgba(0,229,255,0.04); border: 1px solid rgba(0,229,255,0.22); color: var(--c); font-size: 10px; padding: 5px 8px; width: 160px; font-family: monospace; }
-        .cred-input:focus { border-color: var(--c); outline: none; }
-        .cred-save { background: rgba(0,255,136,0.1); border: 1px solid var(--g); color: var(--g); font-size: 9px; padding: 4px 8px; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="modal"><div class="mbox"><div class="mtitle">MAPBOX API TOKEN</div><div class="msub">UYDU HARİTA ERİŞİMİ</div><p class="mdesc"><a href="https://account.mapbox.com" target="_blank">account.mapbox.com</a> adresinden <b>ücretsiz</b> hesap oluşturun.<br><b>Access Tokens</b> sayfasından <b>pk.</b> ile başlayan token alın.<br><br>Token olmadan <b>Demo Mod</b> ile devam edebilirsiniz.<br><span style="color:rgba(168,255,212,0.35)">Demo modda harita arka plan olmaz, tüm diğer özellikler aktiftir.</span></p><div class="msaved" id="msaved"><span>✓</span><span id="msaved-txt">Kayıtlı token</span></div><div class="mlabel">TOKEN</div><input id="tokeninput" class="minput" type="text" placeholder="pk.eyJ1IjoiuserIiwiYSI6ImtleUlkIn0.XXXX" autocomplete="off" spellcheck="false"><div class="merr" id="merr"></div><div class="mbtns"><button class="mbtn-start" id="mbtnstart">▶ BAŞLAT</button><button class="mbtn-demo" id="mbtndemo">DEMO MOD</button></div><div class="mhint">ENTER = Başlat &nbsp;|&nbsp; TAB = Demo Mod &nbsp;|&nbsp; Token kayda alınır</div></div></div>
-    <div id="loading"><div class="ldlogo">SKYWATCH</div><div class="ldsub">CANLI UÇAK TAKİP SİSTEMİ v5.2</div><div class="ldbarwrap"><div class="ldbar" id="ldbar"></div></div><div class="ldstatus" id="ldstatus">HAZIRLANIYOR...</div></div>
+    <div id="loading"><div class="ldlogo">D1A3L0Eye</div><div class="ldsub">CANLI UÇAK TAKİP SİSTEMİ v1</div><div class="ldbarwrap"><div class="ldbar" id="ldbar"></div></div><div class="ldstatus" id="ldstatus">HAZIRLANIYOR...</div></div>
     <div class="kbhelp" id="kbhelp"><div class="kbbox"><div class="kbtitle">KLAVYE KISAYOLLARI <span onclick="toggleHelp()" style="cursor:pointer;color:var(--o);font-size:20px">×</span></div><div class="kbgrid"><div class="kbrow"><div class="kbkey">F</div><div class="kbdesc">Arama aç/kapat</div></div><div class="kbrow"><div class="kbkey">R</div><div class="kbdesc">Veriyi yenile</div></div><div class="kbrow"><div class="kbkey">L</div><div class="kbdesc">Sol paneli aç/kapat</div></div><div class="kbrow"><div class="kbkey">S</div><div class="kbdesc">Uydu katmanı</div></div><div class="kbrow"><div class="kbkey">D</div><div class="kbdesc">Karanlık katmanı</div></div><div class="kbrow"><div class="kbkey">T</div><div class="kbdesc">Sokak katmanı</div></div><div class="kbrow"><div class="kbkey">H</div><div class="kbdesc">Hava durumu</div></div><div class="kbrow"><div class="kbkey">N</div><div class="kbdesc">Gece/gündüz</div></div><div class="kbrow"><div class="kbkey">I</div><div class="kbdesc">Uçak izleri (tümü)</div></div><div class="kbrow"><div class="kbkey">C</div><div class="kbdesc">Konumumu bul</div></div><div class="kbrow"><div class="kbkey">X</div><div class="kbdesc">Seçimi kaldır</div></div><div class="kbrow"><div class="kbkey">ESC</div><div class="kbdesc">Kapat / Geri</div></div><div class="kbrow"><div class="kbkey">?</div><div class="kbdesc">Bu yardım ekranı</div></div><div class="kbrow"><div class="kbkey">F11</div><div class="kbdesc">Tam ekran</div></div><div class="kbrow"><div class="kbkey">U</div><div class="kbdesc">Birim değiştir</div></div><div class="kbrow"><div class="kbkey">G</div><div class="kbdesc">Dil değiştir</div></div><div class="kbrow"><div class="kbkey">O</div><div class="kbdesc">Uçuş orbiti göster/kapat</div></div></div></div></div>
-    <div class="topbar"><div class="tlogo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill="#00ff88"/><circle cx="12" cy="12" r="11" stroke="rgba(0,255,136,0.2)" stroke-width="1"/></svg>SKYWATCH</div><div class="tvbar"></div><div class="tstats"><div class="tsc"><div class="statusdot loading" id="sdot"></div><span id="sstatus">BAĞLANIYOR</span></div><div class="tsc">✈ <span class="tval" id="scount">0</span></div><div class="tsc">GÖR.:<span class="tval" id="svis">0</span></div><div class="tsc">ÜLKE:<span class="tval" id="scountry">0</span></div><div class="tsc">MAX:<span class="tval" id="smaxalt">0</span><span id="altUnit">m</span></div><div class="tsc">⟳<span class="tval" id="slastupd">--:--</span></div></div><div class="tright"><div class="tclock" id="tclock">00:00:00</div><button class="tbtn" onclick="toggleSearch()" title="Arama [F]">🔍</button><button class="tbtn" onclick="doRefresh()" title="Yenile [R]">⟳</button><button class="tbtn" onclick="gotoMe()" title="Konum [C]">📍</button><button class="tbtn" id="wxbtn" onclick="toggleWeather()" title="Hava [H]">☁️</button><button class="tbtn" id="trmbn" onclick="toggleTerminator()" title="Gece/Gündüz [N]">☀️</button><button class="tbtn" id="alltrailbtn" onclick="toggleAllTrails()" title="Tüm izler [I]">➡️</button><button class="tbtn" id="langBtn" onclick="toggleLanguage()" title="Dil [G]">🌐 TR</button><button class="tbtn" id="unitBtn" onclick="toggleUnits()" title="Birim [U]">📏 km/h</button><button class="tbtn" onclick="toggleHelp()" title="Yardım [?]">?</button><button class="tbtn" onclick="doFullscreen()">⛶</button></div></div>
+    <div class="topbar"><div class="tlogo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill="#00ff88"/><circle cx="12" cy="12" r="11" stroke="rgba(0,255,136,0.2)" stroke-width="1"/></svg>D1A3L0Eye</div><div class="tvbar"></div><div class="tstats"><div class="tsc"><div class="statusdot loading" id="sdot"></div><span id="sstatus">BAĞLANIYOR</span></div><div class="tsc">✈ <span class="tval" id="scount">0</span></div><div class="tsc">GÖR.:<span class="tval" id="svis">0</span></div><div class="tsc">ÜLKE:<span class="tval" id="scountry">0</span></div><div class="tsc">MAX:<span class="tval" id="smaxalt">0</span><span id="altUnit">m</span></div><div class="tsc">⟳<span class="tval" id="slastupd">--:--</span></div></div><div class="tright"><div class="tclock" id="tclock">00:00:00</div><button class="tbtn" onclick="toggleSearch()" title="Arama [F]">🔍</button><button class="tbtn" onclick="doRefresh()" title="Yenile [R]">⟳</button><button class="tbtn" onclick="gotoMe()" title="Konum [C]">📍</button><button class="tbtn" id="wxbtn" onclick="toggleWeather()" title="Hava [H]">☁️</button><button class="tbtn" id="trmbn" onclick="toggleTerminator()" title="Gece/Gündüz [N]">☀️</button><button class="tbtn" id="alltrailbtn" onclick="toggleAllTrails()" title="Tüm izler [I]">➡️</button><button class="tbtn" id="langBtn" onclick="toggleLanguage()" title="Dil [G]">🌐 TR</button><button class="tbtn" id="unitBtn" onclick="toggleUnits()" title="Birim [U]">📏 km/h</button><button class="tbtn" onclick="toggleHelp()" title="Yardım [?]">?</button><button class="tbtn" onclick="doFullscreen()">⛶</button></div></div>
     <div class="searchbar" id="searchbar"><div style="position:relative;flex:1"><input class="sinput" id="sinput" placeholder="Callsign, ülke, ICAO24..." oninput="doSearch(this.value)" onkeydown="searchKeydown(event)"><div class="sresults" id="sresults"></div></div><button class="scloseBtn" onclick="toggleSearch()">×</button></div>
     <div class="ptoggle" id="ptoggle" onclick="togglePanel()">◀</div>
-    <div class="lpanel" id="lpanel"><div class="tabs"><button class="tabbtn on" id="tab0" onclick="switchTab(0)">UÇUŞLAR</button><button class="tabbtn" id="tab1" onclick="switchTab(1)">İSTAT</button><button class="tabbtn" id="tab2" onclick="switchTab(2)">ALARM</button><button class="tabbtn" id="tab3" onclick="switchTab(3)">AYAR</button></div><div class="tabpanel on" id="tp0"><div class="slider-section"><div class="slider-row"><span class="slider-label">HARİTA UÇAK LİMİTİ</span><span class="slider-val" id="sliderval">2000</span></div><input type="range" class="slider" id="limitslider" min="10" max="2000" value="2000" step="10" oninput="onSlider(this.value)"><div class="perf-row"><button class="perf-btn" onclick="setPerf('eco')" id="perf-eco">ECO</button><button class="perf-btn" onclick="setPerf('normal')" id="perf-normal">NORMAL</button><button class="perf-btn on" onclick="setPerf('ultra')" id="perf-ultra">ULTRA</button></div></div><div class="fbar"><button class="fchip on" id="fc-all" onclick="setFilter('all')">TÜMÜ</button><button class="fchip" id="fc-high" onclick="setFilter('high')">Y.ALT</button><button class="fchip" id="fc-fast" onclick="setFilter('fast')">HIZ</button><button class="fchip" id="fc-tr" onclick="setFilter('tr')">TR</button><button class="fchip red" id="fc-emg" onclick="setFilter('emg')">ACİL</button></div><div class="fcountbar"><span><span id="fcount">0</span> UÇAK LISTEDE</span><span id="ftotal" style="color:var(--text3)"></span></div><div id="flist" style="flex:1;overflow-y:auto"><div style="padding:22px;text-align:center;color:var(--text3);font-size:11px">VERİ YÜKLENİYOR...</div></div></div><div class="tabpanel" id="tp1"><div class="stblock"><div class="sthead">GENEL ÖZET</div><div class="bigstat"><div class="bsi"><div class="bsv" id="st-total">0</div><div class="bsl">TOPLAM UÇAK</div></div><div class="bsi"><div class="bsv" id="st-country">0</div><div class="bsl">ÜLKE</div></div><div class="bsi"><div class="bsv" id="st-avgalt">0</div><div class="bsl">ORT YÜK (<span id="avgAltUnit">m</span>)</div></div><div class="bsi"><div class="bsv" id="st-avgspd">0</div><div class="bsl">ORT HIZ (<span id="avgSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxspd">0</div><div class="bsl">MAX HIZ (<span id="maxSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxalt">0</div><div class="bsl">MAX YÜK (<span id="maxAltUnit">m</span>)</div></div></div></div><div class="stblock"><div class="sthead">ÜLKE SIRASI</div><div id="st-countries"></div></div><div class="stblock"><div class="sthead">HIZ DAĞILIMI (<span id="spdDistUnit">km/s</span>)</div><div id="st-speeds"></div></div><div class="stblock"><div class="sthead">YÜKSEKLİK (<span id="altDistUnit">m</span>)</div><div id="st-alts"></div></div><div class="stblock"><div class="sthead">AIRLINE SIRASI</div><div id="st-airlines"></div></div><button class="expbtn" onclick="exportPDF()" style="margin:10px; width:calc(100% - 20px);">📄 PDF RAPOR</button></div><div class="tabpanel" id="tp2"><div style="padding:7px 12px;border-bottom:1px solid rgba(0,255,136,.06);font-size:9px;color:var(--text3);display:flex;justify-content:space-between;align-items:center"><span id="alertheader">ALARMLAR</span><button class="fchip" onclick="clearAlerts()" style="font-size:8px;padding:2px 7px">TEMİZLE</button></div><div id="alertlist"><div class="no-alerts">ALARM YOK</div></div></div><div class="tabpanel" id="tp3"><div class="sett-section">HARİTA</div><div class="settrow"><span class="settlabel">Uçuş izleri göster</span><div class="toggle-sw" id="sw-trail" onclick="toggleSetting('trail')"></div></div><div class="settrow"><span class="settlabel">Yer üzerindeki uçaklar</span><div class="toggle-sw" id="sw-ground" onclick="toggleSetting('ground')"></div></div><div class="settrow"><span class="settlabel">3D Binalar</span><div class="toggle-sw on" id="sw-3d" onclick="toggle3D()"></div></div><div class="settrow"><span class="settlabel">Menzil Halkaları</span><div class="toggle-sw" id="sw-rings" onclick="toggleRangeRings()"></div></div><div class="settrow"><span class="settlabel">Uçak Etiketleri</span><div class="toggle-sw on" id="sw-labels" onclick="toggleLabels()"></div></div><div class="settrow"><span class="settlabel">FIR Sınırları</span><div class="toggle-sw" id="sw-fir" onclick="toggleFIR()"></div></div><div class="settrow"><span class="settlabel">Uçuş Orbiti</span><div class="toggle-sw on" id="sw-orbit" onclick="toggleOrbit()"></div></div><div class="sett-section">OPENSKY KİMLİK</div><div class="cred-row"><span class="cred-label">Kullanıcı Adı</span><input type="text" id="openskyUser" class="cred-input" placeholder="OpenSky kullanıcı adı"></div><div class="cred-row"><span class="cred-label">Şifre</span><input type="password" id="openskyPass" class="cred-input" placeholder="OpenSky şifre"></div><div class="cred-row"><span class="cred-label"></span><button class="cred-save" id="saveOpenSkyCred">Kaydet</button><span id="openskyStatus" style="font-size:9px; color:var(--c);"></span></div><div class="sett-section">PERFORMANS</div><div class="settrow"><span class="settlabel">Yenileme süresi</span><span class="settval" id="rf-val">30s</span></div><div style="padding:6px 12px"><input type="range" class="slider" id="rfslider" min="15" max="120" value="30" step="5" oninput="onRfSlider(this.value)"></div><div class="sett-section">DIŞA AKTAR</div><div class="settrow"><span class="settlabel">JSON aktar</span><button class="expbtn" onclick="exportJSON()">⬇ JSON</button></div><div class="settrow"><span class="settlabel">CSV aktar</span><button class="expbtn" onclick="exportCSV()">⬇ CSV</button></div><div class="settrow"><span class="settlabel">PDF rapor</span><button class="expbtn" onclick="exportPDF()">⬇ PDF</button></div><div class="sett-section">TOKEN</div><div class="settrow"><span class="settlabel">Kayıtlı token</span><button class="expbtn" onclick="clearToken()" style="color:var(--r);border-color:rgba(255,68,102,.3)">SİL</button></div><div class="sett-section">BİLDİRİM</div><div class="settrow"><span class="settlabel">Push bildirimi</span><div class="toggle-sw" id="sw-notify" onclick="toggleNotifications()"></div></div><div class="settrow"><span class="settlabel">Sesli uyarı</span><div class="toggle-sw" id="sw-sound" onclick="toggleSound()"></div></div></div></div>
+    <div class="lpanel" id="lpanel"><div class="tabs"><button class="tabbtn on" id="tab0" onclick="switchTab(0)">UÇUŞLAR</button><button class="tabbtn" id="tab1" onclick="switchTab(1)">İSTAT</button><button class="tabbtn" id="tab2" onclick="switchTab(2)">ALARM</button><button class="tabbtn" id="tab3" onclick="switchTab(3)">AYAR</button></div><div class="tabpanel on" id="tp0"><div class="slider-section"><div class="slider-row"><span class="slider-label">HARİTA UÇAK LİMİTİ</span><span class="slider-val" id="sliderval">2000</span></div><input type="range" class="slider" id="limitslider" min="10" max="2000" value="2000" step="10" oninput="onSlider(this.value)"><div class="perf-row"><button class="perf-btn" onclick="setPerf('eco')" id="perf-eco">ECO</button><button class="perf-btn" onclick="setPerf('normal')" id="perf-normal">NORMAL</button><button class="perf-btn on" onclick="setPerf('ultra')" id="perf-ultra">ULTRA</button></div></div><div class="fbar"><button class="fchip on" id="fc-all" onclick="setFilter('all')">TÜMÜ</button><button class="fchip" id="fc-high" onclick="setFilter('high')">Y.ALT</button><button class="fchip" id="fc-fast" onclick="setFilter('fast')">HIZ</button><button class="fchip" id="fc-tr" onclick="setFilter('tr')">TR</button><button class="fchip red" id="fc-emg" onclick="setFilter('emg')">ACİL</button></div><div class="fcountbar"><span><span id="fcount">0</span> UÇAK LISTEDE</span><span id="ftotal" style="color:var(--text3)"></span></div><div id="flist" style="flex:1;overflow-y:auto"><div style="padding:22px;text-align:center;color:var(--text3);font-size:11px">VERİ YÜKLENİYOR...</div></div></div><div class="tabpanel" id="tp1"><div class="stblock"><div class="sthead">GENEL ÖZET</div><div class="bigstat"><div class="bsi"><div class="bsv" id="st-total">0</div><div class="bsl">TOPLAM UÇAK</div></div><div class="bsi"><div class="bsv" id="st-country">0</div><div class="bsl">ÜLKE</div></div><div class="bsi"><div class="bsv" id="st-avgalt">0</div><div class="bsl">ORT YÜK (<span id="avgAltUnit">m</span>)</div></div><div class="bsi"><div class="bsv" id="st-avgspd">0</div><div class="bsl">ORT HIZ (<span id="avgSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxspd">0</div><div class="bsl">MAX HIZ (<span id="maxSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxalt">0</div><div class="bsl">MAX YÜK (<span id="maxAltUnit">m</span>)</div></div></div></div><div class="stblock"><div class="sthead">ÜLKE SIRASI</div><div id="st-countries"></div></div><div class="stblock"><div class="sthead">HIZ DAĞILIMI (<span id="spdDistUnit">km/s</span>)</div><div id="st-speeds"></div></div><div class="stblock"><div class="sthead">YÜKSEKLİK (<span id="altDistUnit">m</span>)</div><div id="st-alts"></div></div><div class="stblock"><div class="sthead">AIRLINE SIRASI</div><div id="st-airlines"></div></div><button class="expbtn" onclick="exportPDF()" style="margin:10px; width:calc(100% - 20px);">📄 PDF RAPOR</button></div><div class="tabpanel" id="tp2"><div style="padding:7px 12px;border-bottom:1px solid rgba(0,255,136,.06);font-size:9px;color:var(--text3);display:flex;justify-content:space-between;align-items:center"><span id="alertheader">ALARMLAR</span><button class="fchip" onclick="clearAlerts()" style="font-size:8px;padding:2px 7px">TEMİZLE</button></div><div id="alertlist"><div class="no-alerts">ALARM YOK</div></div></div><div class="tabpanel" id="tp3"><div class="sett-section">HARİTA</div><div class="settrow"><span class="settlabel">Uçuş izleri göster</span><div class="toggle-sw" id="sw-trail" onclick="toggleSetting('trail')"></div></div><div class="settrow"><span class="settlabel">Yer üzerindeki uçaklar</span><div class="toggle-sw" id="sw-ground" onclick="toggleSetting('ground')"></div></div><div class="settrow"><span class="settlabel">3D Binalar</span><div class="toggle-sw on" id="sw-3d" onclick="toggle3D()"></div></div><div class="settrow"><span class="settlabel">Menzil Halkaları</span><div class="toggle-sw" id="sw-rings" onclick="toggleRangeRings()"></div></div><div class="settrow"><span class="settlabel">Uçak Etiketleri</span><div class="toggle-sw on" id="sw-labels" onclick="toggleLabels()"></div></div><div class="settrow"><span class="settlabel">FIR Sınırları</span><div class="toggle-sw" id="sw-fir" onclick="toggleFIR()"></div></div><div class="settrow"><span class="settlabel">Uçuş Orbiti</span><div class="toggle-sw on" id="sw-orbit" onclick="toggleOrbit()"></div></div><div class="sett-section">OPENSKY KİMLİK</div><div class="cred-row" style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,255,136,.05)"><span style="font-size:10px;color:var(--text2)">Kullanıcı Adı</span><input type="text" id="openskyUser" style="background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.22);color:var(--c);font-size:10px;padding:5px 8px;width:160px;font-family:monospace"></div><div class="cred-row" style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,255,136,.05)"><span style="font-size:10px;color:var(--text2)">Şifre</span><input type="password" id="openskyPass" style="background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.22);color:var(--c);font-size:10px;padding:5px 8px;width:160px;font-family:monospace"></div><div class="cred-row" style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center"><button id="saveOpenSkyCred" style="background:rgba(0,255,136,0.1);border:1px solid var(--g);color:var(--g);font-size:9px;padding:4px 8px;cursor:pointer">Kaydet ve Test Et</button><span id="openskyStatus" style="font-size:9px;color:var(--c);"></span></div><div class="sett-section">PERFORMANS</div><div class="settrow"><span class="settlabel">Yenileme süresi</span><span class="settval" id="rf-val">30s</span></div><div style="padding:6px 12px"><input type="range" class="slider" id="rfslider" min="15" max="120" value="30" step="5" oninput="onRfSlider(this.value)"></div><div class="sett-section">DIŞA AKTAR</div><div class="settrow"><span class="settlabel">JSON aktar</span><button class="expbtn" onclick="exportJSON()">⬇ JSON</button></div><div class="settrow"><span class="settlabel">CSV aktar</span><button class="expbtn" onclick="exportCSV()">⬇ CSV</button></div><div class="settrow"><span class="settlabel">PDF rapor</span><button class="expbtn" onclick="exportPDF()">⬇ PDF</button></div><div class="sett-section">TOKEN</div><div class="settrow"><span class="settlabel">Kayıtlı token</span><button class="expbtn" onclick="clearToken()" style="color:var(--r);border-color:rgba(255,68,102,.3)">SİL</button></div><div class="sett-section">BİLDİRİM</div><div class="settrow"><span class="settlabel">Push bildirimi</span><div class="toggle-sw" id="sw-notify" onclick="toggleNotifications()"></div></div><div class="settrow"><span class="settlabel">Sesli uyarı</span><div class="toggle-sw" id="sw-sound" onclick="toggleSound()"></div></div></div></div>
     <div id="map"></div>
     <div class="trail-legend" id="trail-legend"><div class="tl-title">İZ RENK KODLARI</div><div class="tl-row"><div class="tl-dot" style="background:#00ff88"></div><span>Alçak (&lt;3km)</span></div><div class="tl-row"><div class="tl-dot" style="background:#00e5ff"></div><span>Orta (3-6km)</span></div><div class="tl-row"><div class="tl-dot" style="background:#ffcc00"></div><span>Yüksek (6-9km)</span></div><div class="tl-row"><div class="tl-dot" style="background:#ff4466"></div><span>Çok yüksek (&gt;9km)</span></div></div>
     <div class="range-ring-control" id="ringCtrl" onclick="toggleRangeRings()">🔘 Menzil Halkaları (Kapalı)</div>
@@ -277,7 +270,7 @@ cat > "$HTML" << 'EOF'
     <div class="refbar"><div class="refprog" id="refprog"></div></div>
     <script>
         // ============================================================
-        // TÜM JAVASCRIPT (v5.2 OpenSky Kimlik Doğrulamalı)
+        // D1A3L0Eye v1 - Tüm Özellikler + OpenSky Kimlik Doğrulama
         // ============================================================
 
         // ----- STATE -----
@@ -375,7 +368,6 @@ cat > "$HTML" << 'EOF'
                     }
                 });
                 currentOrbitLayerId = layerId;
-                // Başlangıç noktasına işaretçi
                 const markerEl = document.createElement('div');
                 markerEl.style.width = '8px';
                 markerEl.style.height = '8px';
@@ -476,10 +468,9 @@ cat > "$HTML" << 'EOF'
             el._t = setTimeout(() => el.classList.remove('show'), 3800);
         }
 
-        // ----- MODAL (orijinal) -----
+        // ----- MODAL -----
         window.addEventListener('load', () => {
-            // Mapbox token
-            const saved = localStorage.getItem('skyw4_token');
+            const saved = localStorage.getItem('d1a3l0eye_token');
             if(saved && saved.length > 10) {
                 document.getElementById('tokeninput').value = saved;
                 document.getElementById('msaved-txt').textContent = saved.slice(0,20)+'...';
@@ -503,7 +494,7 @@ cat > "$HTML" << 'EOF'
                 openskyPass = savedPass;
                 document.getElementById('openskyPass').value = savedPass;
             }
-            document.getElementById('saveOpenSkyCred').onclick = saveOpenSkyCredentials;
+            document.getElementById('saveOpenSkyCred').onclick = saveAndTestOpenSky;
         });
         function setModalErr(msg) { document.getElementById('merr').innerHTML = msg ? `<span>⚠</span> ${msg}` : ''; }
         function doStart() {
@@ -512,7 +503,7 @@ cat > "$HTML" << 'EOF'
             if(!v) { setModalErr('Token boş bırakılamaz'); return; }
             if(v.length < 10) { setModalErr('Token çok kısa, en az 10 karakter'); return; }
             TOKEN = v;
-            localStorage.setItem('skyw4_token', v);
+            localStorage.setItem('d1a3l0eye_token', v);
             lockModal();
             boot(false).catch(err => { console.error(err); setModalErr('Başlatma hatası: ' + (err.message || 'bilinmeyen hata')); unlockModal(); });
         }
@@ -532,20 +523,48 @@ cat > "$HTML" << 'EOF'
             document.getElementById('modal').classList.remove('gone');
         }
 
-        // ----- OpenSky kimlik kaydetme -----
-        function saveOpenSkyCredentials() {
+        // ----- OpenSky kaydet ve test et -----
+        async function saveAndTestOpenSky() {
             openskyUser = document.getElementById('openskyUser').value.trim();
             openskyPass = document.getElementById('openskyPass').value;
             if(openskyUser) localStorage.setItem('opensky_user', openskyUser);
             else localStorage.removeItem('opensky_user');
             if(openskyPass) localStorage.setItem('opensky_pass', openskyPass);
             else localStorage.removeItem('opensky_pass');
-            document.getElementById('openskyStatus').textContent = 'Kaydedildi';
-            setTimeout(() => { document.getElementById('openskyStatus').textContent = ''; }, 2000);
-            notify('OpenSky kimlik bilgileri kaydedildi', 'ok');
+            const statusSpan = document.getElementById('openskyStatus');
+            statusSpan.textContent = 'Test ediliyor...';
+            statusSpan.style.color = 'var(--c)';
+            try {
+                const testResult = await testOpenSkyCredentials(openskyUser, openskyPass);
+                if(testResult.ok) {
+                    statusSpan.textContent = '✓ Geçerli';
+                    statusSpan.style.color = 'var(--g)';
+                    notify('OpenSky kimlik bilgileri geçerli!', 'ok');
+                } else {
+                    statusSpan.textContent = '✗ Geçersiz veya kota aşıldı';
+                    statusSpan.style.color = 'var(--r)';
+                    notify('OpenSky kimlik bilgileri geçersiz veya kota doldu', 'err');
+                }
+            } catch(e) {
+                statusSpan.textContent = '✗ Bağlantı hatası';
+                statusSpan.style.color = 'var(--r)';
+                notify('Test başarısız: ' + e.message, 'err');
+            }
+        }
+        async function testOpenSkyCredentials(user, pass) {
+            const url = 'https://opensky-network.org/api/states/all?lamin=25&lomin=-20&lamax=72&lomax=55&limit=1';
+            const headers = {};
+            if(user && pass) {
+                headers['Authorization'] = 'Basic ' + btoa(`${user}:${pass}`);
+            }
+            const resp = await fetch(url, { headers });
+            if(resp.status === 200) return { ok: true };
+            if(resp.status === 401) return { ok: false, error: 'unauthorized' };
+            if(resp.status === 429) return { ok: false, error: 'rate_limit' };
+            return { ok: false, error: 'other' };
         }
 
-        // ----- OPENSKY API (kimlik doğrulamalı) -----
+        // ----- OPENSKY API (kimlik doğrulamalı, hata yönetimli) -----
         const OPENSKY_ENDPOINTS = [
             'https://opensky-network.org/api/states/all?lamin=25&lomin=-20&lamax=72&lomax=55',
             'https://opensky-network.org/api/states/all'
@@ -556,7 +575,6 @@ cat > "$HTML" << 'EOF'
                     const ctrl = new AbortController();
                     const tid = setTimeout(() => ctrl.abort(), 15000);
                     const headers = {};
-                    // Eğer kullanıcı adı varsa Basic Auth ekle
                     if(openskyUser && openskyPass) {
                         const auth = btoa(`${openskyUser}:${openskyPass}`);
                         headers['Authorization'] = `Basic ${auth}`;
@@ -564,7 +582,16 @@ cat > "$HTML" << 'EOF'
                     const r = await fetch(OPENSKY_ENDPOINTS[i], { signal: ctrl.signal, headers: headers });
                     clearTimeout(tid);
                     if(!r.ok) {
-                        if(r.status === 429) console.warn('OpenSky rate limit');
+                        if(r.status === 401) {
+                            console.warn('OpenSky kimlik doğrulama başarısız');
+                            notify('OpenSky kimlik doğrulama başarısız, demo veri kullanılıyor', 'warn');
+                            return generateDemo();
+                        }
+                        if(r.status === 429) {
+                            console.warn('OpenSky istek sınırı aşıldı');
+                            notify('OpenSky istek sınırı aşıldı, demo veri kullanılıyor', 'warn');
+                            return generateDemo();
+                        }
                         continue;
                     }
                     const d = await r.json();
@@ -594,7 +621,7 @@ cat > "$HTML" << 'EOF'
             });
         }
 
-        // ----- BOOT (değişmedi) -----
+        // ----- BOOT -----
         async function boot(demo) {
             const ld = document.getElementById('loading');
             const bar = document.getElementById('ldbar');
@@ -629,7 +656,7 @@ cat > "$HTML" << 'EOF'
         // ----- CLOCK -----
         function startClock() { setInterval(() => { document.getElementById('tclock').textContent = new Date().toTimeString().slice(0,8); }, 1000); }
 
-        // ----- MAP (orijinal) -----
+        // ----- MAP -----
         function initMap() {
             mapboxgl.accessToken = TOKEN;
             MAP = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/satellite-v9', center: [35,40], zoom: 4, antialias: true });
@@ -775,7 +802,7 @@ cat > "$HTML" << 'EOF'
             }
         }
 
-        // ----- LOAD FLIGHTS (orijinal, OpenSky kimlik entegre) -----
+        // ----- LOAD FLIGHTS -----
         async function loadFlights() {
             setSdot('loading');
             const raw = await fetchFlights();
@@ -805,7 +832,7 @@ cat > "$HTML" << 'EOF'
         }
         function doRefresh() { resetRefTimer(); loadFlights(); notify('VERİ YENİLENDİ','ok'); }
 
-        // ----- FILTER & RENDER LIST (orijinal) -----
+        // ----- FILTER & RENDER LIST -----
         function setFilter(f) {
             activeFilter = f;
             ['all','high','fast','tr','emg'].forEach(x => { const el = document.getElementById('fc-'+x); if(el) el.classList.toggle('on', x===f); });
@@ -853,7 +880,7 @@ cat > "$HTML" << 'EOF'
             fl.appendChild(frag);
         }
 
-        // ----- MARKERS (orijinal) -----
+        // ----- MARKERS -----
         function redrawMarkers() {
             if(!MAP) return;
             Object.values(markers).forEach(m => m.remove());
@@ -886,7 +913,7 @@ cat > "$HTML" << 'EOF'
             return el;
         }
 
-        // ----- TRAIL SYSTEM (orijinal) -----
+        // ----- TRAIL SYSTEM -----
         function addTrailSources() {}
         function getTrailColor(alt) {
             if(!alt) return '#00ff88';
@@ -954,7 +981,7 @@ cat > "$HTML" << 'EOF'
             else { updateAllTrails(); notify('TÜM İZLER AKTİF (performansı düşürebilir)','warn'); }
         }
 
-        // ----- SELECT FLIGHT & INFO PANEL (orijinal) -----
+        // ----- SELECT FLIGHT & INFO PANEL -----
         function pickFlight(f) {
             selIcao = f.icao24;
             if(!speedHistory[f.icao24]) speedHistory[f.icao24]=[];
@@ -1050,7 +1077,7 @@ cat > "$HTML" << 'EOF'
             ctx.fillText(Math.round(min), 2, H-2);
         }
 
-        // ----- STATS (orijinal) -----
+        // ----- STATS -----
         function updateStats() {
             const total = flights.length;
             const cmap = {}, amap = {};
@@ -1108,7 +1135,7 @@ cat > "$HTML" << 'EOF'
             `).join('');
         }
 
-        // ----- ALERTS (orijinal) -----
+        // ----- ALERTS -----
         function checkAlerts() {
             const sqkNames = {'7700':'ACİL DURUM','7600':'RADYO ARIZA','7500':'HİJACK'};
             flights.forEach(f => {
@@ -1124,7 +1151,7 @@ cat > "$HTML" << 'EOF'
             renderAlerts();
             if(level==='high') {
                 notify('⚠ ALARM: '+msg,'err');
-                if(notificationsEnabled && Notification.permission === 'granted') new Notification('SKYWATCH Acil Durum', {body: msg});
+                if(notificationsEnabled && Notification.permission === 'granted') new Notification('D1A3L0Eye Acil Durum', {body: msg});
                 if(soundEnabled) playBeep();
             }
         }
@@ -1146,7 +1173,7 @@ cat > "$HTML" << 'EOF'
         }
         function clearAlerts(){ alerts=[]; renderAlerts(); }
 
-        // ----- SETTINGS (orijinal) -----
+        // ----- SETTINGS -----
         function toggleSetting(key) {
             settings[key] = !settings[key];
             document.getElementById('sw-'+key).classList.toggle('on', settings[key]);
@@ -1165,13 +1192,13 @@ cat > "$HTML" << 'EOF'
             notify(mode.toUpperCase()+' PERFORMANS MODU','info');
         }
 
-        // ----- EXPORT (orijinal) -----
+        // ----- EXPORT -----
         function exportJSON() {
             const data = JSON.stringify(flights,null,2);
             const blob = new Blob([data],{type:'application/json'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'skywatch_flights_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.json';
+            a.download = 'd1a3l0eye_flights_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.json';
             a.click(); notify('JSON indirildi','ok');
         }
         function exportCSV() {
@@ -1181,7 +1208,7 @@ cat > "$HTML" << 'EOF'
             const blob = new Blob([csv],{type:'text/csv'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'skywatch_flights_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.csv';
+            a.download = 'd1a3l0eye_flights_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.csv';
             a.click(); notify('CSV indirildi','ok');
         }
         async function exportPDF() {
@@ -1189,7 +1216,7 @@ cat > "$HTML" << 'EOF'
             const doc = new jsPDF();
             doc.setFont('helvetica');
             doc.setFontSize(18);
-            doc.text('SKYWATCH Uçak Raporu', 20, 20);
+            doc.text('D1A3L0Eye Uçak Raporu', 20, 20);
             doc.setFontSize(10);
             doc.text(`Tarih: ${new Date().toLocaleString()}`, 20, 30);
             doc.text(`Toplam Uçak: ${flights.length}`, 20, 40);
@@ -1200,12 +1227,12 @@ cat > "$HTML" << 'EOF'
                 doc.text(`${i+1}. ${f.callsign} (${f.country}) - ${convertAlt(f.alt)}${altUnit()} - ${convertSpeed(f.vel)}${speedUnit()}`, 20, y);
                 y+=6;
             });
-            doc.save(`skywatch_report_${new Date().toISOString().slice(0,19)}.pdf`);
+            doc.save(`d1a3l0eye_report_${new Date().toISOString().slice(0,19)}.pdf`);
             notify('PDF rapor indirildi','ok');
         }
-        function clearToken() { localStorage.removeItem('skyw4_token'); notify('TOKEN SİLİNDİ — Sayfayı yenileyin','warn'); }
+        function clearToken() { localStorage.removeItem('d1a3l0eye_token'); notify('TOKEN SİLİNDİ — Sayfayı yenileyin','warn'); }
 
-        // ----- SEARCH (orijinal) -----
+        // ----- SEARCH -----
         function toggleSearch() {
             searchOpen = !searchOpen;
             document.getElementById('searchbar').classList.toggle('open', searchOpen);
@@ -1229,7 +1256,7 @@ cat > "$HTML" << 'EOF'
         function searchKeydown(e) { if(e.key==='Escape') toggleSearch(); if(e.key==='Enter'){ const first = document.querySelector('.sres-item'); if(first) first.click(); } }
         function pickByIcao(icao) { const f = flights.find(x => x.icao24 === icao); if(f){ pickFlight(f); toggleSearch(); } }
 
-        // ----- PANEL, TABS, MISC (orijinal) -----
+        // ----- PANEL, TABS, MISC -----
         function togglePanel() {
             panelOpen = !panelOpen;
             document.getElementById('lpanel').classList.toggle('closed', !panelOpen);
@@ -1274,7 +1301,7 @@ cat > "$HTML" << 'EOF'
             notify('Sesli uyarı '+(soundEnabled?'açık':'kapalı'), 'info');
         }
 
-        // ----- KEYBOARD (orijinal + O tuşu) -----
+        // ----- KEYBOARD -----
         function setupKeys() {
             document.addEventListener('keydown', e => {
                 if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
@@ -1303,7 +1330,7 @@ cat > "$HTML" << 'EOF'
             });
         }
 
-        // ----- RADAR (orijinal) -----
+        // ----- RADAR -----
         function startRadar() {
             const cv = document.getElementById('radarc');
             const ctx = cv.getContext('2d');
@@ -1351,7 +1378,7 @@ cat > "$HTML" << 'EOF'
             frame();
         }
 
-        // ----- COMPASS (orijinal) -----
+        // ----- COMPASS -----
         function startCompass(){ drawCompass(0); }
         function drawCompass(bearing) {
             const cv = document.getElementById('compass');
@@ -1377,7 +1404,7 @@ cat > "$HTML" << 'EOF'
             ctx.restore();
         }
 
-        // ----- REFRESH TIMER (orijinal) -----
+        // ----- REFRESH TIMER -----
         function startRefTimer() {
             const bar = document.getElementById('refprog');
             let start = Date.now();
@@ -1421,7 +1448,7 @@ printf "  │  ${B}YEREL ERISIM :${N} ${C}http://localhost:$PORT${N}\n"
 if [ -n "$LOCAL_IP" ]; then
   printf "  │  ${B}AG ERISIMI   :${N} ${C}http://$LOCAL_IP:$PORT${N}\n"
 fi
-printf "  │  ${B}VERSiYON     :${N} v5.2 (OpenSky Kimlik Dogrulamali)\n"
+printf "  │  ${B}VERSiYON     :${N} D1A3L0Eye v1 (OpenSky Kimlik Dogrulamali)\n"
 printf "  │  ${B}DURUM        :${N} ${G}AKTIF${N}\n"
 printf "  │\n"
 printf "  │  OpenSky kimlik bilgilerinizi AYAR -> OPENSKY KİMLİK bölümünden girin.\n"
@@ -1448,7 +1475,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         print("  [%s] %s" % (self.address_string(), fmt % a))
     def do_GET(self):
         if self.path in ('/', '/index.html'):
-            self.path = '/skywatch_opensky.html'
+            self.path = '/d1a3l0eye.html'
         super().do_GET()
 
 def shutdown(s, f):
