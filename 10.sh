@@ -1,7 +1,7 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  D1A3L0Eye v1.2 — ADS‑B Exchange (Güncel Endpoint)          ║
-# ║  Calistir: bash d1a3l0eye_final.sh                           ║
+# ║  D1A3L0Eye v2.0 — Proxy ile ADS‑B Exchange (CORS Yok)       ║
+# ║  Calistir: bash d1a3l0eye_proxy.sh                           ║
 # ╚══════════════════════════════════════════════════════════════╝
 
 G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
@@ -15,7 +15,7 @@ printf "  ██║  ██║██║██╔══██║██║    █�
 printf "  ██████╔╝██║██║  ██║███████╗╚██████╔╝███████╗   ██║   ███████╗\n"
 printf "  ╚═════╝ ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝   ╚═╝   ╚══════╝\n"
 printf "${N}"
-printf "  ${C}v1.2 — ADS‑B Exchange (Çalışan Endpoint) + OpenSky Yedek${N}\n"
+printf "  ${C}v2.0 — Proxy ile ADS‑B Exchange (CORS Yok) + OpenSky Yedek${N}\n"
 printf "  ──────────────────────────────────────────────────────────\n\n"
 
 PY=$(command -v python3 || command -v python)
@@ -26,9 +26,9 @@ if [ -z "$PY" ]; then
 fi
 
 TMPD="${TMPDIR:-/tmp}"
-HTML="$TMPD/d1a3l0eye_final.html"
+HTML="$TMPD/d1a3l0eye_proxy.html"
 
-printf "  ${C}HTML olusturuluyor (güncel veri kaynağı)...${N}\n"
+printf "  ${C}HTML olusturuluyor (proxy entegre)...${N}\n"
 
 cat > "$HTML" << 'EOF'
 <!DOCTYPE html>
@@ -36,13 +36,13 @@ cat > "$HTML" << 'EOF'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>D1A3L0Eye v1.2 — ADS‑B Exchange (Güncel)</title>
+    <title>D1A3L0Eye v2.0 — Proxy ile ADS‑B Exchange</title>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        /* Tüm CSS (önceki sürümlerle aynı) */
+        /* Tüm CSS aynı (önceki sürümün CSS'i) – uzunluk nedeniyle kısaltılmıştır, çalışan scriptte tam yer alır */
         :root {
             --g:#00ff88; --c:#00e5ff; --o:#ff6b35; --w:#ffcc00; --r:#ff4466;
             --bg:#020810; --bg2:#030f1a; --bg3:#041220;
@@ -56,7 +56,7 @@ cat > "$HTML" << 'EOF'
         #modal{position:fixed;inset:0;background:rgba(2,8,16,0.98);z-index:10000;display:flex;align-items:center;justify-content:center}
         #modal.gone{display:none!important}
         .mbox{background:var(--bg3);border:1px solid rgba(0,255,136,0.28);padding:34px;width:480px;max-width:95vw;position:relative}
-        .mbox::before{content:'D1A3L0Eye v1.2';position:absolute;top:-11px;left:20px;background:var(--bg3);padding:0 12px;font-family:'Orbitron',sans-serif;font-size:9px;color:var(--g);letter-spacing:5px}
+        .mbox::before{content:'D1A3L0Eye v2.0';position:absolute;top:-11px;left:20px;background:var(--bg3);padding:0 12px;font-family:'Orbitron',sans-serif;font-size:9px;color:var(--g);letter-spacing:5px}
         .mtitle{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--c);letter-spacing:3px;margin-bottom:4px}
         .msub{font-size:10px;color:var(--text3);letter-spacing:2px;margin-bottom:18px}
         .mdesc{font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:20px}
@@ -251,12 +251,12 @@ cat > "$HTML" << 'EOF'
 </head>
 <body>
     <div id="modal"><div class="mbox"><div class="mtitle">MAPBOX API TOKEN</div><div class="msub">UYDU HARİTA ERİŞİMİ</div><p class="mdesc"><a href="https://account.mapbox.com" target="_blank">account.mapbox.com</a> adresinden <b>ücretsiz</b> hesap oluşturun.<br><b>Access Tokens</b> sayfasından <b>pk.</b> ile başlayan token alın.<br><br>Token olmadan <b>Demo Mod</b> ile devam edebilirsiniz.<br><span style="color:rgba(168,255,212,0.35)">Demo modda harita arka plan olmaz, tüm diğer özellikler aktiftir.</span></p><div class="msaved" id="msaved"><span>✓</span><span id="msaved-txt">Kayıtlı token</span></div><div class="mlabel">TOKEN</div><input id="tokeninput" class="minput" type="text" placeholder="pk.eyJ1IjoiuserIiwiYSI6ImtleUlkIn0.XXXX" autocomplete="off" spellcheck="false"><div class="merr" id="merr"></div><div class="mbtns"><button class="mbtn-start" id="mbtnstart">▶ BAŞLAT</button><button class="mbtn-demo" id="mbtndemo">DEMO MOD</button></div><div class="mhint">ENTER = Başlat &nbsp;|&nbsp; TAB = Demo Mod &nbsp;|&nbsp; Token kayda alınır</div></div></div>
-    <div id="loading"><div class="ldlogo">D1A3L0Eye</div><div class="ldsub">ADS‑B Exchange (Güncel)</div><div class="ldbarwrap"><div class="ldbar" id="ldbar"></div></div><div class="ldstatus" id="ldstatus">HAZIRLANIYOR...</div></div>
+    <div id="loading"><div class="ldlogo">D1A3L0Eye</div><div class="ldsub">Proxy ile ADS‑B Exchange (CORS Yok)</div><div class="ldbarwrap"><div class="ldbar" id="ldbar"></div></div><div class="ldstatus" id="ldstatus">HAZIRLANIYOR...</div></div>
     <div class="kbhelp" id="kbhelp"><div class="kbbox"><div class="kbtitle">KLAVYE KISAYOLLARI <span onclick="toggleHelp()" style="cursor:pointer;color:var(--o);font-size:20px">×</span></div><div class="kbgrid"><div class="kbrow"><div class="kbkey">F</div><div class="kbdesc">Arama aç/kapat</div></div><div class="kbrow"><div class="kbkey">R</div><div class="kbdesc">Veriyi yenile</div></div><div class="kbrow"><div class="kbkey">L</div><div class="kbdesc">Sol paneli aç/kapat</div></div><div class="kbrow"><div class="kbkey">S</div><div class="kbdesc">Uydu katmanı</div></div><div class="kbrow"><div class="kbkey">D</div><div class="kbdesc">Karanlık katmanı</div></div><div class="kbrow"><div class="kbkey">T</div><div class="kbdesc">Sokak katmanı</div></div><div class="kbrow"><div class="kbkey">H</div><div class="kbdesc">Hava durumu</div></div><div class="kbrow"><div class="kbkey">N</div><div class="kbdesc">Gece/gündüz</div></div><div class="kbrow"><div class="kbkey">I</div><div class="kbdesc">Uçak izleri (tümü)</div></div><div class="kbrow"><div class="kbkey">C</div><div class="kbdesc">Konumumu bul</div></div><div class="kbrow"><div class="kbkey">X</div><div class="kbdesc">Seçimi kaldır</div></div><div class="kbrow"><div class="kbkey">ESC</div><div class="kbdesc">Kapat / Geri</div></div><div class="kbrow"><div class="kbkey">?</div><div class="kbdesc">Bu yardım ekranı</div></div><div class="kbrow"><div class="kbkey">F11</div><div class="kbdesc">Tam ekran</div></div><div class="kbrow"><div class="kbkey">U</div><div class="kbdesc">Birim değiştir</div></div><div class="kbrow"><div class="kbkey">G</div><div class="kbdesc">Dil değiştir</div></div><div class="kbrow"><div class="kbkey">O</div><div class="kbdesc">Uçuş orbiti göster/kapat</div></div></div></div></div>
     <div class="topbar"><div class="tlogo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill="#00ff88"/><circle cx="12" cy="12" r="11" stroke="rgba(0,255,136,0.2)" stroke-width="1"/></svg>D1A3L0Eye</div><div class="tvbar"></div><div class="tstats"><div class="tsc"><div class="statusdot loading" id="sdot"></div><span id="sstatus">BAĞLANIYOR</span></div><div class="tsc">✈ <span class="tval" id="scount">0</span></div><div class="tsc">GÖR.:<span class="tval" id="svis">0</span></div><div class="tsc">ÜLKE:<span class="tval" id="scountry">0</span></div><div class="tsc">MAX:<span class="tval" id="smaxalt">0</span><span id="altUnit">m</span></div><div class="tsc">⟳<span class="tval" id="slastupd">--:--</span></div></div><div class="tright"><div class="tclock" id="tclock">00:00:00</div><button class="tbtn" onclick="toggleSearch()" title="Arama [F]">🔍</button><button class="tbtn" onclick="doRefresh()" title="Yenile [R]">⟳</button><button class="tbtn" onclick="gotoMe()" title="Konum [C]">📍</button><button class="tbtn" id="wxbtn" onclick="toggleWeather()" title="Hava [H]">☁️</button><button class="tbtn" id="trmbn" onclick="toggleTerminator()" title="Gece/Gündüz [N]">☀️</button><button class="tbtn" id="alltrailbtn" onclick="toggleAllTrails()" title="Tüm izler [I]">➡️</button><button class="tbtn" id="langBtn" onclick="toggleLanguage()" title="Dil [G]">🌐 TR</button><button class="tbtn" id="unitBtn" onclick="toggleUnits()" title="Birim [U]">📏 km/h</button><button class="tbtn" onclick="toggleHelp()" title="Yardım [?]">?</button><button class="tbtn" onclick="doFullscreen()">⛶</button></div></div>
     <div class="searchbar" id="searchbar"><div style="position:relative;flex:1"><input class="sinput" id="sinput" placeholder="Callsign, ülke, ICAO24..." oninput="doSearch(this.value)" onkeydown="searchKeydown(event)"><div class="sresults" id="sresults"></div></div><button class="scloseBtn" onclick="toggleSearch()">×</button></div>
     <div class="ptoggle" id="ptoggle" onclick="togglePanel()">◀</div>
-    <div class="lpanel" id="lpanel"><div class="tabs"><button class="tabbtn on" id="tab0" onclick="switchTab(0)">UÇUŞLAR</button><button class="tabbtn" id="tab1" onclick="switchTab(1)">İSTAT</button><button class="tabbtn" id="tab2" onclick="switchTab(2)">ALARM</button><button class="tabbtn" id="tab3" onclick="switchTab(3)">AYAR</button></div><div class="tabpanel on" id="tp0"><div class="slider-section"><div class="slider-row"><span class="slider-label">HARİTA UÇAK LİMİTİ</span><span class="slider-val" id="sliderval">2000</span></div><input type="range" class="slider" id="limitslider" min="10" max="2000" value="2000" step="10" oninput="onSlider(this.value)"><div class="perf-row"><button class="perf-btn" onclick="setPerf('eco')" id="perf-eco">ECO</button><button class="perf-btn" onclick="setPerf('normal')" id="perf-normal">NORMAL</button><button class="perf-btn on" onclick="setPerf('ultra')" id="perf-ultra">ULTRA</button></div></div><div class="fbar"><button class="fchip on" id="fc-all" onclick="setFilter('all')">TÜMÜ</button><button class="fchip" id="fc-high" onclick="setFilter('high')">Y.ALT</button><button class="fchip" id="fc-fast" onclick="setFilter('fast')">HIZ</button><button class="fchip" id="fc-tr" onclick="setFilter('tr')">TR</button><button class="fchip red" id="fc-emg" onclick="setFilter('emg')">ACİL</button></div><div class="fcountbar"><span><span id="fcount">0</span> UÇAK LISTEDE</span><span id="ftotal" style="color:var(--text3)"></span></div><div id="flist" style="flex:1;overflow-y:auto"><div style="padding:22px;text-align:center;color:var(--text3);font-size:11px">VERİ YÜKLENİYOR...</div></div></div><div class="tabpanel" id="tp1"><div class="stblock"><div class="sthead">GENEL ÖZET</div><div class="bigstat"><div class="bsi"><div class="bsv" id="st-total">0</div><div class="bsl">TOPLAM UÇAK</div></div><div class="bsi"><div class="bsv" id="st-country">0</div><div class="bsl">ÜLKE</div></div><div class="bsi"><div class="bsv" id="st-avgalt">0</div><div class="bsl">ORT YÜK (<span id="avgAltUnit">m</span>)</div></div><div class="bsi"><div class="bsv" id="st-avgspd">0</div><div class="bsl">ORT HIZ (<span id="avgSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxspd">0</div><div class="bsl">MAX HIZ (<span id="maxSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxalt">0</div><div class="bsl">MAX YÜK (<span id="maxAltUnit">m</span>)</div></div></div></div><div class="stblock"><div class="sthead">ÜLKE SIRASI</div><div id="st-countries"></div></div><div class="stblock"><div class="sthead">HIZ DAĞILIMI (<span id="spdDistUnit">km/s</span>)</div><div id="st-speeds"></div></div><div class="stblock"><div class="sthead">YÜKSEKLİK (<span id="altDistUnit">m</span>)</div><div id="st-alts"></div></div><div class="stblock"><div class="sthead">AIRLINE SIRASI</div><div id="st-airlines"></div></div><button class="expbtn" onclick="exportPDF()" style="margin:10px; width:calc(100% - 20px);">📄 PDF RAPOR</button></div><div class="tabpanel" id="tp2"><div style="padding:7px 12px;border-bottom:1px solid rgba(0,255,136,.06);font-size:9px;color:var(--text3);display:flex;justify-content:space-between;align-items:center"><span id="alertheader">ALARMLAR</span><button class="fchip" onclick="clearAlerts()" style="font-size:8px;padding:2px 7px">TEMİZLE</button></div><div id="alertlist"><div class="no-alerts">ALARM YOK</div></div></div><div class="tabpanel" id="tp3"><div class="sett-section">HARİTA</div><div class="settrow"><span class="settlabel">Uçuş izleri göster</span><div class="toggle-sw" id="sw-trail" onclick="toggleSetting('trail')"></div></div><div class="settrow"><span class="settlabel">Yer üzerindeki uçaklar</span><div class="toggle-sw" id="sw-ground" onclick="toggleSetting('ground')"></div></div><div class="settrow"><span class="settlabel">3D Binalar</span><div class="toggle-sw on" id="sw-3d" onclick="toggle3D()"></div></div><div class="settrow"><span class="settlabel">Menzil Halkaları</span><div class="toggle-sw" id="sw-rings" onclick="toggleRangeRings()"></div></div><div class="settrow"><span class="settlabel">Uçak Etiketleri</span><div class="toggle-sw on" id="sw-labels" onclick="toggleLabels()"></div></div><div class="settrow"><span class="settlabel">FIR Sınırları</span><div class="toggle-sw" id="sw-fir" onclick="toggleFIR()"></div></div><div class="settrow"><span class="settlabel">Uçuş Orbiti</span><div class="toggle-sw on" id="sw-orbit" onclick="toggleOrbit()"></div></div><div class="sett-section">VERİ KAYNAĞI</div><div class="settrow"><span class="settlabel">ADS‑B Exchange</span><span class="settval" style="color:var(--g)">✓ Çalışan Endpoint</span></div><div class="sett-section">PERFORMANS</div><div class="settrow"><span class="settlabel">Yenileme süresi</span><span class="settval" id="rf-val">30s</span></div><div style="padding:6px 12px"><input type="range" class="slider" id="rfslider" min="15" max="120" value="30" step="5" oninput="onRfSlider(this.value)"></div><div class="sett-section">DIŞA AKTAR</div><div class="settrow"><span class="settlabel">JSON aktar</span><button class="expbtn" onclick="exportJSON()">⬇ JSON</button></div><div class="settrow"><span class="settlabel">CSV aktar</span><button class="expbtn" onclick="exportCSV()">⬇ CSV</button></div><div class="settrow"><span class="settlabel">PDF rapor</span><button class="expbtn" onclick="exportPDF()">⬇ PDF</button></div><div class="sett-section">TOKEN</div><div class="settrow"><span class="settlabel">Kayıtlı token</span><button class="expbtn" onclick="clearToken()" style="color:var(--r);border-color:rgba(255,68,102,.3)">SİL</button></div><div class="sett-section">BİLDİRİM</div><div class="settrow"><span class="settlabel">Push bildirimi</span><div class="toggle-sw" id="sw-notify" onclick="toggleNotifications()"></div></div><div class="settrow"><span class="settlabel">Sesli uyarı</span><div class="toggle-sw" id="sw-sound" onclick="toggleSound()"></div></div></div></div>
+    <div class="lpanel" id="lpanel"><div class="tabs"><button class="tabbtn on" id="tab0" onclick="switchTab(0)">UÇUŞLAR</button><button class="tabbtn" id="tab1" onclick="switchTab(1)">İSTAT</button><button class="tabbtn" id="tab2" onclick="switchTab(2)">ALARM</button><button class="tabbtn" id="tab3" onclick="switchTab(3)">AYAR</button></div><div class="tabpanel on" id="tp0"><div class="slider-section"><div class="slider-row"><span class="slider-label">HARİTA UÇAK LİMİTİ</span><span class="slider-val" id="sliderval">2000</span></div><input type="range" class="slider" id="limitslider" min="10" max="2000" value="2000" step="10" oninput="onSlider(this.value)"><div class="perf-row"><button class="perf-btn" onclick="setPerf('eco')" id="perf-eco">ECO</button><button class="perf-btn" onclick="setPerf('normal')" id="perf-normal">NORMAL</button><button class="perf-btn on" onclick="setPerf('ultra')" id="perf-ultra">ULTRA</button></div></div><div class="fbar"><button class="fchip on" id="fc-all" onclick="setFilter('all')">TÜMÜ</button><button class="fchip" id="fc-high" onclick="setFilter('high')">Y.ALT</button><button class="fchip" id="fc-fast" onclick="setFilter('fast')">HIZ</button><button class="fchip" id="fc-tr" onclick="setFilter('tr')">TR</button><button class="fchip red" id="fc-emg" onclick="setFilter('emg')">ACİL</button></div><div class="fcountbar"><span><span id="fcount">0</span> UÇAK LISTEDE</span><span id="ftotal" style="color:var(--text3)"></span></div><div id="flist" style="flex:1;overflow-y:auto"><div style="padding:22px;text-align:center;color:var(--text3);font-size:11px">VERİ YÜKLENİYOR...</div></div></div><div class="tabpanel" id="tp1"><div class="stblock"><div class="sthead">GENEL ÖZET</div><div class="bigstat"><div class="bsi"><div class="bsv" id="st-total">0</div><div class="bsl">TOPLAM UÇAK</div></div><div class="bsi"><div class="bsv" id="st-country">0</div><div class="bsl">ÜLKE</div></div><div class="bsi"><div class="bsv" id="st-avgalt">0</div><div class="bsl">ORT YÜK (<span id="avgAltUnit">m</span>)</div></div><div class="bsi"><div class="bsv" id="st-avgspd">0</div><div class="bsl">ORT HIZ (<span id="avgSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxspd">0</div><div class="bsl">MAX HIZ (<span id="maxSpdUnit">km/s</span>)</div></div><div class="bsi"><div class="bsv" id="st-maxalt">0</div><div class="bsl">MAX YÜK (<span id="maxAltUnit">m</span>)</div></div></div></div><div class="stblock"><div class="sthead">ÜLKE SIRASI</div><div id="st-countries"></div></div><div class="stblock"><div class="sthead">HIZ DAĞILIMI (<span id="spdDistUnit">km/s</span>)</div><div id="st-speeds"></div></div><div class="stblock"><div class="sthead">YÜKSEKLİK (<span id="altDistUnit">m</span>)</div><div id="st-alts"></div></div><div class="stblock"><div class="sthead">AIRLINE SIRASI</div><div id="st-airlines"></div></div><button class="expbtn" onclick="exportPDF()" style="margin:10px; width:calc(100% - 20px);">📄 PDF RAPOR</button></div><div class="tabpanel" id="tp2"><div style="padding:7px 12px;border-bottom:1px solid rgba(0,255,136,.06);font-size:9px;color:var(--text3);display:flex;justify-content:space-between;align-items:center"><span id="alertheader">ALARMLAR</span><button class="fchip" onclick="clearAlerts()" style="font-size:8px;padding:2px 7px">TEMİZLE</button></div><div id="alertlist"><div class="no-alerts">ALARM YOK</div></div></div><div class="tabpanel" id="tp3"><div class="sett-section">HARİTA</div><div class="settrow"><span class="settlabel">Uçuş izleri göster</span><div class="toggle-sw" id="sw-trail" onclick="toggleSetting('trail')"></div></div><div class="settrow"><span class="settlabel">Yer üzerindeki uçaklar</span><div class="toggle-sw" id="sw-ground" onclick="toggleSetting('ground')"></div></div><div class="settrow"><span class="settlabel">3D Binalar</span><div class="toggle-sw on" id="sw-3d" onclick="toggle3D()"></div></div><div class="settrow"><span class="settlabel">Menzil Halkaları</span><div class="toggle-sw" id="sw-rings" onclick="toggleRangeRings()"></div></div><div class="settrow"><span class="settlabel">Uçak Etiketleri</span><div class="toggle-sw on" id="sw-labels" onclick="toggleLabels()"></div></div><div class="settrow"><span class="settlabel">FIR Sınırları</span><div class="toggle-sw" id="sw-fir" onclick="toggleFIR()"></div></div><div class="settrow"><span class="settlabel">Uçuş Orbiti</span><div class="toggle-sw on" id="sw-orbit" onclick="toggleOrbit()"></div></div><div class="sett-section">VERİ KAYNAĞI</div><div class="settrow"><span class="settlabel">ADS‑B Exchange (Proxy)</span><span class="settval" style="color:var(--g)">✓ CORS Yok</span></div><div class="sett-section">PERFORMANS</div><div class="settrow"><span class="settlabel">Yenileme süresi</span><span class="settval" id="rf-val">30s</span></div><div style="padding:6px 12px"><input type="range" class="slider" id="rfslider" min="15" max="120" value="30" step="5" oninput="onRfSlider(this.value)"></div><div class="sett-section">DIŞA AKTAR</div><div class="settrow"><span class="settlabel">JSON aktar</span><button class="expbtn" onclick="exportJSON()">⬇ JSON</button></div><div class="settrow"><span class="settlabel">CSV aktar</span><button class="expbtn" onclick="exportCSV()">⬇ CSV</button></div><div class="settrow"><span class="settlabel">PDF rapor</span><button class="expbtn" onclick="exportPDF()">⬇ PDF</button></div><div class="sett-section">TOKEN</div><div class="settrow"><span class="settlabel">Kayıtlı token</span><button class="expbtn" onclick="clearToken()" style="color:var(--r);border-color:rgba(255,68,102,.3)">SİL</button></div><div class="sett-section">BİLDİRİM</div><div class="settrow"><span class="settlabel">Push bildirimi</span><div class="toggle-sw" id="sw-notify" onclick="toggleNotifications()"></div></div><div class="settrow"><span class="settlabel">Sesli uyarı</span><div class="toggle-sw" id="sw-sound" onclick="toggleSound()"></div></div></div></div>
     <div id="map"></div>
     <div class="trail-legend" id="trail-legend"><div class="tl-title">İZ RENK KODLARI</div><div class="tl-row"><div class="tl-dot" style="background:#00ff88"></div><span>Alçak (&lt;3km)</span></div><div class="tl-row"><div class="tl-dot" style="background:#00e5ff"></div><span>Orta (3-6km)</span></div><div class="tl-row"><div class="tl-dot" style="background:#ffcc00"></div><span>Yüksek (6-9km)</span></div><div class="tl-row"><div class="tl-dot" style="background:#ff4466"></div><span>Çok yüksek (&gt;9km)</span></div></div>
     <div class="range-ring-control" id="ringCtrl" onclick="toggleRangeRings()">🔘 Menzil Halkaları (Kapalı)</div>
@@ -271,10 +271,9 @@ cat > "$HTML" << 'EOF'
     <div class="refbar"><div class="refprog" id="refprog"></div></div>
     <script>
         // ============================================================
-        // D1A3L0Eye v1.2 — Güncel ADS‑B Exchange Endpoint'leri
+        // D1A3L0Eye v2.0 — Proxy ile ADS‑B Exchange (CORS Yok)
         // ============================================================
 
-        // ----- STATE -----
         let MAP = null, TOKEN = '', DEMO = false;
         let flights = [], filteredFlights = [], selIcao = null;
         let activeFilter = 'all', markerLimit = 2000, perfMode = 'ultra';
@@ -301,7 +300,7 @@ cat > "$HTML" << 'EOF'
         let currentOrbitMarker = null;
         let audioCtx = null;
 
-        // ----- HAVAALANI VERİTABANI -----
+        // ----- HAVAALANI VERİTABANI (önceki ile aynı) -----
         const AIRPORTS = {
             'TK': { name: 'İstanbul (IST)', lon: 28.814, lat: 40.976 },
             'LH': { name: 'Frankfurt (FRA)', lon: 8.570, lat: 50.033 },
@@ -327,8 +326,7 @@ cat > "$HTML" << 'EOF'
         };
         function getOriginForFlight(flight) {
             let code = flight.callsign.replace(/[0-9]/g,'').trim().toUpperCase().slice(0,3);
-            if(AIRPORTS[code]) return AIRPORTS[code];
-            return AIRPORTS.default;
+            return AIRPORTS[code] || AIRPORTS.default;
         }
 
         // ----- ORBİT -----
@@ -409,8 +407,7 @@ cat > "$HTML" << 'EOF'
         };
         function getAircraftType(callsign) {
             let code = callsign.replace(/[0-9]/g,'').trim().slice(0,3).toUpperCase();
-            let db = aircraftDB[code] || aircraftDB.default;
-            return db.type;
+            return aircraftDB[code]?.type || aircraftDB.default.type;
         }
 
         // ----- BİRİM -----
@@ -481,39 +478,42 @@ cat > "$HTML" << 'EOF'
             document.getElementById('modal').classList.remove('gone');
         }
 
-        // ----- ADS‑B EXCHANGE (Güncel Endpoint) -----
-        async function fetchFromADSExchange() {
-            const endpoints = [
-                'https://globe.adsbexchange.com/data/aircraft.json',
-                'https://api.adsb.lol/v2/point/25/35/70/50',
-                'https://public-api.adsbexchange.com/Virtual-Radar-Sites/icao.json'
-            ];
-            for (const url of endpoints) {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 10000);
-                    const response = await fetch(url, { signal: controller.signal });
-                    clearTimeout(timeoutId);
-                    if (!response.ok) continue;
-                    const data = await response.json();
-                    if (data.aircraft && Array.isArray(data.aircraft)) {
-                        return data.aircraft;
-                    }
-                    if (data.ac && Array.isArray(data.ac)) {
-                        return data.ac;
-                    }
-                    if (data.states && Array.isArray(data.states)) {
-                        return data.states;
-                    }
-                } catch (e) {
-                    console.warn('ADS‑B Exchange endpoint hatası:', url, e);
-                    continue;
+        // ----- PROXY ÜZERİNDEN VERİ ÇEK -----
+        async function fetchFlightsFromProxy() {
+            try {
+                const response = await fetch('/api/adsb');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                if (data.aircraft && Array.isArray(data.aircraft)) {
+                    return data.aircraft;
                 }
+                return null;
+            } catch (e) {
+                console.warn('Proxy hatası:', e);
+                return null;
             }
-            return null;
         }
 
-        // OpenSky yedek
+        // ----- ADS‑B verisini dönüştür -----
+        function convertADSData(aircraftList) {
+            return aircraftList
+                .filter(ac => ac.lat && ac.lon && ac.lat !== 0 && ac.lon !== 0)
+                .map(ac => ({
+                    icao24: ac.hex || 'unknown',
+                    callsign: ac.flight ? ac.flight.trim() : ac.hex || '????',
+                    country: ac.reg ? ac.reg.slice(0,2) : (ac.icao_type ? ac.icao_type.slice(0,2) : 'Unknown'),
+                    lon: ac.lon,
+                    lat: ac.lat,
+                    alt: ac.altitude ? Math.round(ac.altitude * 0.3048) : null,
+                    ground: ac.ground_speed === 0 || (ac.altitude && ac.altitude < 100),
+                    vel: ac.speed ? Math.round(ac.speed * 1.852) : null,
+                    hdg: ac.track !== undefined ? Math.round(ac.track) : null,
+                    vs: ac.vert_rate ? Math.round(ac.vert_rate * 0.00508) : 0,
+                    sqk: ac.squawk || '----'
+                }));
+        }
+
+        // ----- OpenSky yedek (opsiyonel) -----
         async function fetchFromOpenSky() {
             const user = localStorage.getItem('opensky_user');
             const pass = localStorage.getItem('opensky_pass');
@@ -534,24 +534,6 @@ cat > "$HTML" << 'EOF'
                 console.warn('OpenSky hatası:', e);
                 return null;
             }
-        }
-
-        function convertADSData(aircraftList) {
-            return aircraftList
-                .filter(ac => ac.lat && ac.lon && ac.lat !== 0 && ac.lon !== 0)
-                .map(ac => ({
-                    icao24: ac.hex || 'unknown',
-                    callsign: ac.flight ? ac.flight.trim() : ac.hex || '????',
-                    country: ac.reg ? ac.reg.slice(0,2) : (ac.icao_type ? ac.icao_type.slice(0,2) : 'Unknown'),
-                    lon: ac.lon,
-                    lat: ac.lat,
-                    alt: ac.altitude ? Math.round(ac.altitude * 0.3048) : null,
-                    ground: ac.ground_speed === 0 || (ac.altitude && ac.altitude < 100),
-                    vel: ac.speed ? Math.round(ac.speed * 1.852) : null,
-                    hdg: ac.track !== undefined ? Math.round(ac.track) : null,
-                    vs: ac.vert_rate ? Math.round(ac.vert_rate * 0.00508) : 0,
-                    sqk: ac.squawk || '----'
-                }));
         }
 
         function convertOpenSkyData(states) {
@@ -592,15 +574,17 @@ cat > "$HTML" << 'EOF'
 
         async function fetchFlights() {
             setSdot('loading');
-            const adsbData = await fetchFromADSExchange();
-            if (adsbData && adsbData.length > 0) {
-                const flights = convertADSData(adsbData);
+            // 1. Proxy üzerinden ADS‑B Exchange
+            const proxyData = await fetchFlightsFromProxy();
+            if (proxyData && proxyData.length > 0) {
+                const flights = convertADSData(proxyData);
                 if (flights.length > 0) {
-                    console.log('ADS‑B Exchange verisi alındı, uçak sayısı:', flights.length);
+                    console.log('Proxy üzerinden ADS‑B verisi alındı, uçak sayısı:', flights.length);
                     setSdot(DEMO?'demo':'live');
                     return flights;
                 }
             }
+            // 2. OpenSky yedek
             const openskyRaw = await fetchFromOpenSky();
             if (openskyRaw && openskyRaw.length > 0) {
                 const flights = convertOpenSkyData(openskyRaw);
@@ -608,19 +592,20 @@ cat > "$HTML" << 'EOF'
                 setSdot(DEMO?'demo':'live');
                 return flights;
             }
+            // 3. Demo
             notify('Veri kaynaklarına ulaşılamıyor, demo modda', 'warn');
             setSdot('demo');
             return generateDemo();
         }
 
-        // ----- BOOT (aynen) -----
+        // ----- BOOT (aynı) -----
         async function boot(demo) {
             const ld = document.getElementById('loading');
             const bar = document.getElementById('ldbar');
             const status = document.getElementById('ldstatus');
             ld.classList.add('on');
             const steps = [
-                [10, 'SISTEM BASLATILIYOR...'], [22, 'ADS‑B EXCHANGE BAGLANTISI...'],
+                [10, 'SISTEM BASLATILIYOR...'], [22, 'PROXY BAGLANTISI...'],
                 [40, 'HARITA KATMANLARI YUKLENIYOR...'], [58, 'UCAK VERITABANI OLUSTURULUYOR...'],
                 [72, 'RADAR AKTIF EDILIYOR...'], [85, 'PERFORMANS OPTIMIZE EDILIYOR...'],
                 [95, 'GOSTERIM MOTORU HAZIRLANIYOR...'], [100, 'HAZIR!']
@@ -681,105 +666,19 @@ cat > "$HTML" << 'EOF'
             s.textContent = v[1];
         }
 
-        // ----- 3D, MENZİL HALKALARI, LABEL, FIR, LAYER, TERMINATOR, WEATHER -----
+        // ----- 3D, MENZİL, LABEL, FIR, LAYER, TERMINATOR, WEATHER (önceki ile aynı, kısaltılmış) -----
         function enable3D() { if(MAP && !DEMO) { MAP.setConfigProperty('basemap','show3dObjects',true); MAP.setTerrain({source:'mapbox-dem', exaggeration:1.5}); } }
         function toggle3D() { show3D = !show3D; document.getElementById('sw-3d').classList.toggle('on', show3D); if(show3D && MAP) enable3D(); else if(MAP) MAP.setTerrain(null); }
-        function toggleRangeRings() {
-            showRings = !showRings;
-            document.getElementById('sw-rings').classList.toggle('on', showRings);
-            document.getElementById('ringCtrl').innerHTML = showRings ? '🔘 Menzil Halkaları (Açık)' : '🔘 Menzil Halkaları (Kapalı)';
-            if(showRings && MAP) drawRangeRings();
-            else if(MAP && ringsLayer) MAP.removeLayer('rings-layer');
-        }
-        function drawRangeRings() {
-            if(!MAP) return;
-            const center = MAP.getCenter();
-            const distances = [50,100,200];
-            const rings = [];
-            distances.forEach(d => {
-                const points = [];
-                for(let i=0;i<=360;i+=10){
-                    const lat = center.lat + (d/111.32)*Math.cos(i*Math.PI/180);
-                    const lon = center.lng + (d/(111.32*Math.cos(center.lat*Math.PI/180)))*Math.sin(i*Math.PI/180);
-                    points.push([lon, lat]);
-                }
-                rings.push(points);
-            });
-            if(ringsLayer) MAP.removeLayer('rings-layer');
-            if(MAP.getSource('rings')) MAP.removeSource('rings');
-            const geojson = {type:'FeatureCollection', features: rings.map(coords => ({type:'Feature', geometry:{type:'LineString', coordinates:coords}}))};
-            MAP.addSource('rings', {type:'geojson', data:geojson});
-            MAP.addLayer({id:'rings-layer', type:'line', source:'rings', paint:{'line-color':'#00ff88','line-width':1,'line-dasharray':[2,4]}});
-        }
-        function toggleLabels() {
-            showLabels = !showLabels;
-            document.getElementById('sw-labels').classList.toggle('on', showLabels);
-            document.getElementById('labelCtrl').innerHTML = showLabels ? '🏷️ Etiketler (Açık)' : '🏷️ Etiketler (Kapalı)';
-            redrawMarkers();
-        }
-        function toggleFIR() {
-            showFIR = !showFIR;
-            document.getElementById('sw-fir').classList.toggle('on', showFIR);
-            if(showFIR && MAP) drawFIR();
-            else if(MAP && firLayer) MAP.removeLayer('fir-layer');
-        }
-        function drawFIR() {
-            if(!MAP) return;
-            const coords = [[26,42],[32,42],[36,40],[38,36],[30,34],[26,38],[26,42]];
-            const geojson = {type:'Feature', geometry:{type:'Polygon', coordinates:[coords]}};
-            if(firLayer) MAP.removeLayer('fir-layer');
-            if(MAP.getSource('fir')) MAP.removeSource('fir');
-            MAP.addSource('fir', {type:'geojson', data:geojson});
-            MAP.addLayer({id:'fir-layer', type:'fill', source:'fir', paint:{'fill-color':'#ff4466','fill-opacity':0.1,'fill-outline-color':'#ff4466'}});
-        }
+        function toggleRangeRings() { showRings = !showRings; document.getElementById('sw-rings').classList.toggle('on', showRings); document.getElementById('ringCtrl').innerHTML = showRings ? '🔘 Menzil Halkaları (Açık)' : '🔘 Menzil Halkaları (Kapalı)'; if(showRings && MAP) drawRangeRings(); else if(MAP && ringsLayer) MAP.removeLayer('rings-layer'); }
+        function drawRangeRings() { if(!MAP) return; const center = MAP.getCenter(); const distances = [50,100,200]; const rings = []; distances.forEach(d => { const points = []; for(let i=0;i<=360;i+=10){ const lat = center.lat + (d/111.32)*Math.cos(i*Math.PI/180); const lon = center.lng + (d/(111.32*Math.cos(center.lat*Math.PI/180)))*Math.sin(i*Math.PI/180); points.push([lon, lat]); } rings.push(points); }); if(ringsLayer) MAP.removeLayer('rings-layer'); if(MAP.getSource('rings')) MAP.removeSource('rings'); const geojson = {type:'FeatureCollection', features: rings.map(coords => ({type:'Feature', geometry:{type:'LineString', coordinates:coords}}))}; MAP.addSource('rings', {type:'geojson', data:geojson}); MAP.addLayer({id:'rings-layer', type:'line', source:'rings', paint:{'line-color':'#00ff88','line-width':1,'line-dasharray':[2,4]}}); }
+        function toggleLabels() { showLabels = !showLabels; document.getElementById('sw-labels').classList.toggle('on', showLabels); document.getElementById('labelCtrl').innerHTML = showLabels ? '🏷️ Etiketler (Açık)' : '🏷️ Etiketler (Kapalı)'; redrawMarkers(); }
+        function toggleFIR() { showFIR = !showFIR; document.getElementById('sw-fir').classList.toggle('on', showFIR); if(showFIR && MAP) drawFIR(); else if(MAP && firLayer) MAP.removeLayer('fir-layer'); }
+        function drawFIR() { if(!MAP) return; const coords = [[26,42],[32,42],[36,40],[38,36],[30,34],[26,38],[26,42]]; const geojson = {type:'Feature', geometry:{type:'Polygon', coordinates:[coords]}}; if(firLayer) MAP.removeLayer('fir-layer'); if(MAP.getSource('fir')) MAP.removeSource('fir'); MAP.addSource('fir', {type:'geojson', data:geojson}); MAP.addLayer({id:'fir-layer', type:'fill', source:'fir', paint:{'fill-color':'#ff4466','fill-opacity':0.1,'fill-outline-color':'#ff4466'}}); }
         const LAYERS = { satellite: 'mapbox://styles/mapbox/satellite-v9', dark: 'mapbox://styles/mapbox/dark-v11', street: 'mapbox://styles/mapbox/streets-v12' };
-        function setLayer(l) {
-            if(DEMO || !MAP) return;
-            curLayer = l;
-            const ids = {satellite:'lbsat',dark:'lbdrk',street:'lbstr'};
-            Object.keys(ids).forEach(k => document.getElementById(ids[k]).classList.toggle('on', k===l));
-            MAP.setStyle(LAYERS[l]);
-            MAP.once('style.load', () => { addTrailSources(); redrawMarkers(); if(show3D) enable3D(); if(showRings) drawRangeRings(); if(showFIR) drawFIR(); });
-            notify(l.toUpperCase()+' KATMANI', 'info');
-        }
-        function toggleTerminator() {
-            terminatorOn = !terminatorOn;
-            document.getElementById('trmbn').classList.toggle('on', terminatorOn);
-            if(terminatorOn) drawTerminator();
-            else if(MAP && MAP.isStyleLoaded()){ try{ if(MAP.getLayer('trm'))MAP.removeLayer('trm'); if(MAP.getSource('trm'))MAP.removeSource('trm'); }catch(e){} }
-            notify(t('daynight')+' '+(terminatorOn?'AKTİF':'KAPALI'), 'info');
-        }
-        function drawTerminator() {
-            if(!MAP || !MAP.isStyleLoaded()) return;
-            const d = new Date();
-            const dec = -23.45 * Math.cos((360/365*(d.getMonth()*30+d.getDate())+10)*Math.PI/180) * Math.PI/180;
-            let coords = [];
-            for(let lon=-180;lon<=180;lon+=2){
-                const lat = Math.atan(-Math.cos(lon*Math.PI/180)/Math.tan(dec))*180/Math.PI;
-                coords.push([lon,lat]);
-            }
-            coords.push([180,-90],[180,90],[-180,90],[-180,coords[0][1]],coords[0]);
-            try{
-                if(MAP.getSource('trm')){ MAP.removeLayer('trm'); MAP.removeSource('trm'); }
-                MAP.addSource('trm',{type:'geojson',data:{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}});
-                MAP.addLayer({id:'trm',type:'fill',source:'trm',paint:{'fill-color':'#000018','fill-opacity':0.42}});
-            }catch(e){}
-        }
-        function toggleWeather() {
-            weatherOn = !weatherOn;
-            document.getElementById('wxbtn').classList.toggle('on', weatherOn);
-            notify(t('weather')+' '+(weatherOn?'AKTİF':'KAPALI'), 'info');
-            if(!MAP || DEMO) return;
-            if(weatherOn){
-                try{
-                    if(!MAP.isStyleLoaded()){ notify('Harita yükleniyor, tekrar deneyin','warn'); weatherOn = false; return; }
-                    MAP.addSource('owm',{type:'raster',tiles:['https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02'],tileSize:256,attribution:'OpenWeatherMap'});
-                    MAP.addLayer({id:'owmlayer',type:'raster',source:'owm',paint:{'raster-opacity':0.4}});
-                }catch(e){ notify('Hava katmanı yüklenemedi','warn'); }
-            }else{
-                try{ if(MAP.getLayer('owmlayer'))MAP.removeLayer('owmlayer'); if(MAP.getSource('owm'))MAP.removeSource('owm'); }catch(e){}
-            }
-        }
+        function setLayer(l) { if(DEMO || !MAP) return; curLayer = l; const ids = {satellite:'lbsat',dark:'lbdrk',street:'lbstr'}; Object.keys(ids).forEach(k => document.getElementById(ids[k]).classList.toggle('on', k===l)); MAP.setStyle(LAYERS[l]); MAP.once('style.load', () => { addTrailSources(); redrawMarkers(); if(show3D) enable3D(); if(showRings) drawRangeRings(); if(showFIR) drawFIR(); }); notify(l.toUpperCase()+' KATMANI', 'info'); }
+        function toggleTerminator() { terminatorOn = !terminatorOn; document.getElementById('trmbn').classList.toggle('on', terminatorOn); if(terminatorOn) drawTerminator(); else if(MAP && MAP.isStyleLoaded()){ try{ if(MAP.getLayer('trm'))MAP.removeLayer('trm'); if(MAP.getSource('trm'))MAP.removeSource('trm'); }catch(e){} } notify(t('daynight')+' '+(terminatorOn?'AKTİF':'KAPALI'), 'info'); }
+        function drawTerminator() { if(!MAP || !MAP.isStyleLoaded()) return; const d = new Date(); const dec = -23.45 * Math.cos((360/365*(d.getMonth()*30+d.getDate())+10)*Math.PI/180) * Math.PI/180; let coords = []; for(let lon=-180;lon<=180;lon+=2){ const lat = Math.atan(-Math.cos(lon*Math.PI/180)/Math.tan(dec))*180/Math.PI; coords.push([lon,lat]); } coords.push([180,-90],[180,90],[-180,90],[-180,coords[0][1]],coords[0]); try{ if(MAP.getSource('trm')){ MAP.removeLayer('trm'); MAP.removeSource('trm'); } MAP.addSource('trm',{type:'geojson',data:{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}}); MAP.addLayer({id:'trm',type:'fill',source:'trm',paint:{'fill-color':'#000018','fill-opacity':0.42}}); }catch(e){} }
+        function toggleWeather() { weatherOn = !weatherOn; document.getElementById('wxbtn').classList.toggle('on', weatherOn); notify(t('weather')+' '+(weatherOn?'AKTİF':'KAPALI'), 'info'); if(!MAP || DEMO) return; if(weatherOn){ try{ if(!MAP.isStyleLoaded()){ notify('Harita yükleniyor, tekrar deneyin','warn'); weatherOn = false; return; } MAP.addSource('owm',{type:'raster',tiles:['https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02'],tileSize:256,attribution:'OpenWeatherMap'}); MAP.addLayer({id:'owmlayer',type:'raster',source:'owm',paint:{'raster-opacity':0.4}}); }catch(e){ notify('Hava katmanı yüklenemedi','warn'); } }else{ try{ if(MAP.getLayer('owmlayer'))MAP.removeLayer('owmlayer'); if(MAP.getSource('owm'))MAP.removeSource('owm'); }catch(e){} } }
 
         // ----- LOAD FLIGHTS -----
         async function loadFlights() {
@@ -958,7 +857,7 @@ cat > "$HTML" << 'EOF'
             else { updateAllTrails(); notify('TÜM İZLER AKTİF (performansı düşürebilir)','warn'); }
         }
 
-        // ----- SELECT FLIGHT -----
+        // ----- SELECT FLIGHT & INFO PANEL -----
         function pickFlight(f) {
             selIcao = f.icao24;
             if(!speedHistory[f.icao24]) speedHistory[f.icao24]=[];
@@ -1424,7 +1323,7 @@ printf "  │  ${B}YEREL ERISIM :${N} ${C}http://localhost:$PORT${N}\n"
 if [ -n "$LOCAL_IP" ]; then
   printf "  │  ${B}AG ERISIMI   :${N} ${C}http://$LOCAL_IP:$PORT${N}\n"
 fi
-printf "  │  ${B}VERSiYON     :${N} D1A3L0Eye v1.2 (Güncel Endpoint)\n"
+printf "  │  ${B}VERSiYON     :${N} D1A3L0Eye v2.0 (Proxy ile CORS Yok)\n"
 printf "  │  ${B}DURUM        :${N} ${G}AKTIF${N}\n"
 printf "  │\n"
 printf "  │  Durdur: Ctrl + C\n"
@@ -1438,18 +1337,47 @@ command -v termux-open-url &>/dev/null && {
 
 cd "$TMPD"
 $PY << PYEOF
-import http.server, socketserver, os, sys, signal
+import http.server, socketserver, os, sys, signal, urllib.request, json
 
 PORT = $PORT
 os.chdir("$TMPD")
 
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, fmt, *a):
-        print("  [%s] %s" % (self.address_string(), fmt % a))
+class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path in ('/', '/index.html'):
-            self.path = '/d1a3l0eye_final.html'
-        super().do_GET()
+        if self.path == '/api/adsb':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            # ADS‑B Exchange'in güncel endpoint'lerini dene
+            endpoints = [
+                'https://globe.adsbexchange.com/data/aircraft.json',
+                'https://api.adsb.lol/v2/point/25/35/70/50',
+                'https://public-api.adsbexchange.com/Virtual-Radar-Sites/icao.json'
+            ]
+            data = None
+            for url in endpoints:
+                try:
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        data = resp.read().decode('utf-8')
+                        # Geçerli JSON kontrolü
+                        json.loads(data)
+                        break
+                except Exception as e:
+                    print(f"Proxy endpoint hatası {url}: {e}")
+                    continue
+            if data:
+                self.wfile.write(data.encode())
+            else:
+                # Hata durumunda boş dizi döndür
+                self.wfile.write(b'{"aircraft":[]}')
+        else:
+            # Normal dosya istekleri
+            super().do_GET()
+
+    def log_message(self, fmt, *a):
+        # Sessiz mod
+        pass
 
 def shutdown(s, f):
     print("\n  Sunucu kapatildi.\n")
@@ -1458,7 +1386,7 @@ def shutdown(s, f):
 signal.signal(signal.SIGINT, shutdown)
 socketserver.TCPServer.allow_reuse_address = True
 
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
+with socketserver.TCPServer(("", PORT), ProxyHandler) as httpd:
     print("  http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
     httpd.serve_forever()
 PYEOF
