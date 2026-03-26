@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  ADS-B Uçak Takip Sunucusu - Termux için Tek Kod            ║
+# ║  ADS-B Uçak Takip Sunucusu - Termux için Tek Kod (Düzeltilmiş)║
 # ║  Kullanım: ./adsb-server.sh [--port PORT]                   ║
 # ╚══════════════════════════════════════════════════════════════╝
 
@@ -14,7 +14,7 @@ R='\033[0;31m'
 N='\033[0m'
 B='\033[1m'
 
-# Varsayılan port aralığı (rastgele seçilecek)
+# Varsayılan port aralığı
 MIN_PORT=8000
 MAX_PORT=9000
 PORT=""
@@ -28,7 +28,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --help)
             echo "Kullanım: $0 [--port PORT]"
-            echo "  --port   Belirtilen portta çalıştır (varsayılan: rastgele $MIN_PORT-$MAX_PORT arası)"
             exit 0
             ;;
         *)
@@ -38,8 +37,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Geçici HTML dosyası oluştur
-HTML_FILE="/tmp/adsb_$$.html"
+# Geçici dosya için güvenli bir konum: Termux'ta HOME altında .cache oluştur
+CACHE_DIR="$HOME/.cache/adsb"
+mkdir -p "$CACHE_DIR"
+HTML_FILE="$CACHE_DIR/adsb.html"
 
 echo -e "${C}✈️  ADS-B Sunucu HTML dosyası oluşturuluyor...${N}"
 
@@ -50,136 +51,52 @@ cat > "$HTML_FILE" << 'HTMLEOF'
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>ADS-B Uçak Takip - Termux</title>
-    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Leaflet.RotatedMarker için (uçak ikonlarını döndürmek için) -->
     <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            height: 100vh;
-        }
-        #map {
-            height: 100%;
-            width: 100%;
-            background: #111;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; height: 100vh; }
+        #map { height: 100%; width: 100%; background: #111; }
         .controls {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            z-index: 1000;
-            background: rgba(0,0,0,0.75);
-            backdrop-filter: blur(8px);
-            padding: 12px 18px;
-            border-radius: 8px;
-            color: white;
-            font-size: 13px;
-            pointer-events: auto;
-            font-family: monospace;
-            border-left: 4px solid #00aaff;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 12px 18px;
+            border-radius: 8px; color: white; font-size: 13px; font-family: monospace;
+            border-left: 4px solid #00aaff; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
             max-width: 260px;
         }
-        .controls .stat {
-            margin: 4px 0;
-        }
-        .controls .stat span {
-            color: #00aaff;
-            font-weight: bold;
-        }
+        .controls .stat { margin: 4px 0; }
+        .controls .stat span { color: #00aaff; font-weight: bold; }
         .controls button {
-            background: #00aaff;
-            border: none;
-            color: white;
-            padding: 4px 12px;
-            margin-top: 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 12px;
-            transition: 0.2s;
+            background: #00aaff; border: none; color: white; padding: 4px 12px;
+            margin-top: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;
+            font-size: 12px; transition: 0.2s;
         }
-        .controls button:hover {
-            background: #0088cc;
-        }
-        .controls .rate-info {
-            font-size: 10px;
-            color: #aaa;
-            margin-top: 6px;
-        }
+        .controls button:hover { background: #0088cc; }
+        .controls .rate-info { font-size: 10px; color: #aaa; margin-top: 6px; }
         .info-panel {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 280px;
-            background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(8px);
-            border-radius: 12px;
-            padding: 12px;
-            color: #eee;
-            font-size: 12px;
-            font-family: monospace;
-            border-top: 2px solid #00aaff;
-            pointer-events: auto;
-            z-index: 1000;
-            display: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            position: absolute; bottom: 20px; right: 20px; width: 280px;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); border-radius: 12px;
+            padding: 12px; color: #eee; font-size: 12px; font-family: monospace;
+            border-top: 2px solid #00aaff; pointer-events: auto; z-index: 1000;
+            display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
         }
-        .info-panel.visible {
-            display: block;
-        }
-        .info-panel h4 {
-            margin: 0 0 6px 0;
-            color: #00aaff;
-            border-bottom: 1px solid #444;
-            padding-bottom: 4px;
-        }
-        .info-panel p {
-            margin: 4px 0;
-            word-break: break-word;
-        }
-        .info-panel .close {
-            float: right;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            color: #aaa;
-        }
-        .info-panel .close:hover {
-            color: white;
-        }
+        .info-panel.visible { display: block; }
+        .info-panel h4 { margin: 0 0 6px 0; color: #00aaff; border-bottom: 1px solid #444; padding-bottom: 4px; }
+        .info-panel p { margin: 4px 0; word-break: break-word; }
+        .info-panel .close { float: right; cursor: pointer; font-size: 16px; font-weight: bold; color: #aaa; }
+        .info-panel .close:hover { color: white; }
         .toast {
-            position: fixed;
-            bottom: 90px;
-            left: 20px;
-            background: rgba(0,0,0,0.8);
-            color: #ffaa44;
-            padding: 8px 15px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-family: monospace;
-            z-index: 1000;
-            pointer-events: none;
-            border-left: 3px solid #ffaa44;
-            max-width: 260px;
+            position: fixed; bottom: 90px; left: 20px; background: rgba(0,0,0,0.8);
+            color: #ffaa44; padding: 8px 15px; border-radius: 6px; font-size: 12px;
+            font-family: monospace; z-index: 1000; pointer-events: none;
+            border-left: 3px solid #ffaa44; max-width: 260px;
         }
-        @keyframes fadeout {
-            0% { opacity: 1; }
-            100% { opacity: 0; }
-        }
+        @keyframes fadeout { 0% { opacity: 1; } 100% { opacity: 0; } }
     </style>
 </head>
 <body>
 <div id="map"></div>
-
 <div class="controls">
     <div class="stat">✈️ <span id="aircraft-count">0</span> uçak</div>
     <div class="stat">🌍 <span id="top-country">-</span></div>
@@ -187,28 +104,21 @@ cat > "$HTML_FILE" << 'HTMLEOF'
     <div class="rate-info" id="rate-status">📡 Anonim limit: 100 istek/gün</div>
     <button id="refresh-btn">🔄 Şimdi Yenile</button>
 </div>
-
 <div class="info-panel" id="info-panel">
     <span class="close" id="close-panel">&times;</span>
     <h4 id="aircraft-callsign">Uçak Bilgisi</h4>
     <p id="aircraft-detail"></p>
 </div>
-
 <div class="toast" id="toast" style="display: none;"></div>
-
 <script>
     const OPENSKY_URL = "https://opensky-network.org/api/states/all";
     const map = L.map('map').setView([39.0, 35.0], 5);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB',
-        subdomains: 'abcd',
-        maxZoom: 19,
-        minZoom: 3
+        subdomains: 'abcd', maxZoom: 19, minZoom: 3
     }).addTo(map);
-
     let aircraftLayer = L.layerGroup().addTo(map);
     let currentAircraftData = {};
-
     const aircraftCountSpan = document.getElementById('aircraft-count');
     const topCountrySpan = document.getElementById('top-country');
     const lastUpdateSpan = document.getElementById('last-update');
@@ -219,39 +129,27 @@ cat > "$HTML_FILE" << 'HTMLEOF'
     const aircraftCallsign = document.getElementById('aircraft-callsign');
     const aircraftDetail = document.getElementById('aircraft-detail');
     const toastDiv = document.getElementById('toast');
-
     const planeSvg = L.divIcon({
         className: 'plane-svg',
-        html: `<svg width="24" height="24" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px black);">
-                <polygon points="12,2 18,10 14,10 14,18 10,18 10,10 6,10 12,2" fill="#00aaff" stroke="white" stroke-width="1"/>
-               </svg>`,
-        iconSize: [24, 24],
-        popupAnchor: [0, -12]
+        html: `<svg width="24" height="24" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 2px black);"><polygon points="12,2 18,10 14,10 14,18 10,18 10,10 6,10 12,2" fill="#00aaff" stroke="white" stroke-width="1"/></svg>`,
+        iconSize: [24, 24], popupAnchor: [0, -12]
     });
-
     function showToast(message, duration = 4000) {
         toastDiv.textContent = message;
         toastDiv.style.display = 'block';
         toastDiv.style.animation = 'none';
         toastDiv.offsetHeight;
         toastDiv.style.animation = 'fadeout 3s ease forwards';
-        setTimeout(() => {
-            toastDiv.style.display = 'none';
-        }, duration);
+        setTimeout(() => { toastDiv.style.display = 'none'; }, duration);
     }
-
     async function fetchAircraftData() {
         try {
             const startTime = Date.now();
             const response = await fetch(OPENSKY_URL);
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             if (!response.ok) {
-                if (response.status === 429) {
-                    showToast('⚠️ API limit aşıldı! Lütfen 1 dakika bekleyin veya kayıtlı hesap kullanın.');
-                    rateStatusSpan.innerHTML = '⚠️ Rate limit aşıldı!';
-                } else {
-                    showToast(`Hata: ${response.status} - ${response.statusText}`);
-                }
+                if (response.status === 429) showToast('⚠️ API limit aşıldı! Lütfen 1 dakika bekleyin.');
+                else showToast(`Hata: ${response.status}`);
                 return null;
             }
             const data = await response.json();
@@ -259,28 +157,10 @@ cat > "$HTML_FILE" << 'HTMLEOF'
             rateStatusSpan.innerHTML = '📡 Anonim limit: 100 istek/gün | Son istek: ' + elapsed + ' sn';
             return states;
         } catch (error) {
-            console.error('Fetch hatası:', error);
             showToast('Bağlantı hatası: ' + error.message);
             return null;
         }
     }
-
-    function getFlagEmoji(countryCode) {
-        if (!countryCode) return '🌍';
-        const code = countryCode.toUpperCase();
-        if (code === 'TR') return '🇹🇷';
-        if (code === 'US') return '🇺🇸';
-        if (code === 'GB') return '🇬🇧';
-        if (code === 'DE') return '🇩🇪';
-        if (code === 'FR') return '🇫🇷';
-        if (code === 'RU') return '🇷🇺';
-        if (code === 'CN') return '🇨🇳';
-        if (code === 'NL') return '🇳🇱';
-        if (code === 'IT') return '🇮🇹';
-        if (code === 'ES') return '🇪🇸';
-        return code.substring(0,2);
-    }
-
     function updateMapWithAircraft(states) {
         if (!states || states.length === 0) {
             aircraftCountSpan.innerText = '0';
@@ -290,115 +170,52 @@ cat > "$HTML_FILE" << 'HTMLEOF'
             currentAircraftData = {};
             return;
         }
-
-        const validAircraft = states.filter(s => {
-            if (!s || s.length < 10) return false;
-            const lat = s[6];
-            const lon = s[5];
-            if (lat === null || lon === null) return false;
-            return true;
-        });
-
-        const count = validAircraft.length;
-        aircraftCountSpan.innerText = count;
-
+        const validAircraft = states.filter(s => s && s.length >= 10 && s[5] !== null && s[6] !== null);
+        aircraftCountSpan.innerText = validAircraft.length;
         const countryCount = {};
-        validAircraft.forEach(a => {
-            const country = a[2] || 'Bilinmiyor';
-            countryCount[country] = (countryCount[country] || 0) + 1;
-        });
-        let topCountry = '';
-        let topCount = 0;
-        for (let [country, cnt] of Object.entries(countryCount)) {
-            if (cnt > topCount) {
-                topCount = cnt;
-                topCountry = country;
-            }
-        }
+        validAircraft.forEach(a => { const c = a[2] || 'Bilinmiyor'; countryCount[c] = (countryCount[c] || 0) + 1; });
+        let topCountry = '', topCount = 0;
+        for (let [c, cnt] of Object.entries(countryCount)) if (cnt > topCount) { topCount = cnt; topCountry = c; }
         topCountrySpan.innerText = topCountry ? `${topCountry} (${topCount})` : '-';
         lastUpdateSpan.innerText = new Date().toLocaleTimeString();
-
         const newIcaos = new Set();
-        validAircraft.forEach(aircraft => {
-            const icao24 = aircraft[0];
-            const callsign = (aircraft[1] || 'N/A').trim();
-            const originCountry = aircraft[2] || '?';
-            const longitude = aircraft[5];
-            const latitude = aircraft[6];
-            const altitude = aircraft[7] ? Math.round(aircraft[7]) : null;
-            const velocity = aircraft[9] ? (aircraft[9] * 3.6).toFixed(0) : null;
-            const heading = aircraft[10] !== null ? aircraft[10] : 0;
-            const onGround = aircraft[8] || false;
-
-            newIcaos.add(icao24);
-            const popupContent = `
-                <b>${callsign}</b><br>
-                ${originCountry}<br>
-                İrtifa: ${altitude ? altitude + ' m' : '?'}<br>
-                Hız: ${velocity ? velocity + ' km/h' : '?'}<br>
-                Yön: ${heading}°<br>
-                ${onGround ? '🛬 Yerde' : '✈️ Havada'}
-            `;
-
-            if (currentAircraftData[icao24]) {
-                const existing = currentAircraftData[icao24];
-                const marker = existing.marker;
-                marker.setLatLng([latitude, longitude]);
-                if (marker.setRotationAngle) marker.setRotationAngle(heading);
-                marker.setPopupContent(popupContent);
-                existing.info = { callsign, originCountry, altitude, velocity, heading, onGround };
+        validAircraft.forEach(ac => {
+            const icao = ac[0];
+            const cs = (ac[1] || 'N/A').trim();
+            const country = ac[2] || '?';
+            const lon = ac[5];
+            const lat = ac[6];
+            const alt = ac[7] ? Math.round(ac[7]) : null;
+            const vel = ac[9] ? (ac[9] * 3.6).toFixed(0) : null;
+            const hdg = ac[10] !== null ? ac[10] : 0;
+            const ground = ac[8] || false;
+            newIcaos.add(icao);
+            const popup = `<b>${cs}</b><br>${country}<br>İrtifa: ${alt ? alt+' m' : '?'}<br>Hız: ${vel ? vel+' km/h' : '?'}<br>Yön: ${hdg}°<br>${ground ? '🛬 Yerde' : '✈️ Havada'}`;
+            if (currentAircraftData[icao]) {
+                const m = currentAircraftData[icao].marker;
+                m.setLatLng([lat, lon]);
+                if (m.setRotationAngle) m.setRotationAngle(hdg);
+                m.setPopupContent(popup);
+                currentAircraftData[icao].info = { cs, country, alt, vel, hdg, ground };
             } else {
-                const marker = L.marker([latitude, longitude], {
-                    icon: planeSvg,
-                    rotationAngle: heading,
-                    rotationOrigin: 'center center'
-                }).addTo(aircraftLayer);
-                marker.bindPopup(popupContent);
+                const marker = L.marker([lat, lon], { icon: planeSvg, rotationAngle: hdg, rotationOrigin: 'center center' }).addTo(aircraftLayer);
+                marker.bindPopup(popup);
                 marker.on('click', () => {
-                    showAircraftDetails(icao24, callsign, originCountry, altitude, velocity, heading, onGround);
+                    aircraftCallsign.innerText = cs;
+                    aircraftDetail.innerHTML = `<strong>ICAO24:</strong> ${icao}<br><strong>Ülke:</strong> ${country}<br><strong>İrtifa:</strong> ${alt ? alt+' m' : 'Belirsiz'}<br><strong>Hız:</strong> ${vel ? vel+' km/h' : 'Belirsiz'}<br><strong>Yön:</strong> ${hdg}°<br><strong>Durum:</strong> ${ground ? 'Yerde' : 'Havada'}<br><button id="center-plane-btn" style="margin-top:8px;background:#00aaff;border:none;color:white;padding:3px 8px;border-radius:4px;cursor:pointer;">📍 Haritada Ortala</button>`;
+                    infoPanel.classList.add('visible');
+                    setTimeout(() => {
+                        const btn = document.getElementById('center-plane-btn');
+                        if (btn) btn.onclick = () => { const m = currentAircraftData[icao]?.marker; if (m) map.setView(m.getLatLng(), 12); };
+                    }, 10);
                 });
-                currentAircraftData[icao24] = {
-                    marker: marker,
-                    info: { callsign, originCountry, altitude, velocity, heading, onGround }
-                };
+                currentAircraftData[icao] = { marker, info: { cs, country, alt, vel, hdg, ground } };
             }
         });
-
-        for (let icao in currentAircraftData) {
-            if (!newIcaos.has(icao)) {
-                aircraftLayer.removeLayer(currentAircraftData[icao].marker);
-                delete currentAircraftData[icao];
-            }
-        }
+        for (let icao in currentAircraftData) if (!newIcaos.has(icao)) { aircraftLayer.removeLayer(currentAircraftData[icao].marker); delete currentAircraftData[icao]; }
     }
-
-    function showAircraftDetails(icao, callsign, country, altitude, speed, heading, onGround) {
-        aircraftCallsign.innerText = callsign;
-        aircraftDetail.innerHTML = `
-            <strong>ICAO24:</strong> ${icao}<br>
-            <strong>Ülke:</strong> ${country}<br>
-            <strong>İrtifa:</strong> ${altitude ? altitude + ' m' : 'Belirsiz'}<br>
-            <strong>Hız:</strong> ${speed ? speed + ' km/h' : 'Belirsiz'}<br>
-            <strong>Yön:</strong> ${heading}°<br>
-            <strong>Durum:</strong> ${onGround ? 'Yerde' : 'Havada'}<br>
-            <button id="center-plane-btn" style="margin-top:8px;background:#00aaff;border:none;color:white;padding:3px 8px;border-radius:4px;cursor:pointer;">📍 Haritada Ortala</button>
-        `;
-        infoPanel.classList.add('visible');
-
-        setTimeout(() => {
-            const centerBtn = document.getElementById('center-plane-btn');
-            if (centerBtn) {
-                centerBtn.onclick = () => {
-                    const marker = currentAircraftData[icao]?.marker;
-                    if (marker) map.setView(marker.getLatLng(), 12);
-                };
-            }
-        }, 10);
-    }
-
     closePanel.onclick = () => infoPanel.classList.remove('visible');
     map.on('click', () => infoPanel.classList.remove('visible'));
-
     let isUpdating = false;
     async function refreshData() {
         if (isUpdating) return;
@@ -411,7 +228,6 @@ cat > "$HTML_FILE" << 'HTMLEOF'
         refreshBtn.style.opacity = '1';
         isUpdating = false;
     }
-
     refreshBtn.onclick = refreshData;
     refreshData();
     setInterval(refreshData, 8000);
@@ -428,34 +244,22 @@ else
     echo -e "${C}🔌 Belirtilen port kullanılacak: ${Y}$PORT${N}"
 fi
 
-# Python HTTP sunucusunu başlat
-echo -e "${C}🚀 Sunucu başlatılıyor...${N}"
-echo -e "${G}${B}✈️  ADS-B Uçak Takip Sistemi${N}"
-echo -e "${C}Adres:${N}"
-
-# Yerel IP adresini bul (Termux için)
+# Yerel IP adresini bul
+LOCAL_IP="localhost"
 if command -v ip &>/dev/null; then
     LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127.0.0.1 | head -1)
 elif command -v ifconfig &>/dev/null; then
     LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v 127.0.0.1 | head -1)
-else
-    LOCAL_IP="localhost"
 fi
 
+echo -e "\n${G}${B}✈️  ADS-B Uçak Takip Sistemi Başlatıldı${N}"
+echo -e "${C}📍 Adres:${N}"
 echo -e "  ${G}http://${LOCAL_IP}:${PORT}${N}"
 echo -e "  ${G}http://localhost:${PORT}${N}"
-echo -e ""
-echo -e "${Y}🌐 Tarayıcınızda bu adresi açarak uçakları izleyebilirsiniz.${N}"
 echo -e "${Y}📱 Aynı ağdaki diğer cihazlardan da ${LOCAL_IP}:${PORT} adresini kullanabilirsiniz.${N}"
 echo -e "${R}⏹️  Sunucuyu durdurmak için Ctrl+C tuşlarına basın.${N}"
 
-# Geçici dosyayı temizleme (Ctrl+C ile)
+# Sunucuyu başlat
+cd "$CACHE_DIR"
 trap 'echo -e "\n${C}🧹 Sunucu kapatılıyor...${N}"; rm -f "$HTML_FILE"; exit 0' INT TERM
-
-# Python HTTP sunucusunu çalıştır
-cd "$(dirname "$HTML_FILE")"
-python3 -m http.server "$PORT" --directory "$(dirname "$HTML_FILE")" 2>/dev/null || \
-python -m http.server "$PORT" --directory "$(dirname "$HTML_FILE")"
-
-# Sunucu sonlandığında temizlik
-rm -f "$HTML_FILE"
+python3 -m http.server "$PORT" 2>/dev/null || python -m http.server "$PORT"
