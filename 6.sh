@@ -1,15 +1,4 @@
-Aşağıdaki düzeltilmiş script, belirttiğiniz sorunları giderir:
-
-· Demo butonu çalışır, hata durumunda butonlar tekrar aktif olur.
-· #loading başlangıçta gizlidir, sadece boot çağrıldığında görünür.
-· Token modal her zaman en öndedir (z-index 10000), loading (9999) ile çakışmaz.
-· Token doğrulama sadece uzunluk kontrolü yapar, pk. zorunluluğu kaldırılmıştır.
-· Hata mesajları (notify) daha yüksek z-index ile gösterilir, topbar altında kalmaz.
-· Port kontrolü Termux uyumlu TCP bağlantı testi ile yapılır.
-
-Scriptin tamamını aşağıda bulabilirsiniz. Çalıştırmak için bash skywatch.sh yazın.
-
-```bash
+bash
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  SKYWATCH v4.0 ULTIMATE — Canli Ucak Takip Sistemi          ║
