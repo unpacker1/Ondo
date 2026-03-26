@@ -1,11 +1,11 @@
-cat > horus_eye.sh << 'EOF'
+cat > ~/horus_eye.sh << 'SCRIPT'
 #!/data/data/com.termux/files/usr/bin/bash
 
 set -e
 
-echo "[*] Horus-Eye Demo Kurulumu Başlatılıyor..."
+echo "=== Horus-Eye Demo Kurulumu ==="
 
-# Gerekli paketler
+# Güncelleme ve python kurulumu
 pkg update -y
 pkg install python -y
 
@@ -13,12 +13,11 @@ pkg install python -y
 pip install flask
 
 # Çalışma dizini
-WORK_DIR="$HOME/horus_eye_demo"
-mkdir -p "$WORK_DIR"
-cd "$WORK_DIR"
+mkdir -p ~/horus_eye_demo/templates
+cd ~/horus_eye_demo
 
 # app.py oluştur
-cat > app.py << 'APP_PY'
+cat > app.py << 'APP'
 from flask import Flask, render_template, jsonify
 import random
 from datetime import datetime
@@ -26,8 +25,9 @@ from datetime import datetime
 app = Flask(__name__)
 
 def generate_status():
+    threat = random.choice(["LOW", "MODERATE", "ELEVATED", "HIGH", "CRITICAL"])
     return {
-        "threat_level": random.choice(["LOW", "MODERATE", "ELEVATED", "HIGH", "CRITICAL"]),
+        "threat_level": threat,
         "threat_percent": random.randint(10, 95),
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "patterns": [
@@ -52,17 +52,15 @@ def api_status():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-APP_PY
+APP
 
-# templates klasörü ve HTML
-mkdir -p templates
+# dashboard.html oluştur
 cat > templates/dashboard.html << 'HTML'
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HORUS-EYE | Global Asset Tracking</title>
+    <title>HORUS-EYE</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -85,13 +83,11 @@ cat > templates/dashboard.html << 'HTML'
             padding: 18px;
             box-shadow: 0 0 12px rgba(0,255,200,0.1);
         }
-        .card.full-width { grid-column: span 3; }
+        .full-width { grid-column: span 3; }
         .card h3 {
-            font-size: 1.2rem;
             border-left: 4px solid #00e6c3;
             padding-left: 12px;
             margin-bottom: 16px;
-            color: #8effe6;
         }
         .stat-row {
             display: flex;
@@ -104,23 +100,19 @@ cat > templates/dashboard.html << 'HTML'
         .threat-high { color: #ff9f4a; }
         .threat-moderate { color: #ffdd77; }
         .threat-low { color: #6fcf97; }
-        .pattern-list {
-            list-style: none;
-        }
         .pattern-list li {
             background: #03060c;
             margin: 8px 0;
             padding: 8px;
             border-radius: 6px;
             border-left: 3px solid #00e6c3;
+            list-style: none;
         }
         .live-badge {
-            display: inline-block;
             background: #1f3e3e;
             border-radius: 20px;
             padding: 2px 12px;
             font-size: 0.7rem;
-            margin-left: 12px;
             animation: pulse 1.5s infinite;
         }
         @keyframes pulse {
@@ -131,13 +123,12 @@ cat > templates/dashboard.html << 'HTML'
             margin-top: 30px;
             text-align: center;
             font-size: 0.8rem;
-            color: #3c6e6e;
             border-top: 1px solid #1e3a3a;
             padding-top: 16px;
         }
         @media (max-width: 800px) {
             .dashboard { grid-template-columns: 1fr; }
-            .card.full-width { grid-column: span 1; }
+            .full-width { grid-column: span 1; }
         }
     </style>
 </head>
@@ -151,18 +142,14 @@ cat > templates/dashboard.html << 'HTML'
 
     <div class="card">
         <h3>⚠️ THREAT LEVEL</h3>
-        <div id="threatArea">
-            <div class="stat-row"><span>Current status</span> <span id="threatLevel">---</span></div>
-            <div class="stat-row"><span>Risk index</span> <span id="threatPercent">--</span>%</div>
-            <div class="stat-row"><span>Last update</span> <span id="timestamp">--:--:--</span></div>
-        </div>
+        <div class="stat-row"><span>Current status</span> <span id="threatLevel">---</span></div>
+        <div class="stat-row"><span>Risk index</span> <span id="threatPercent">--</span>%</div>
+        <div class="stat-row"><span>Last update</span> <span id="timestamp">--:--:--</span></div>
     </div>
 
     <div class="card">
         <h3>🛰️ ORBIT PATTERNS</h3>
-        <ul class="pattern-list" id="patternList">
-            <li>Loading...</li>
-        </ul>
+        <ul class="pattern-list" id="patternList"><li>Loading...</li></ul>
     </div>
 
     <div class="card">
@@ -176,9 +163,8 @@ cat > templates/dashboard.html << 'HTML'
 
     <div class="card full-width">
         <h3>🌍 LIVE FEED (openSky + adsbexchange)</h3>
-        <div style="height: 180px; background: #050a12; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #2e6b6b;">
-            [ simulated radar view ]<br>
-            🔴 12 aircraft · 6 satellites
+        <div style="height: 180px; background: #050a12; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            [ simulated radar view ]<br>🔴 12 aircraft · 6 satellites
         </div>
     </div>
 
@@ -201,7 +187,7 @@ cat > templates/dashboard.html << 'HTML'
             const res = await fetch('/api/status');
             const data = await res.json();
             document.getElementById('threatLevel').innerText = data.threat_level;
-            document.getElementById('threatLevel').className = `threat-${data.threat_level.toLowerCase()}`;
+            document.getElementById('threatLevel').className = 'threat-' + data.threat_level.toLowerCase();
             document.getElementById('threatPercent').innerText = data.threat_percent;
             document.getElementById('timestamp').innerText = data.time;
             document.getElementById('uplinkStatus').innerText = data.uplink;
@@ -233,10 +219,13 @@ cat > templates/dashboard.html << 'HTML'
 </html>
 HTML
 
-echo "[*] Kurulum tamamlandı. Sunucu başlatılıyor..."
-echo "[*] Tarayıcıdan http://localhost:5000 adresini açın."
-echo "[*] Başka cihazlardan erişmek için Termux IP'sini kullanın."
-echo "[*] Çıkmak için CTRL+C"
+echo ""
+echo "=== Kurulum tamamlandı! ==="
+echo "Sunucu başlatılıyor..."
+echo "Tarayıcıdan http://localhost:5000 adresini açın."
+echo "Başka cihazlar için: http://$(ifconfig wlan0 2>/dev/null | grep 'inet ' | awk '{print $2}'):5000"
+echo "Sunucuyu durdurmak için Ctrl+C"
+echo ""
 
 python app.py
-EOF
+SCRIPT
