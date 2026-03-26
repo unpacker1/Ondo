@@ -1,4 +1,7 @@
+Tüm düzeltmeleri içeren tam çalışan script aşağıdadır.
+Termux'ta bash skywatch.sh ile çalıştırın.
 
+```bash
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  SKYWATCH v4.0 ULTIMATE — Canli Ucak Takip Sistemi          ║
@@ -68,7 +71,7 @@ w("::selection{background:rgba(0,255,136,0.2);color:#00ff88}")
 w("body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.008) 2px,rgba(0,255,136,.008) 4px);pointer-events:none;z-index:1}")
 w("#map{position:absolute;inset:0}")
 
-# ── MODAL ──────────────────────────────────────────────────────────
+# ── MODAL (en üstte) ──────────────────────────────────────────────
 w("#modal{position:fixed;inset:0;background:rgba(2,8,16,0.98);z-index:10000;display:flex;align-items:center;justify-content:center}")
 w("#modal.gone{display:none!important}")
 w(".mbox{background:var(--bg3);border:1px solid rgba(0,255,136,0.28);padding:34px;width:480px;max-width:95vw;position:relative}")
@@ -94,7 +97,7 @@ w(".msaved{display:none;align-items:center;gap:8px;font-size:10px;color:var(--g)
 w(".msaved.show{display:flex}")
 w(".mhint{font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:12px;text-align:center}")
 
-# ── LOADING ────────────────────────────────────────────────────────
+# ── LOADING (başlangıçta gizli) ───────────────────────────────────
 w("#loading{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}")
 w("#loading.on{display:flex}")
 w(".ldlogo{font-family:'Orbitron',sans-serif;font-size:34px;font-weight:900;color:var(--g);letter-spacing:8px;animation:lglow 2.5s ease-in-out infinite;text-align:center}")
@@ -580,7 +583,7 @@ w("<div class='notif' id='notif'><div class='notif-icon' id='notif-icon'>i</div>
 w("<div class='refbar'><div class='refprog' id='refprog'></div></div>")
 
 # ══════════════════════════════════════════════════════════════════
-# JAVASCRIPT (DÜZELTİLMİŞ)
+# JAVASCRIPT (tüm düzeltmelerle)
 # ══════════════════════════════════════════════════════════════════
 w("<script>")
 
@@ -618,7 +621,7 @@ function flag(c){
 }
 """)
 
-# ── NOTIFY (z-index arttırıldı, daha görünür) ─────────────────────
+# ── NOTIFY (yüksek z-index) ───────────────────────────────────────
 js("""
 function notify(msg, type){
   type = type||'info';
@@ -692,7 +695,7 @@ function unlockModal(){
 }
 """)
 
-# ── BOOT (loading gösterimi düzeltildi) ───────────────────────────
+# ── BOOT (loading göster) ─────────────────────────────────────────
 js("""
 async function boot(demo){
   var ld = document.getElementById('loading');
@@ -737,7 +740,7 @@ async function boot(demo){
 function sleep(ms){ return new Promise(function(r){setTimeout(r,ms);}); }
 """)
 
-# ── MAP (değişmedi) ───────────────────────────────────────────────
+# ── MAP ───────────────────────────────────────────────────────────
 js("""
 function initMap(){
   mapboxgl.accessToken = TOKEN;
@@ -788,19 +791,6 @@ function setSdot(state){
 }
 """)
 
-# ── LAYER, TERMINATOR, WEATHER (daha önceki düzeltilmiş halleri)
-# (Bu kısımlar önceki düzeltmelerle aynı; yer tasarrufu için kısaltılmıştır.
-#  Tamamı yukarıdaki düzeltilmiş scriptte mevcuttur.)
-# Burada kalan tüm fonksiyonlar (fetchFlights, loadFlights, filtreler, izler, istatistikler, vs.)
-# daha önceki düzeltilmiş halleriyle aynıdır. Eksiksiz çalışması için aşağıdaki kısmı kopyalayınız.
-
-# ... (Tüm fonksiyonlar buraya gelir; daha önce paylaştığım düzeltilmiş JS kodunun tamamı buraya eklenmelidir.)
-
-# Önceki mesajımda verdiğim düzeltilmiş JS bölümünün tamamını (fetchFlights, loadFlights, ... , drawCompass, startRefTimer) buraya ekleyin.
-# Ancak mesaj uzunluğu sınırı nedeniyle burada tekrar yazmıyorum; kullanıcı bu kısmı önceki düzeltilmiş cevaptan alabilir.
-
-
-
 # ── LAYER ─────────────────────────────────────────────────────────
 js("""
 var LAYERS = {
@@ -826,12 +816,12 @@ function toggleTerminator(){
   terminatorOn=!terminatorOn;
   document.getElementById('trmbn').classList.toggle('on',terminatorOn);
   if(terminatorOn) drawTerminator();
-  else if(MAP){ try{if(MAP.getLayer('trm'))MAP.removeLayer('trm'); if(MAP.getSource('trm'))MAP.removeSource('trm');}catch(e){} }
+  else if(MAP && MAP.isStyleLoaded()){ try{if(MAP.getLayer('trm'))MAP.removeLayer('trm'); if(MAP.getSource('trm'))MAP.removeSource('trm');}catch(e){} }
   notify('GECE/GUNDUZ '+(terminatorOn?'AKTIF':'KAPALI'), 'info');
 }
 
 function drawTerminator(){
-  if(!MAP) return;
+  if(!MAP || !MAP.isStyleLoaded()) return;
   var d=new Date();
   var dec = -23.45 * Math.cos((360/365*(d.getMonth()*30+d.getDate())+10)*Math.PI/180) * Math.PI/180;
   var coords=[];
@@ -857,7 +847,11 @@ function toggleWeather(){
   if(!MAP||DEMO) return;
   if(weatherOn){
     try{
-      // Open free tile (no key needed for basic wind/cloud)
+      if(!MAP.isStyleLoaded()){
+        notify('Harita yukleniyor, tekrar deneyin','warn');
+        weatherOn=false;
+        return;
+      }
       MAP.addSource('owm',{type:'raster',tiles:['https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02'],tileSize:256,attribution:'OpenWeatherMap'});
       MAP.addLayer({id:'owmlayer',type:'raster',source:'owm',paint:{'raster-opacity':0.4}});
     }catch(e){ notify('Hava katmani yuklenemedi','warn'); }
@@ -932,7 +926,6 @@ async function loadFlights(){
     return f.lat && f.lon && (settings.ground || !f.ground);
   });
 
-  // Update speed history for selected
   if(selIcao){
     var sf = flights.find(function(f){return f.icao24===selIcao;});
     if(sf && sf.vel){
@@ -942,7 +935,6 @@ async function loadFlights(){
     }
   }
 
-  // Topbar stats
   var countries = new Set(flights.map(function(f){return f.country;}));
   var alts = flights.filter(function(f){return f.alt;});
   document.getElementById('scount').textContent = flights.length;
@@ -1020,11 +1012,9 @@ function renderList(){
 js("""
 function redrawMarkers(){
   if(!MAP) return;
-  // Remove old markers
   Object.values(markers).forEach(function(m){m.remove();});
   markers = {};
 
-  // Only show up to markerLimit aircraft
   var toShow = filteredFlights.length ? filteredFlights : flights;
   toShow = toShow.slice(0, markerLimit);
 
@@ -1066,11 +1056,7 @@ function createMarkerEl(f){
 
 # ── TRAIL SYSTEM ──────────────────────────────────────────────────
 js("""
-function addTrailSources(){
-  // Called after map style loads
-  // Trail sources are added dynamically when needed
-}
-
+function addTrailSources(){}
 function getTrailColor(alt){
   if(!alt) return '#00ff88';
   if(alt > 9000) return '#ff4466';
@@ -1078,124 +1064,73 @@ function getTrailColor(alt){
   if(alt > 3000) return '#00e5ff';
   return '#00ff88';
 }
-
 function updateTrailForFlight(f){
   if(!MAP || !f.lat || !f.lon) return;
   var icao = f.icao24;
   if(!trailData[icao]) trailData[icao]=[];
-
-  // Add point with altitude color info
-  trailData[icao].push({
-    coords: [f.lon, f.lat],
-    alt: f.alt,
-    ts: Date.now()
-  });
-  // Keep last 120 points
-  if(trailData[icao].length > 120) trailData[icao].shift();
-
+  trailData[icao].push({coords:[f.lon,f.lat],alt:f.alt,ts:Date.now()});
+  if(trailData[icao].length>120) trailData[icao].shift();
   renderTrailOnMap(icao);
 }
-
 function renderTrailOnMap(icao){
-  if(!MAP) return;
+  if(!MAP || !MAP.isStyleLoaded()) return;
   var pts = trailData[icao];
-  if(!pts || pts.length < 2) return;
-
-  // Build segmented line with color gradient by altitude
-  var segments = [];
+  if(!pts || pts.length<2) return;
+  var segments=[];
   for(var i=1;i<pts.length;i++){
-    segments.push({
-      coords: [pts[i-1].coords, pts[i].coords],
-      color: getTrailColor(pts[i].alt)
-    });
+    segments.push({coords:[pts[i-1].coords,pts[i].coords],color:getTrailColor(pts[i].alt)});
   }
-
-  // Remove old trail layers/sources for this icao
   try{
-    var existing = MAP.getStyle().layers.filter(function(l){ return l.id.startsWith('trail-'+icao+'-'); });
-    existing.forEach(function(l){
-      try{MAP.removeLayer(l.id);}catch(e){}
-    });
-    var existingSrc = Object.keys(MAP.getStyle().sources||{}).filter(function(s){ return s.startsWith('trsrc-'+icao+'-'); });
-    existingSrc.forEach(function(s){
-      try{MAP.removeSource(s);}catch(e){}
-    });
+    var style=MAP.getStyle();
+    var toRemove=(style.layers||[]).filter(function(l){return l.id.startsWith('trail-'+icao+'-');});
+    toRemove.forEach(function(l){try{MAP.removeLayer(l.id);}catch(e){}});
+    var srcRemove=Object.keys(style.sources||{}).filter(function(s){return s.startsWith('trsrc-'+icao+'-');});
+    srcRemove.forEach(function(s){try{MAP.removeSource(s);}catch(e){}});
   }catch(e){}
-
-  // Add new trail as segments grouped by color
-  var colorGroups = {};
+  var colorGroups={};
   segments.forEach(function(seg){
     if(!colorGroups[seg.color]) colorGroups[seg.color]=[];
     colorGroups[seg.color].push(seg.coords);
   });
-
-  Object.keys(colorGroups).forEach(function(color, ci){
-    var srcId = 'trsrc-'+icao+'-'+ci;
-    var lyrId = 'trail-'+icao+'-'+ci;
-    var lines = colorGroups[color].map(function(coords){
-      return {type:'Feature',geometry:{type:'LineString',coordinates:coords}};
-    });
+  Object.keys(colorGroups).forEach(function(color,ci){
+    var srcId='trsrc-'+icao+'-'+ci, lyrId='trail-'+icao+'-'+ci;
+    var lines=colorGroups[color].map(function(coords){return {type:'Feature',geometry:{type:'LineString',coordinates:coords}};});
     try{
       MAP.addSource(srcId,{type:'geojson',data:{type:'FeatureCollection',features:lines}});
-      MAP.addLayer({
-        id:lyrId, type:'line', source:srcId,
-        paint:{
-          'line-color':color,
-          'line-width':['interpolate',['linear'],['zoom'],4,1.5,10,3],
-          'line-opacity':0.7,
-          'line-blur':0.5
-        }
-      });
+      MAP.addLayer({id:lyrId,type:'line',source:srcId,paint:{'line-color':color,'line-width':['interpolate',['linear'],['zoom'],4,1.5,10,3],'line-opacity':0.7,'line-blur':0.5}});
     }catch(e){}
   });
 }
-
 function updateAllTrails(){
-  if(!MAP) return;
-  // Update trails for flights that have trail enabled
-  flights.forEach(function(f){
-    if(trailEnabled[f.icao24] || showAllTrails){
-      updateTrailForFlight(f);
-    }
-  });
+  if(!MAP || !MAP.isStyleLoaded()) return;
+  flights.forEach(function(f){ if(trailEnabled[f.icao24]||showAllTrails) updateTrailForFlight(f); });
 }
-
 function clearTrailForFlight(icao){
-  if(!MAP) return;
+  if(!MAP||!MAP.isStyleLoaded()) return;
   delete trailData[icao];
   try{
-    var style = MAP.getStyle();
+    var style=MAP.getStyle();
     if(!style) return;
-    var toRemove = (style.layers||[]).filter(function(l){return l.id.startsWith('trail-'+icao+'-');});
-    toRemove.forEach(function(l){try{MAP.removeLayer(l.id);}catch(e){}});
-    var srcRemove = Object.keys(style.sources||{}).filter(function(s){return s.startsWith('trsrc-'+icao+'-');});
-    srcRemove.forEach(function(s){try{MAP.removeSource(s);}catch(e){}});
+    (style.layers||[]).filter(function(l){return l.id.startsWith('trail-'+icao+'-');}).forEach(function(l){try{MAP.removeLayer(l.id);}catch(e){}});
+    Object.keys(style.sources||{}).filter(function(s){return s.startsWith('trsrc-'+icao+'-');}).forEach(function(s){try{MAP.removeSource(s);}catch(e){}});
   }catch(e){}
 }
-
-function clearAllTrails(){
-  Object.keys(trailData).forEach(function(icao){ clearTrailForFlight(icao); });
-  trailData={};
-  trailEnabled={};
-  notify('TUM iZLER TENiZLENDi','info');
-}
-
+function clearAllTrails(){ Object.keys(trailData).forEach(function(icao){ clearTrailForFlight(icao); }); trailData={}; trailEnabled={}; notify('TUM iZLER TENiZLENDi','info'); }
 function toggleSelTrail(){
   if(!selIcao) return;
-  trailEnabled[selIcao] = !trailEnabled[selIcao];
-  document.getElementById('trailbtn').classList.toggle('on', trailEnabled[selIcao]);
+  trailEnabled[selIcao]=!trailEnabled[selIcao];
+  document.getElementById('trailbtn').classList.toggle('on',trailEnabled[selIcao]);
   if(!trailEnabled[selIcao]) clearTrailForFlight(selIcao);
-  else { var f=flights.find(function(x){return x.icao24===selIcao;}); if(f)updateTrailForFlight(f); }
-  notify('iZ '+(trailEnabled[selIcao]?'AKTIF':'KAPALI'), 'info');
+  else{ var f=flights.find(function(x){return x.icao24===selIcao;}); if(f)updateTrailForFlight(f); }
+  notify('iZ '+(trailEnabled[selIcao]?'AKTIF':'KAPALI'),'info');
 }
-
 function toggleAllTrails(){
-  showAllTrails = !showAllTrails;
-  document.getElementById('alltrailbtn').classList.toggle('on', showAllTrails);
-  var legend = document.getElementById('trail-legend');
-  legend.classList.toggle('vis', showAllTrails);
+  showAllTrails=!showAllTrails;
+  document.getElementById('alltrailbtn').classList.toggle('on',showAllTrails);
+  var legend=document.getElementById('trail-legend');
+  legend.classList.toggle('vis',showAllTrails);
   if(!showAllTrails){ clearAllTrails(); }
-  else { updateAllTrails(); notify('TUM iZLER AKTIF (performansi dusurebilir)','warn'); }
+  else{ updateAllTrails(); notify('TUM iZLER AKTIF (performansi dusurebilir)','warn'); }
 }
 """)
 
@@ -1210,51 +1145,38 @@ function pickFlight(f){
   renderList();
   if(MAP) redrawMarkers();
 }
-
 function refreshInfoPanel(){
   var f = flights.find(function(x){return x.icao24===selIcao;});
   if(!f) return;
   var emg = f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';
-
   document.getElementById('info-call').textContent = f.callsign;
   document.getElementById('inf-co').textContent = flag(f.country)+' '+f.country.slice(0,16);
-
   var altEl=document.getElementById('inf-alt');
   altEl.textContent = f.alt ? f.alt+'m' : '--';
   altEl.className='ival'+(f.alt>9000?' red':f.alt>6000?' yellow':'');
-
   document.getElementById('inf-spd').textContent = f.vel ? f.vel+' km/s' : '--';
   document.getElementById('inf-hdg').textContent = f.hdg!==null ? f.hdg+'°' : '--';
   document.getElementById('inf-lat').textContent = f.lat ? f.lat.toFixed(5) : '--';
   document.getElementById('inf-lon').textContent = f.lon ? f.lon.toFixed(5) : '--';
-
   var sqkEl=document.getElementById('inf-sqk');
   sqkEl.textContent = f.sqk || '--';
   sqkEl.className = 'ival'+(emg?' red':'');
-
   var vsEl=document.getElementById('inf-vs');
   vsEl.textContent = f.vs ? (f.vs>0?'+':'')+f.vs+' m/s' : '--';
   vsEl.className = 'ival'+(f.vs>2?' blue':f.vs<-2?' yellow':'');
-
   var vertText = f.ground?'YERDE' : f.vs>3?'&#9650; YUKSELiYOR' : f.vs<-3?'&#9660; iNiYOR' : '&#9654; SEYREDIYOR';
   document.getElementById('inf-grnd').innerHTML = vertText;
   document.getElementById('inf-icao').textContent = (f.icao24||'--').toUpperCase();
-
   document.getElementById('spdgauge').style.width = (f.vel?Math.min(100,f.vel/12):0)+'%';
-
-  // HUD
   document.getElementById('hud-alt').textContent = f.alt?Math.round(f.alt):'--';
   document.getElementById('hud-spd').textContent = f.vel||'--';
   document.getElementById('hud-hdg').textContent = f.hdg!==null?f.hdg:'--';
   document.getElementById('hud-vs').textContent = f.vs?(f.vs>0?'+':'')+f.vs:'--';
-
   document.getElementById('trailbtn').classList.toggle('on', !!trailEnabled[f.icao24]);
   document.getElementById('infopanel').classList.add('vis');
   document.getElementById('hud').classList.add('vis');
-
   drawSpeedHistory(f.icao24);
 }
-
 function closeInfo(){
   selIcao=null;
   document.getElementById('infopanel').classList.remove('vis');
@@ -1262,7 +1184,6 @@ function closeInfo(){
   renderList();
   if(MAP) redrawMarkers();
 }
-
 function flyToSel(){ var f=flights.find(function(x){return x.icao24===selIcao;}); if(f&&MAP)MAP.flyTo({center:[f.lon,f.lat],zoom:9,speed:1.5}); }
 function copyCoords(){ var f=flights.find(function(x){return x.icao24===selIcao;}); if(!f)return; var t=f.lat.toFixed(5)+', '+f.lon.toFixed(5); try{navigator.clipboard.writeText(t);notify('KOORDINAT KOPYALANDI','ok');}catch(e){notify(t,'info');} }
 function openFA(){ var f=flights.find(function(x){return x.icao24===selIcao;}); if(f)window.open('https://flightaware.com/live/flight/'+f.callsign.trim(),'_blank'); }
@@ -1278,7 +1199,6 @@ function drawSpeedHistory(icao){
   var W = cv.offsetWidth || 274, H = 36;
   cv.width = W; cv.height = H;
   ctx.clearRect(0,0,W,H);
-
   if(pts.length < 2){
     ctx.fillStyle='rgba(168,255,212,0.2)';
     ctx.font='9px Share Tech Mono';
@@ -1286,34 +1206,23 @@ function drawSpeedHistory(icao){
     ctx.fillText('VERi BEKLENIYOR...', W/2, H/2+3);
     return;
   }
-
   var min=Math.min.apply(null,pts), max=Math.max.apply(null,pts);
   if(max===min) max=min+1;
-
-  // Background grid
   ctx.strokeStyle='rgba(0,255,136,0.06)'; ctx.lineWidth=1;
   for(var y=0;y<H;y+=H/3){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
-
-  // Gradient line
   var step = W/(pts.length-1);
   var grad = ctx.createLinearGradient(0,0,W,0);
-  grad.addColorStop(0,'rgba(0,255,136,0.4)');
-  grad.addColorStop(1,'rgba(0,229,255,0.9)');
-
+  grad.addColorStop(0,'rgba(0,255,136,0.4)');grad.addColorStop(1,'rgba(0,229,255,0.9)');
   ctx.beginPath();
   pts.forEach(function(v,i){
     var x=i*step, y=H-(v-min)/(max-min)*(H-4)-2;
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
   });
   ctx.strokeStyle=grad; ctx.lineWidth=1.5; ctx.stroke();
-
-  // Fill
   ctx.lineTo((pts.length-1)*step,H); ctx.lineTo(0,H); ctx.closePath();
   var fillGrad=ctx.createLinearGradient(0,0,0,H);
-  fillGrad.addColorStop(0,'rgba(0,229,255,0.15)'); fillGrad.addColorStop(1,'rgba(0,229,255,0)');
+  fillGrad.addColorStop(0,'rgba(0,229,255,0.15)');fillGrad.addColorStop(1,'rgba(0,229,255,0)');
   ctx.fillStyle=fillGrad; ctx.fill();
-
-  // Labels
   ctx.fillStyle='rgba(168,255,212,0.4)'; ctx.font='8px Share Tech Mono'; ctx.textAlign='left';
   ctx.fillText(Math.round(max), 2, 9);
   ctx.fillText(Math.round(min), 2, H-2);
@@ -1356,7 +1265,6 @@ function updateStats(){
   renderBars('st-countries', cmap, 'var(--g)');
   renderBars('st-airlines', amap, 'var(--c)');
 
-  // Speed buckets
   var spB=[{l:'<400',n:0},{l:'400-600',n:0},{l:'600-800',n:0},{l:'800-1000',n:0},{l:'>1000',n:0}];
   vels.forEach(function(f){ if(f.vel<400)spB[0].n++; else if(f.vel<600)spB[1].n++; else if(f.vel<800)spB[2].n++; else if(f.vel<1000)spB[3].n++; else spB[4].n++; });
   var maxS=Math.max.apply(null,spB.map(function(b){return b.n;}));
@@ -1364,7 +1272,6 @@ function updateStats(){
     return '<div class="strow"><div class="stlabel">'+b.l+' km/s</div><div class="sttrack"><div class="stfill" style="width:'+(maxS>0?b.n/maxS*100:0)+'%;background:var(--c)"></div></div><div class="stval" style="color:var(--c)">'+b.n+'</div></div>';
   }).join('');
 
-  // Alt buckets
   var aB=[{l:'<3k',n:0},{l:'3-6k',n:0},{l:'6-9k',n:0},{l:'9-12k',n:0},{l:'>12k',n:0}];
   alts.forEach(function(f){ if(f.alt<3000)aB[0].n++; else if(f.alt<6000)aB[1].n++; else if(f.alt<9000)aB[2].n++; else if(f.alt<12000)aB[3].n++; else aB[4].n++; });
   var maxA=Math.max.apply(null,aB.map(function(b){return b.n;}));
@@ -1568,20 +1475,16 @@ function startRadar(){
   var cv=document.getElementById('radarc'), ctx=cv.getContext('2d');
   function frame(){
     ctx.clearRect(0,0,100,100);
-    // Circles
     ctx.strokeStyle='rgba(0,255,136,0.12)'; ctx.lineWidth=1;
     [16,30,46].forEach(function(r){ ctx.beginPath();ctx.arc(50,50,r,0,Math.PI*2);ctx.stroke(); });
-    // Cross
     ctx.strokeStyle='rgba(0,255,136,0.07)';
     ctx.beginPath();ctx.moveTo(50,2);ctx.lineTo(50,98);ctx.stroke();
     ctx.beginPath();ctx.moveTo(2,50);ctx.lineTo(98,50);ctx.stroke();
-    // Sweep
     ctx.save();ctx.translate(50,50);ctx.rotate(radarAngle);
     var sw=ctx.createLinearGradient(0,0,48,0);
     sw.addColorStop(0,'rgba(0,255,136,0.6)');sw.addColorStop(1,'rgba(0,255,136,0)');
     ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,48,-0.4,0);ctx.closePath();ctx.fillStyle=sw;ctx.fill();
     ctx.restore();
-    // Blips
     var cnt=0;
     if(flights.length&&MAP){
       var ctr=MAP.getCenter();
@@ -1596,7 +1499,6 @@ function startRadar(){
         ctx.fillStyle=color;ctx.fill();
       });
     } else {
-      // Demo blips
       flights.slice(0,40).forEach(function(f,i){
         var a=(i/40)*Math.PI*2, r=4+Math.random()*42;
         ctx.beginPath();ctx.arc(50+Math.cos(a)*r,50+Math.sin(a)*r,1.5,0,Math.PI*2);
@@ -1667,24 +1569,6 @@ BYTES=$(wc -c < "$HTML")
 LINES=$(wc -l < "$HTML")
 printf "  ${G}HTML hazir — %d byte, %d satir${N}\n" $BYTES $LINES
 
-# ── SYNTAX CHECK ────────────────────────────────────────────────
-
-html = "\n".join(L)
-with open(HTML, "w", encoding="utf-8") as f:
-    f.write(html)
-
-print("OK:" + HTML)
-print("SIZE:" + str(len(html)))
-PYEOF
-
-if [ ! -f "$HTML" ]; then
-  printf "  ${R}HATA: HTML olusturulamadi!${N}\n"; exit 1
-fi
-
-BYTES=$(wc -c < "$HTML")
-LINES=$(wc -l < "$HTML")
-printf "  ${G}HTML hazir — %d byte, %d satir${N}\n" $BYTES $LINES
-
 # Port kontrolü (Termux uyumlu)
 PORT=$((RANDOM % 8900 + 1100))
 while (echo >/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; do
@@ -1739,3 +1623,4 @@ with socketserver.TCPServer(("", PORT), Handler) as httpd:
     print("  http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
     httpd.serve_forever()
 PYEOF
+```
