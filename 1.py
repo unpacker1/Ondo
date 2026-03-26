@@ -214,7 +214,7 @@ class HorusEyeHandler(http.server.BaseHTTPRequestHandler):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
         return
 
-# ==================== HTML İÇERİĞİ ====================
+# ==================== HTML İÇERİĞİ (YENİ SIDEBAR LAYOUT) ====================
 
 HTML_CONTENT = r"""
 <!DOCTYPE html>
@@ -267,44 +267,55 @@ HTML_CONTENT = r"""
             z-index: 0;
         }
         
-        /* Ana panel */
-        .dashboard {
-            position: relative;
-            z-index: 10;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            padding: 20px;
-            height: 100vh;
-            pointer-events: none;
+        /* Sidebar containers - sabit genişlik, yükseklik tam, kaydırma */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            width: 280px;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(8px);
+            border-right: 1px solid rgba(0, 255, 255, 0.3);
+            border-left: 1px solid rgba(0, 255, 255, 0.3);
+            z-index: 20;
+            overflow-y: auto;
+            padding: 15px 12px;
+            pointer-events: auto;
         }
         
-        /* Tüm kartlar */
+        .sidebar-left {
+            left: 0;
+            border-right: 1px solid rgba(0, 255, 255, 0.3);
+        }
+        
+        .sidebar-right {
+            right: 0;
+            border-left: 1px solid rgba(0, 255, 255, 0.3);
+        }
+        
+        /* Sidebar içindeki kartlar */
         .card {
             background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(8px);
             border: 1px solid rgba(0, 255, 255, 0.3);
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
-            transition: all 0.3s ease;
-            pointer-events: auto;
-            overflow-y: auto;
-            max-height: 90vh;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+            transition: all 0.2s ease;
         }
         
         .card:hover {
             border-color: #0ff;
-            box-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
+            box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
         }
         
-        /* Başlık */
+        /* Kart başlığı */
         .card-header {
-            font-size: 1.2rem;
+            font-size: 1rem;
             font-weight: bold;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             border-bottom: 1px solid rgba(0, 255, 255, 0.5);
-            padding-bottom: 5px;
+            padding-bottom: 4px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -313,18 +324,19 @@ HTML_CONTENT = r"""
         .card-header i {
             color: #f0f;
             font-style: normal;
+            font-size: 0.7rem;
         }
         
-        /* İçerik */
+        /* Kart içeriği */
         .card-content {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
         }
         
         /* ISS tracker */
         .iss-coord {
-            font-size: 1.2rem;
+            font-size: 0.9rem;
             font-weight: bold;
-            margin: 10px 0;
+            margin: 6px 0;
         }
         
         .astronaut-count {
@@ -333,17 +345,18 @@ HTML_CONTENT = r"""
         
         /* Uzay hava durumu */
         .kp-value {
-            font-size: 2rem;
+            font-size: 1.4rem;
             font-weight: bold;
             text-align: center;
-            margin: 10px 0;
+            margin: 6px 0;
         }
         
         .threat {
             text-align: center;
             font-weight: bold;
-            padding: 5px;
-            border-radius: 5px;
+            padding: 3px;
+            border-radius: 4px;
+            font-size: 0.7rem;
         }
         
         .threat-severe { background: #f00; color: black; }
@@ -354,21 +367,22 @@ HTML_CONTENT = r"""
         /* Grafik */
         canvas.chart {
             width: 100%;
-            height: 150px;
-            margin-top: 10px;
+            height: 120px;
+            margin-top: 8px;
         }
         
         /* Haberler */
         .news-item {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             border-bottom: 1px solid rgba(0, 255, 255, 0.2);
-            padding-bottom: 8px;
+            padding-bottom: 6px;
         }
         
         .news-title {
             font-weight: bold;
             color: #fff;
             text-decoration: none;
+            font-size: 0.85rem;
         }
         
         .news-title:hover {
@@ -376,23 +390,23 @@ HTML_CONTENT = r"""
         }
         
         .news-date {
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             color: #aaa;
         }
         
         /* Yorumlar */
         .comments-list {
-            max-height: 250px;
+            max-height: 180px;
             overflow-y: auto;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
         
         .comment {
             background: rgba(0, 255, 255, 0.1);
-            border-left: 3px solid #0ff;
-            padding: 5px;
-            margin-bottom: 8px;
-            font-size: 0.8rem;
+            border-left: 2px solid #0ff;
+            padding: 4px;
+            margin-bottom: 5px;
+            font-size: 0.7rem;
         }
         
         .comment-user {
@@ -407,6 +421,7 @@ HTML_CONTENT = r"""
         .comment-input {
             display: flex;
             gap: 5px;
+            margin-top: 8px;
         }
         
         .comment-input input {
@@ -414,28 +429,31 @@ HTML_CONTENT = r"""
             background: #111;
             border: 1px solid #0ff;
             color: #0ff;
-            padding: 5px;
+            padding: 4px;
             font-family: monospace;
+            font-size: 0.7rem;
         }
         
         .comment-input button {
             background: #0ff;
             border: none;
             color: black;
-            padding: 5px 10px;
+            padding: 4px 8px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 0.7rem;
         }
         
         /* Kontroller */
         .control-group {
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
         
         .control-group label {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.75rem;
         }
         
         input[type="range"] {
@@ -448,11 +466,12 @@ HTML_CONTENT = r"""
             background: rgba(0, 255, 255, 0.2);
             border: 1px solid #0ff;
             color: #0ff;
-            padding: 5px 10px;
+            padding: 4px 8px;
             cursor: pointer;
             margin-top: 5px;
             width: 100%;
             transition: 0.2s;
+            font-size: 0.7rem;
         }
         
         button:hover {
@@ -460,27 +479,31 @@ HTML_CONTENT = r"""
             color: black;
         }
         
-        /* Responsive */
-        @media (max-width: 1200px) {
-            .dashboard {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-        }
-        
+        /* Responsive: mobilde sidebarları alt alta veya daralt */
         @media (max-width: 768px) {
-            .dashboard {
-                grid-template-columns: 1fr;
-                padding: 10px;
+            .sidebar {
+                width: 260px;
             }
-            .card {
-                max-height: 70vh;
+            .sidebar-left {
+                top: auto;
+                bottom: 0;
+                height: 50%;
+                width: 100%;
+                border-right: none;
+                border-top: 1px solid rgba(0, 255, 255, 0.3);
+            }
+            .sidebar-right {
+                top: 0;
+                height: 50%;
+                width: 100%;
+                border-left: none;
+                border-bottom: 1px solid rgba(0, 255, 255, 0.3);
             }
         }
         
         /* Scrollbar */
         ::-webkit-scrollbar {
-            width: 5px;
+            width: 4px;
         }
         ::-webkit-scrollbar-track {
             background: #111;
@@ -501,11 +524,13 @@ HTML_CONTENT = r"""
 </head>
 <body>
     <div id="canvas-container"></div>
-    <div class="dashboard">
+    
+    <!-- Sol Sidebar -->
+    <div class="sidebar sidebar-left">
         <!-- ISS Takip -->
         <div class="card">
             <div class="card-header">
-                🛰️ ISS REAL-TIME TRACKER
+                🛰️ ISS TRACKER
                 <i>● LIVE</i>
             </div>
             <div class="card-content">
@@ -514,16 +539,16 @@ HTML_CONTENT = r"""
                     🌐 Boylam: <span id="iss-lon">--</span>°
                 </div>
                 <div>
-                    👨‍🚀 Uzaydaki İnsan: <span id="astronauts" class="astronaut-count">--</span>
+                    👨‍🚀 Uzayda: <span id="astronauts" class="astronaut-count">--</span>
                 </div>
-                <div style="font-size:0.7rem; margin-top:8px;">Son güncelleme: <span id="iss-time">--</span></div>
+                <div style="font-size:0.6rem; margin-top:4px;">🕒 <span id="iss-time">--</span></div>
             </div>
         </div>
         
         <!-- Uzay Hava Durumu -->
         <div class="card">
             <div class="card-header">
-                ⚡ SPACE WEATHER MONITOR
+                ⚡ SPACE WEATHER
                 <i>Kp INDEX</i>
             </div>
             <div class="card-content">
@@ -531,10 +556,37 @@ HTML_CONTENT = r"""
                     <span id="kp-index">--</span>
                 </div>
                 <div id="threat" class="threat">--</div>
-                <canvas id="kp-chart" class="chart" width="300" height="120"></canvas>
+                <canvas id="kp-chart" class="chart" width="300" height="100"></canvas>
             </div>
         </div>
         
+        <!-- Kontroller -->
+        <div class="card">
+            <div class="card-header">
+                🎮 CONTROLS
+                <i>ayarlar</i>
+            </div>
+            <div class="card-content">
+                <div class="control-group">
+                    <label>🔄 Yörüngeler <input type="checkbox" id="toggle-orbits" checked></label>
+                </div>
+                <div class="control-group">
+                    <label>🌙 Ay <input type="checkbox" id="toggle-moon" checked></label>
+                </div>
+                <div class="control-group">
+                    <label>🔊 Ses uyarıları <input type="checkbox" id="toggle-sounds"></label>
+                </div>
+                <div class="control-group">
+                    <label>⭐ Yıldız yoğunluğu <input type="range" id="star-density" min="500" max="2500" step="100" value="1500"></label>
+                </div>
+                <button id="screenshot-btn">📸 Ekran Görüntüsü</button>
+                <button id="reset-camera">🎥 Kamerayı Sıfırla</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sağ Sidebar -->
+    <div class="sidebar sidebar-right">
         <!-- NASA APOD -->
         <div class="card">
             <div class="card-header">
@@ -542,9 +594,9 @@ HTML_CONTENT = r"""
                 <i>günlük</i>
             </div>
             <div class="card-content">
-                <div id="apod-title" style="font-weight:bold;">--</div>
-                <img id="apod-img" src="" style="width:100%; margin:8px 0; border-radius:5px;" alt="APOD">
-                <div id="apod-explanation" style="font-size:0.75rem; max-height:150px; overflow-y:auto;">--</div>
+                <div id="apod-title" style="font-weight:bold; font-size:0.8rem;">--</div>
+                <img id="apod-img" src="" style="width:100%; margin:5px 0; border-radius:4px;" alt="APOD">
+                <div id="apod-explanation" style="font-size:0.65rem; max-height:100px; overflow-y:auto;">--</div>
             </div>
         </div>
         
@@ -576,30 +628,6 @@ HTML_CONTENT = r"""
                 </div>
             </div>
         </div>
-        
-        <!-- Kontroller -->
-        <div class="card">
-            <div class="card-header">
-                🎮 CONTROLS
-                <i>ayarlar</i>
-            </div>
-            <div class="card-content">
-                <div class="control-group">
-                    <label>🔄 Yörüngeler <input type="checkbox" id="toggle-orbits" checked></label>
-                </div>
-                <div class="control-group">
-                    <label>🌙 Ay <input type="checkbox" id="toggle-moon" checked></label>
-                </div>
-                <div class="control-group">
-                    <label>🔊 Ses uyarıları <input type="checkbox" id="toggle-sounds"></label>
-                </div>
-                <div class="control-group">
-                    <label>⭐ Yıldız yoğunluğu <input type="range" id="star-density" min="500" max="2500" step="100" value="1500"></label>
-                </div>
-                <button id="screenshot-btn">📸 Ekran Görüntüsü Al</button>
-                <button id="reset-camera">🎥 Kamerayı Sıfırla</button>
-            </div>
-        </div>
     </div>
 
     <script type="module">
@@ -615,7 +643,7 @@ HTML_CONTENT = r"""
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 0, 3);
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); // preserveDrawingBuffer for screenshot
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         container.appendChild(renderer.domElement);
@@ -733,7 +761,6 @@ HTML_CONTENT = r"""
         scene.add(backLight);
         
         // ---------- UI Kontrolleri ----------
-        // Yörünge görünürlüğü
         document.getElementById('toggle-orbits').addEventListener('change', (e) => {
             orbitRing.visible = e.target.checked;
             orbitRing2.visible = e.target.checked;
@@ -751,9 +778,11 @@ HTML_CONTENT = r"""
             controls.update();
         });
         document.getElementById('screenshot-btn').addEventListener('click', () => {
-            // Geçici olarak UI'yi gizle
-            const panels = document.querySelectorAll('.card');
-            panels.forEach(p => p.style.opacity = '0');
+            // Geçici olarak UI'yi gizle (sidebarlar)
+            const left = document.querySelector('.sidebar-left');
+            const right = document.querySelector('.sidebar-right');
+            if (left) left.style.opacity = '0';
+            if (right) right.style.opacity = '0';
             renderer.render(scene, camera);
             const canvas = renderer.domElement;
             const dataURL = canvas.toDataURL('image/png');
@@ -761,7 +790,8 @@ HTML_CONTENT = r"""
             link.href = dataURL;
             link.download = 'horus_eye_screenshot.png';
             link.click();
-            panels.forEach(p => p.style.opacity = '1');
+            if (left) left.style.opacity = '1';
+            if (right) right.style.opacity = '1';
         });
         
         // Animasyon (Ay yörüngesi)
@@ -774,7 +804,7 @@ HTML_CONTENT = r"""
             moon.position.z = Math.sin(moonAngle) * moonDist;
             moon.position.y = Math.sin(moonAngle * 1.5) * 0.5;
             
-            controls.update(); // autoRotate handled by OrbitControls
+            controls.update();
             renderer.render(scene, camera);
         }
         animate();
@@ -825,13 +855,15 @@ HTML_CONTENT = r"""
                                 borderColor: '#0ff',
                                 backgroundColor: 'rgba(0,255,255,0.1)',
                                 fill: true,
-                                tension: 0.3
+                                tension: 0.3,
+                                pointRadius: 0
                             }]
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: true,
-                            plugins: { legend: { labels: { color: '#0ff' } } }
+                            plugins: { legend: { display: false } },
+                            scales: { x: { ticks: { color: '#0ff', maxRotation: 45, autoSkip: true, maxTicksLimit: 6 } } }
                         }
                     });
                 }
@@ -843,7 +875,9 @@ HTML_CONTENT = r"""
             const data = await fetchAPI('/api/apod');
             if (data) {
                 document.getElementById('apod-title').innerHTML = data.title;
-                document.getElementById('apod-explanation').innerHTML = data.explanation.substring(0, 300) + (data.explanation.length > 300 ? '...' : '');
+                let explanation = data.explanation;
+                if (explanation.length > 200) explanation = explanation.substring(0, 200) + '...';
+                document.getElementById('apod-explanation').innerHTML = explanation;
                 if (data.url) document.getElementById('apod-img').src = data.url;
             }
         }
@@ -857,7 +891,7 @@ HTML_CONTENT = r"""
                     <div class="news-item">
                         <a href="${article.url}" target="_blank" class="news-title">${article.title}</a>
                         <div class="news-date">${new Date(article.published_at).toLocaleDateString()}</div>
-                        <div style="font-size:0.7rem;">${article.summary.substring(0, 100)}...</div>
+                        <div style="font-size:0.65rem;">${article.summary.substring(0, 80)}...</div>
                     </div>
                 `).join('');
             } else {
@@ -933,13 +967,6 @@ HTML_CONTENT = r"""
         updateAPOD();
         updateNews();
         loadComments();
-        
-        // Otomatik döndürme kontrolü (opsiyonel)
-        setInterval(() => {
-            if (controls.autoRotate) {
-                // Otomatik döndürme aktif, herhangi bir işlem yapma
-            }
-        }, 1000);
         
         // Pencere yeniden boyutlandırma
         window.addEventListener('resize', onWindowResize, false);
