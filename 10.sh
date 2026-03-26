@@ -1,17 +1,22 @@
+#!/bin/bash
+# HORUS-EYE - Global Asset Tracker (Bash + Python)
+# Termux için optimize edilmiştir.
+
+if ! command -v python3 &> /dev/null; then
+    echo "Python3 yüklenmemiş! 'pkg install python' ile kurun."
+    exit 1
+fi
+
+echo "HORUS-EYE başlatılıyor..."
+python3 - <<'PYTHON_SCRIPT'
 #!/usr/bin/env python3
-"""
-HORUS-EYE Global Asset Tracker
-Termux uyumlu, random port ile erişilebilen 3D orbit görselleştirmeli web arayüzü.
-"""
+# -*- coding: utf-8 -*-
 
 import http.server
 import socketserver
 import socket
 import webbrowser
-import threading
-import os
 import sys
-import json
 from urllib.parse import urlparse
 
 # ======================= HTML İÇERİĞİ =======================
@@ -37,7 +42,7 @@ HTML_PAGE = """<!DOCTYPE html>
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* tıklamaları canvas'a geçir */
+            pointer-events: none;
             z-index: 10;
         }
 
@@ -424,7 +429,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 points.push(new THREE.Vector3(newX, newY, newZ));
             }
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const material = new THREE.LineBasicMaterial({ color: orb.color, linewidth: 1 }); // linewidth webgl'de genelde 1, ancak neon efekt
+            const material = new THREE.LineBasicMaterial({ color: orb.color, linewidth: 1 });
             const orbitLine = new THREE.LineLoop(geometry, material);
             scene.add(orbitLine);
             orbitLines.push(orbitLine);
@@ -509,7 +514,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 light.position.y = Math.sin(time * 1.2 + idx) * 2;
             });
             
-            controls.update(); // Kamera kontrol
+            controls.update();
             renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
         }
@@ -544,7 +549,6 @@ HTML_PAGE = """<!DOCTYPE html>
             });
         }
         
-        // Konsola başarı logu
         console.log("HORUS-EYE 3D Orbit Tracker Aktif | GSPOG | FCK1EL | HAMIC");
     </script>
 </body>
@@ -566,14 +570,17 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b"404 - Not Found")
     
     def log_message(self, format, *args):
-        # Daha temiz konsol çıktısı
         sys.stdout.write(f"[{self.address_string()}] {args[0]}\n")
+
+def get_random_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
 
 def start_server(port):
     with socketserver.TCPServer(("", port), CustomHandler) as httpd:
         print(f"\n🚀 HORUS-EYE sunucusu başlatıldı!")
         print(f"🌐 Yerel erişim: http://localhost:{port}")
-        # Ağ IP'sini bulmaya çalış (Termux için)
         try:
             hostname = socket.gethostname()
             local_ip = socket.gethostbyname(hostname)
@@ -586,15 +593,8 @@ def start_server(port):
         except KeyboardInterrupt:
             print("\n⛔ Sunucu durduruldu.")
 
-def get_random_port():
-    """Sistem tarafından rastgele atanmış bir port döndürür."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        return s.getsockname()[1]
-
 def main():
     port = get_random_port()
-    # opsiyonel olarak tarayıcı aç (termux'da çalışmayabilir, ama dene)
     try:
         webbrowser.open(f"http://localhost:{port}")
     except:
@@ -603,3 +603,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+PYTHON_SCRIPT
