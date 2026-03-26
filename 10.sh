@@ -1,8 +1,8 @@
 #!/bin/bash
-# SKYWATCH v7 — Tüm 28 öneri eklendi, tırnak hatası düzeltildi
+# SKYWATCH v7 — Tüm 28 öneri + login hata yönetimi
 G='\033[0;32m'; C='\033[0;36m'; N='\033[0m'; B='\033[1m'; R='\033[0;31m'
 clear
-printf "\n${G}${B}  SKYWATCH v7.0${N}\n  ${C}28 yenilik eklendi — Eski WebView uyumlu${N}\n\n"
+printf "\n${G}${B}  SKYWATCH v7.0${N}\n  ${C}28 yenilik + login düzeltmesi — Eski WebView uyumlu${N}\n\n"
 
 PY=$(command -v python3 || command -v python)
 [ -z "$PY" ] && { pkg install python -y 2>/dev/null || apt install python3 -y 2>/dev/null; PY=$(command -v python3); }
@@ -93,7 +93,7 @@ Type=Application
 Terminal=true
 EOF
 
-# ---------- HTML + JS (üçlü tırnak ile tek parça) ----------
+# ---------- HTML + JS (tüm hatalar giderildi) ----------
 $PY - << 'WRITEPY'
 import os
 HTML_PATH = os.path.join(os.environ.get("TMPDIR", "/tmp"), "sw7.html")
@@ -274,12 +274,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#020810;color:#a8ffd
 <link rel="manifest" href="manifest.json">
 
 <script>
-// ----- TÜM ÖZELLİKLER -----
+// ----- TÜM ÖZELLİKLER + LOGIN HATA YÖNETİMİ -----
 let MAP=null,TOKEN="",DEMO=false,flights=[],filtered=[],selIcao=null;
 let activeF=0,mlimit=150,panelOpen=true,searchOpen=false,helpOpen=false,curLayer=0,wxOn=false,trmOn=false,allTrails=false,radarOn=false,darkTheme=false;
 let markers={},trailPts={},trailOn={},spdHist={},altHist={},replayInterval=null,replayActive=false,replayPoints=[];
 let alerts=[],rfTimer=null,RF=30000,cfg=[false,false,true],worker=null;
 let lang="tr",airports=[],aircraftTypes={};
+let mapLoadTimeout=null;
 
 // Dil
 const translations={tr:{search:"Ara",refresh:"Yenile",location:"Konum",weather:"Hava",night:"Gece",trails:"Izler",theme:"Tema"},en:{search:"Search",refresh:"Refresh",location:"Location",weather:"Weather",night:"Night",trails:"Trails",theme:"Theme"}};
@@ -352,11 +353,102 @@ function togglePanel(){panelOpen=!panelOpen;document.getElementById("lpanel").cl
 function showTab(n){for(let i=0;i<4;i++){document.getElementById(`tab${i}`).classList.toggle("on",i===n);document.getElementById(`tp${i}`).classList.toggle("on",i===n);}}
 function toggleHelp(){helpOpen=!helpOpen;document.getElementById("kbhelp").classList.toggle("vis",helpOpen);}
 function doFS(){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
-function initMap(){mapboxgl.accessToken=TOKEN;MAP=new mapboxgl.Map({container:"map",style:"mapbox://styles/mapbox/satellite-v9",center:[35,40],zoom:4});MAP.addControl(new mapboxgl.NavigationControl({showCompass:false}),"top-right");MAP.on("load",()=>setSdot("live"));MAP.on("rotate",()=>drawCompass(MAP.getBearing()));}
-function initNoMap(){setSdot("demo");document.getElementById("map").style.background="radial-gradient(#030f1e, #020810)";}
-function boot(demo){DEMO=demo;document.getElementById("modal").classList.add("hide");document.getElementById("loading").classList.add("show");let steps=[[10,"SISTEM..."],[25,"OPENSKY..."],[45,"HARITA..."],[65,"VERi..."],[82,"RADAR..."],[95,"OPTiMiZE..."],[100,"HAZIR!"]];let i=0;function next(){if(i>=steps.length){setTimeout(()=>{document.getElementById("loading").classList.remove("show");if(demo)initNoMap();else initMap();startClock();startRadar();startCompass();setupKeys();loadFlights();startRfTimer();initWorker();loadAirports();},500);return;}document.getElementById("ldbar").style.width=steps[i][0]+"%";i++;setTimeout(next,260);}next();}
+
+// ----- DÜZELTİLMİŞ BOOT VE MAP HATA YÖNETİMİ -----
+function handleMapError(err) {
+    console.error("Map error:", err);
+    if (mapLoadTimeout) clearTimeout(mapLoadTimeout);
+    document.getElementById("loading").classList.remove("show");
+    ntf("Harita yüklenemedi! Token geçersiz veya ağ hatası. Demo moda geçiliyor.", "err");
+    // Demo moda düş
+    DEMO = true;
+    initNoMap();
+    startClock(); startRadar(); startCompass(); setupKeys(); loadFlights(); startRfTimer(); initWorker(); loadAirports();
+    setSdot("demo");
+}
+
+function initMap() {
+    if (!TOKEN || TOKEN.length < 20) {
+        ntf("Token geçersiz, demo mod başlatılıyor.", "warn");
+        DEMO = true;
+        initNoMap();
+        return;
+    }
+    mapboxgl.accessToken = TOKEN;
+    MAP = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/satellite-v9",
+        center: [35, 40],
+        zoom: 4
+    });
+    MAP.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+    
+    // Hata yakalama
+    MAP.on('error', (e) => {
+        handleMapError(e);
+    });
+    
+    // Yükleme başarılı
+    MAP.on('load', () => {
+        if (mapLoadTimeout) clearTimeout(mapLoadTimeout);
+        setSdot("live");
+        document.getElementById("loading").classList.remove("show");
+        // Harita hazır, diğer başlangıçları yap (bunlar boot'tan çağrılmış olacak)
+    });
+    
+    // Zaman aşımı: 10 saniye içinde yüklenmezse hata
+    mapLoadTimeout = setTimeout(() => {
+        if (MAP && !MAP.loaded()) {
+            MAP.remove();
+            MAP = null;
+            handleMapError(new Error("Timeout"));
+        }
+    }, 10000);
+}
+
+function initNoMap() {
+    setSdot("demo");
+    document.getElementById("map").style.background = "radial-gradient(#030f1e, #020810)";
+    document.getElementById("loading").classList.remove("show");
+    ntf("Demo mod aktif - harita arkaplanı yok", "info");
+}
+
+function boot(demo) {
+    DEMO = demo;
+    document.getElementById("modal").classList.add("hide");
+    document.getElementById("loading").classList.add("show");
+    let steps = [[10,"SISTEM..."],[25,"OPENSKY..."],[45,"HARITA..."],[65,"VERi..."],[82,"RADAR..."],[95,"OPTiMiZE..."],[100,"HAZIR!"]];
+    let i = 0;
+    function next() {
+        if (i >= steps.length) {
+            setTimeout(() => {
+                if (demo) {
+                    initNoMap();
+                } else {
+                    initMap();
+                }
+                // Geri kalan başlangıçlar her iki durumda da yapılır
+                startClock();
+                startRadar();
+                startCompass();
+                setupKeys();
+                loadFlights();
+                startRfTimer();
+                initWorker();
+                loadAirports();
+            }, 500);
+            return;
+        }
+        document.getElementById("ldbar").style.width = steps[i][0] + "%";
+        i++;
+        setTimeout(next, 260);
+    }
+    next();
+}
+
+// Geri kalan fonksiyonlar (değişmedi)
 function loadAirports(){fetch("https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat").then(res=>res.text()).then(txt=>{airports=txt.split("\n").slice(0,200).map(line=>{let parts=line.split(",");if(parts.length<7)return null;let lat=parseFloat(parts[4]),lon=parseFloat(parts[5]);if(isNaN(lat)||isNaN(lon))return null;return{name:parts[1],lat:lat,lon:lon};}).filter(a=>a);}).catch(()=>console.log("Airport data failed"));}
-function doStart(){let v=document.getElementById("ti").value.trim();if(!v){document.getElementById("m-err").textContent="Token bos!";return;}TOKEN=v;localStorage.setItem("sw6tok",v);boot(false);}
+function doStart(){let v=document.getElementById("ti").value.trim();if(!v||v.length<20){document.getElementById("m-err").textContent="Token bos veya cok kisa (20+ karakter)!";return;}TOKEN=v;localStorage.setItem("sw6tok",v);boot(false);}
 function doDemo(){DEMO=true;boot(true);}
 function setupKeys(){document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;let k=e.key.toLowerCase();if(k==="f")toggleSearch();else if(k==="r")doRefresh();else if(k==="l")togglePanel();else if(k==="s")setLayer(0);else if(k==="d")setLayer(1);else if(k==="t")setLayer(2);else if(k==="h")toggleWx();else if(k==="n")toggleTrm();else if(k==="i")toggleAllTrails();else if(k==="c")gotoMe();else if(k==="x")closeInfo();else if(k==="escape"){if(helpOpen)toggleHelp();else if(searchOpen)toggleSearch();else closeInfo();}else if(k==="?")toggleHelp();else if(k==="f11"){e.preventDefault();doFS();}});}
 function closeInfo(){selIcao=null;document.getElementById("infopanel").classList.remove("vis");renderList();if(MAP)redrawMarkers();}
