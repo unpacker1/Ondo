@@ -1667,8 +1667,7 @@ BYTES=$(wc -c < "$HTML")
 LINES=$(wc -l < "$HTML")
 printf "  ${G}HTML hazir — %d byte, %d satir${N}\n" $BYTES $LINES
 
-# ── SYNTAX CHECK ──────────────────────────────────────────────────
-w("</script></body></html>")
+# ── SYNTAX CHECK ────────────────────────────────────────────────
 
 html = "\n".join(L)
 with open(HTML, "w", encoding="utf-8") as f:
