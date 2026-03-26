@@ -1,4 +1,4 @@
-```bash
+
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  SKYWATCH v4.0 ULTIMATE — Canli Ucak Takip Sistemi          ║
@@ -1758,4 +1758,3 @@ with socketserver.TCPServer(("", PORT), Handler) as httpd:
     print("  http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
     httpd.serve_forever()
 PYEOF
-```
