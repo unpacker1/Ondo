@@ -1,4 +1,4 @@
-#!/bin/bash
+ #!/bin/bash
 # SKYWATCH v7.2 — Login ve demo kesin çalışır, tüm 28 özellik
 G='\033[0;32m'; C='\033[0;36m'; N='\033[0m'; B='\033[1m'; R='\033[0;31m'
 clear
