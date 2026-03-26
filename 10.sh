@@ -1,16 +1,9 @@
-#!/bin/bash
-# HORUS-EYE Ultimate Edition - Tüm özellikler tek dosyada
-# Termux için optimize edilmiştir.
-
-if ! command -v python3 &> /dev/null; then
-    echo "Python3 yüklenmemiş! 'pkg install python' ile kurun."
-    exit 1
-fi
-
-echo "HORUS-EYE Ultimate başlatılıyor..."
-python3 - <<'PYTHON_SCRIPT'
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+HORUS-EYE Ultimate - Real Satellite Tracking & Space Data
+Termux / Linux uyumlu, tek dosya, performans odaklı.
+"""
 
 import http.server
 import socketserver
@@ -18,76 +11,65 @@ import socket
 import webbrowser
 import sys
 import json
-import os
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse
+import threading
+import time
 
-# ======================= HTML İÇERİĞİ (Tüm Özellikler) =======================
+# ======================= HTML İÇERİĞİ (Sade ve hızlı) =======================
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>HORUS-EYE · Ultimate Asset Tracker</title>
+    <title>HORUS-EYE · Real Time Tracker</title>
     <link rel="manifest" href="/manifest.json">
     <style>
-        /* ---- Temel stiller ---- */
-        body { margin: 0; overflow: hidden; font-family: 'Share Tech Mono', 'Courier New', monospace; color: #0ff; background-color: #000; }
-        .dashboard { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        /* Paneller */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Courier New', monospace; background: #000; color: #0ff; }
+        /* Paneller (sade, şeffaf, performans) */
         .panel {
-            pointer-events: auto;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(12px);
-            border-radius: 16px;
-            border: 1px solid rgba(0, 255, 255, 0.3);
+            position: absolute;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            border-left: 2px solid #0ff;
             padding: 12px;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
             font-size: 12px;
+            pointer-events: auto;
+            z-index: 20;
+            max-width: 320px;
+            max-height: 85vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
         }
-        .left-panel { position: absolute; top: 20px; left: 20px; width: 340px; max-height: 90vh; overflow-y: auto; }
-        .right-panel { position: absolute; bottom: 20px; right: 20px; width: 300px; max-height: 80vh; overflow-y: auto; }
-        .bottom-panel { position: absolute; bottom: 20px; left: 20px; width: 320px; background: rgba(0,0,0,0.7); border-radius: 12px; padding: 8px; pointer-events: auto; }
-        .title { font-size: 24px; font-weight: bold; letter-spacing: 2px; margin-bottom: 4px; text-shadow: 0 0 5px #0ff; }
-        .sub { font-size: 11px; color: #8aa; border-bottom: 1px dashed #2a6; margin-bottom: 12px; padding-bottom: 5px; }
-        .threat { background: rgba(255,30,30,0.2); border-left: 4px solid #f44; padding: 8px; margin: 10px 0; }
-        .pattern { background: rgba(0,20,40,0.7); margin: 5px 0; padding: 5px 8px; border-radius: 8px; border: 1px solid #1fa; }
-        .pattern-name { color: #ffaa44; font-weight: bold; }
-        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0; }
-        .data-item { font-size: 11px; }
-        .data-label { color: #7af; }
-        .data-value { font-weight: bold; color: #fff; }
+        .left-panel { top: 15px; left: 15px; width: 300px; }
+        .right-panel { bottom: 15px; right: 15px; width: 280px; max-height: 70vh; }
+        .bottom-panel { bottom: 15px; left: 15px; width: 300px; background: rgba(0,0,0,0.8); }
+        h3 { font-size: 14px; margin: 5px 0; border-bottom: 1px solid #0ff3; }
+        .data-row { display: flex; justify-content: space-between; margin: 5px 0; }
+        .threat { background: #f003; border-left: 3px solid #f44; padding: 6px; margin: 8px 0; }
         button, .btn {
-            background: none;
-            border: 1px solid #0ff;
-            border-radius: 20px;
-            padding: 4px 12px;
-            color: #0ff;
-            cursor: pointer;
-            font-family: monospace;
-            transition: 0.2s;
+            background: none; border: 1px solid #0ff; border-radius: 20px; padding: 4px 10px;
+            color: #0ff; cursor: pointer; font-family: monospace; transition: 0.2s;
         }
-        button:hover { background: #0ff; color: #000; box-shadow: 0 0 10px #0ff; }
-        input, select { background: #112; border: 1px solid #0ff; color: #0ff; border-radius: 12px; padding: 4px 8px; font-family: monospace; }
-        .user-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-        .avatar { width: 36px; height: 36px; background: #124; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #0ff; }
-        .comment-box { margin-top: 8px; display: flex; gap: 5px; }
-        .comment-input { flex: 1; }
-        .comment-list { max-height: 150px; overflow-y: auto; margin-top: 8px; font-size: 10px; }
-        .settings-group { margin: 10px 0; }
-        .slider { width: 100%; }
-        hr { border-color: #0ff3; }
-        .sat-list { max-height: 200px; overflow-y: auto; margin-top: 5px; }
-        .sat-item { padding: 4px; cursor: pointer; border-bottom: 1px solid #0ff3; }
+        button:hover { background: #0ff; color: #000; box-shadow: 0 0 8px #0ff; }
+        input, select { background: #112; border: 1px solid #0ff; color: #0ff; border-radius: 12px; padding: 4px 8px; width: 100%; margin: 4px 0; }
+        .sat-item { padding: 4px; border-bottom: 1px solid #0ff3; cursor: pointer; }
         .sat-item:hover { background: #0ff2; }
-        .graph-container { height: 150px; margin-top: 10px; }
-        canvas.graph { width: 100%; height: 100%; background: #000c; border-radius: 8px; }
+        .comment-box { display: flex; gap: 6px; margin: 8px 0; }
+        .comment-input { flex: 1; }
+        .comment-list { max-height: 150px; overflow-y: auto; font-size: 10px; }
+        .news-item { margin: 8px 0; border-left: 2px solid #0ff; padding-left: 8px; font-size: 11px; }
+        .apod-img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
+        .slider { width: 100%; }
+        hr { border-color: #0ff3; margin: 8px 0; }
         @media (max-width: 700px) {
-            .left-panel { width: 280px; top: 10px; left: 10px; max-height: 70vh; }
-            .right-panel { width: 260px; }
-            .bottom-panel { width: 260px; }
+            .left-panel, .right-panel, .bottom-panel { width: 260px; font-size: 10px; }
         }
     </style>
-    <!-- Kütüphaneler -->
+    <!-- Three.js ve yardımcılar -->
     <script type="importmap">
         {
             "imports": {
@@ -100,69 +82,55 @@ HTML_PAGE = """<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
-    <div class="dashboard">
-        <!-- Sol panel: Ana veriler + kontroller -->
-        <div class="panel left-panel">
-            <div class="title">HORUS-EYE</div>
-            <div class="sub">ULTIMATE ASSET TRACKING · SECURE LINK</div>
-            <div class="threat" id="threatPanel">
-                <span>⚠ THREAT LEVEL</span><br>
-                <span class="threat-level" id="threatLevel">12:26-03-03 · NOMINAL</span>
-            </div>
-            <div>🔍 PATTERN DETECTED</div>
-            <div id="patternList"></div>
-            <div class="data-grid" id="dataGrid"></div>
-            <div style="font-size: 11px;">📡 openSky + adsbexcha &nbsp;|&nbsp; <span id="liveStats">930 / 1.307</span></div>
-            <hr>
-            <div><b>🎮 KONTROLLER</b></div>
-            <div><label><input type="checkbox" id="toggleOrbitGSPOG" checked> GSPOG</label>
-                 <label><input type="checkbox" id="toggleOrbitFCK1EL" checked> FCK1EL</label>
-                 <label><input type="checkbox" id="toggleOrbitHAMIC" checked> HAMIC</label>
-                 <label><input type="checkbox" id="toggleMoon" checked> 🌙 Ay</label>
-            </div>
-            <div>Yörünge Yarıçapı (GSPOG): <input type="range" id="radiusGSPOG" min="4" max="8" step="0.1" value="5.4"></div>
-            <div>Yörünge Eğiklik (GSPOG): <input type="range" id="inclGSPOG" min="-1.5" max="1.5" step="0.01" value="0.32"></div>
-            <button id="focusGSPOG">🔭 GSPOG'a Odaklan</button>
-            <button id="focusFCK1EL">🔭 FCK1EL'a Odaklan</button>
-            <button id="focusHAMIC">🔭 HAMIC'a Odaklan</button>
-            <button id="resetCam">🌍 Dünya'ya Dön</button>
-            <hr>
-            <div><b>⚙️ AYARLAR</b></div>
-            <div><label>🔊 Sesli Uyarı: <input type="checkbox" id="soundAlert" checked></label></div>
-            <div><label>📢 Bildirim: <input type="checkbox" id="notificationAlert" checked></label></div>
-            <div><label>⭐ Yıldız Yoğunluğu: <input type="range" id="starDensity" min="0" max="3000" step="100" value="1800"></label></div>
-            <div><label>🌍 Arkaplan Rengi: <input type="color" id="bgColor" value="#010118"></label></div>
-            <button id="takeScreenshot">📸 Ekran Görüntüsü</button>
-            <button id="shareBtn">📤 Paylaş</button>
-            <hr>
-            <div><b>👤 KULLANICI</b></div>
-            <div><input type="text" id="username" placeholder="Kullanıcı adı" style="width:100%"></div>
-            <button id="loginBtn">Giriş Yap / Kaydet</button>
-            <div id="userStatus"></div>
+    <!-- Sol panel: Ana veriler ve kontroller -->
+    <div class="panel left-panel">
+        <div style="font-size: 20px; font-weight: bold;">HORUS-EYE</div>
+        <div class="threat" id="threatPanel">
+            <span>⚠ THREAT LEVEL</span><br>
+            <span id="threatLevel">Loading...</span>
         </div>
+        <div id="satInfo">🛰️ Gerçek uydular yükleniyor...</div>
+        <div class="data-row"><span>📡 ISS Konumu:</span> <span id="issPos">-</span></div>
+        <div class="data-row"><span>👨‍🚀 Astronot Sayısı:</span> <span id="astronauts">-</span></div>
+        <hr>
+        <div><b>🎮 Kontroller</b></div>
+        <div><label><input type="checkbox" id="toggleOrbits" checked> Yörüngeler</label></div>
+        <div><label><input type="checkbox" id="toggleMoon" checked> Ay</label></div>
+        <div><label>🔊 Sesli Uyarı: <input type="checkbox" id="soundAlert" checked></label></div>
+        <div><label>⭐ Yıldız Yoğunluğu: <input type="range" id="starDensity" min="0" max="2500" step="100" value="1500"></label></div>
+        <button id="resetCam">🌍 Dünya'ya Dön</button>
+        <button id="takeScreenshot">📸 Ekran Görüntüsü</button>
+        <hr>
+        <div><b>🔑 N2YO API Key</b></div>
+        <input type="text" id="apiKey" placeholder="n2yo.com'dan alınan anahtar">
+        <button id="saveApiKey">Kaydet</button>
+        <div style="font-size: 9px; color:#8aa;">Ücretsiz: 1000 istek/gün</div>
+    </div>
 
-        <!-- Sağ panel: Uydu listesi, yorumlar, grafik -->
-        <div class="panel right-panel">
-            <div><b>🛰️ TAKİP EDİLEN UYDULAR</b></div>
-            <div class="sat-list" id="satList"></div>
-            <hr>
-            <div><b>💬 YORUMLAR</b></div>
-            <div class="comment-box">
-                <input type="text" id="newComment" class="comment-input" placeholder="Yorum yaz...">
-                <button id="postComment">➤</button>
-            </div>
-            <div class="comment-list" id="commentList"></div>
-            <hr>
-            <div><b>📈 AÇI-ZAMAN GRAFİĞİ (GSPOG)</b></div>
-            <canvas id="angleGraph" class="graph" width="300" height="150"></canvas>
+    <!-- Sağ panel: Haberler, APOD, Uydu listesi -->
+    <div class="panel right-panel">
+        <h3>🌌 NASA APOD</h3>
+        <div id="apodTitle"></div>
+        <img id="apodImg" class="apod-img" style="display:none;">
+        <div id="apodExplanation" style="font-size:10px;"></div>
+        <hr>
+        <h3>📰 Uzay Haberleri</h3>
+        <div id="newsList"></div>
+        <hr>
+        <h3>💬 Yorumlar</h3>
+        <div class="comment-box">
+            <input type="text" id="newComment" class="comment-input" placeholder="Yorum yaz...">
+            <button id="postComment">➤</button>
         </div>
+        <div class="comment-list" id="commentList"></div>
+    </div>
 
-        <!-- Alt panel: Anomali ve tahmin -->
-        <div class="panel bottom-panel">
-            <div><b>🧠 ANOMALİ TESPİTİ & TAHMİN</b></div>
-            <div id="anomalyMsg">İzleme aktif, sapma yok.</div>
-            <div id="predictionMsg">Yörünge stabil.</div>
-        </div>
+    <!-- Alt panel: Uydu geçiş tahmini ve anomali -->
+    <div class="panel bottom-panel">
+        <h3>🛰️ Üst Geçiş Tahmini (İstanbul)</h3>
+        <div id="passPredict">-</div>
+        <h3>⚠️ Anomali / Tahmin</h3>
+        <div id="anomalyMsg">İzleme aktif</div>
     </div>
 
     <script type="module">
@@ -170,15 +138,14 @@ HTML_PAGE = """<!DOCTYPE html>
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-        // ---------- BAŞLANGIÇ ----------
+        // ---------- Three.js Sahne ----------
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x010118);
-        scene.fog = new THREE.FogExp2(0x010118, 0.0008);
+        scene.fog = new THREE.FogExp2(0x010118, 0.0006);
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 3, 18);
+        camera.position.set(0, 2, 16);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
         const labelRenderer = new CSS2DRenderer();
         labelRenderer.setSize(window.innerWidth, window.innerHeight);
@@ -189,73 +156,71 @@ HTML_PAGE = """<!DOCTYPE html>
         document.body.appendChild(labelRenderer.domElement);
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true; controls.dampingFactor = 0.05; controls.zoomSpeed = 1.2; controls.rotateSpeed = 0.8;
-        controls.target.set(0, 0, 0);
+
+        // Dünya
+        const earthGeo = new THREE.SphereGeometry(3.2, 128, 128);
+        const texLoader = new THREE.TextureLoader();
+        const earthMap = texLoader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg');
+        const earthSpec = texLoader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg');
+        const earthNorm = texLoader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg');
+        const cloudMap = texLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png');
+        const earthMat = new THREE.MeshPhongMaterial({ map: earthMap, specularMap: earthSpec, shininess: 5, normalMap: earthNorm });
+        const earth = new THREE.Mesh(earthGeo, earthMat);
+        scene.add(earth);
+        const cloudMat = new THREE.MeshPhongMaterial({ map: cloudMap, transparent: true, opacity: 0.12 });
+        const clouds = new THREE.Mesh(new THREE.SphereGeometry(3.23, 128, 128), cloudMat);
+        scene.add(clouds);
+
+        // Işık
+        const ambient = new THREE.AmbientLight(0x222222);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(5, 8, 6);
+        scene.add(dirLight);
 
         // Yıldızlar (dinamik)
         let starsMesh;
         function updateStars(count) {
             if (starsMesh) scene.remove(starsMesh);
-            const geometry = new THREE.BufferGeometry();
+            const geo = new THREE.BufferGeometry();
             const positions = new Float32Array(count * 3);
             for (let i = 0; i < count; i++) {
                 positions[i*3] = (Math.random() - 0.5) * 800;
                 positions[i*3+1] = (Math.random() - 0.5) * 800;
                 positions[i*3+2] = (Math.random() - 0.5) * 150 - 50;
             }
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            const material = new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, transparent: true });
-            starsMesh = new THREE.Points(geometry, material);
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.2 });
+            starsMesh = new THREE.Points(geo, mat);
             scene.add(starsMesh);
         }
-        updateStars(1800);
+        updateStars(1500);
         document.getElementById('starDensity').addEventListener('input', (e) => updateStars(parseInt(e.target.value)));
-        document.getElementById('bgColor').addEventListener('input', (e) => scene.background.set(e.target.value));
 
-        // Dünya
-        const earthGeo = new THREE.SphereGeometry(3.2, 128, 128);
-        const textureLoader = new THREE.TextureLoader();
-        const earthMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg');
-        const earthSpec = textureLoader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg');
-        const earthNorm = textureLoader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg');
-        const cloudMap = textureLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png');
-        const earthMat = new THREE.MeshPhongMaterial({ map: earthMap, specularMap: earthSpec, specular: new THREE.Color('grey'), shininess: 5, normalMap: earthNorm });
-        const earth = new THREE.Mesh(earthGeo, earthMat);
-        scene.add(earth);
-        const cloudGeo = new THREE.SphereGeometry(3.23, 128, 128);
-        const cloudMat = new THREE.MeshPhongMaterial({ map: cloudMap, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending });
-        const clouds = new THREE.Mesh(cloudGeo, cloudMat);
-        scene.add(clouds);
+        // Ay
+        const moonGeo = new THREE.SphereGeometry(0.5, 64, 64);
+        const moonMat = new THREE.MeshStandardMaterial({ color: 0xccccaa });
+        const moon = new THREE.Mesh(moonGeo, moonMat);
+        scene.add(moon);
+        let moonAngle = 0;
 
-        // Işık
-        const ambient = new THREE.AmbientLight(0x222222);
-        scene.add(ambient);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        dirLight.position.set(5, 10, 7);
-        scene.add(dirLight);
-        const fillLight = new THREE.PointLight(0x4466cc, 0.5);
-        fillLight.position.set(-3, 2, 4);
-        scene.add(fillLight);
-
-        // Yörünge verileri
-        const orbitsData = [
-            { id: 'GSPOG', radius: 5.4, inclination: 0.32, color: 0x33ffff, deg: 273, speed: 0.008, angle: 0, line: null, label: null, particles: [] },
-            { id: 'FCK1EL', radius: 6.7, inclination: 0.75, color: 0xffaa44, deg: 312, speed: 0.006, angle: 0, line: null, label: null, particles: [] },
-            { id: 'HAMIC', radius: 8.1, inclination: 1.08, color: 0xff66cc, deg: 295, speed: 0.005, angle: 0, line: null, label: null, particles: [] }
+        // Yörüngeler (üç farklı)
+        const orbits = [
+            { radius: 5.2, inc: 0.32, color: 0x33ffff, line: null, visible: true },
+            { radius: 6.5, inc: 0.75, color: 0xffaa44, line: null, visible: true },
+            { radius: 7.9, inc: 1.08, color: 0xff66cc, line: null, visible: true }
         ];
-        const orbitObjects = {};
-
-        // Yörünge çizgileri ve etiketleri oluştur
-        orbitsData.forEach(orb => {
+        orbits.forEach((orb, idx) => {
             const points = [];
             for (let i = 0; i <= 180; i++) {
                 const angle = (i / 180) * Math.PI * 2;
                 let x = orb.radius * Math.cos(angle);
                 let z = orb.radius * Math.sin(angle);
                 let y = 0;
-                const cosInc = Math.cos(orb.inclination);
-                const sinInc = Math.sin(orb.inclination);
-                const newY = y * cosInc - z * sinInc;
-                const newZ = y * sinInc + z * cosInc;
+                const cosI = Math.cos(orb.inc);
+                const sinI = Math.sin(orb.inc);
+                const newY = y * cosI - z * sinI;
+                const newZ = y * sinI + z * cosI;
                 points.push(new THREE.Vector3(x, newY, newZ));
             }
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -263,167 +228,137 @@ HTML_PAGE = """<!DOCTYPE html>
             const line = new THREE.LineLoop(geometry, material);
             scene.add(line);
             orb.line = line;
+        });
+        document.getElementById('toggleOrbits').addEventListener('change', (e) => {
+            orbits.forEach(orb => orb.line.visible = e.target.checked);
+        });
+        document.getElementById('toggleMoon').addEventListener('change', (e) => moon.visible = e.target.checked);
+        document.getElementById('resetCam').onclick = () => { controls.target.set(0,0,0); camera.position.set(0,2,16); controls.update(); };
 
+        // Gerçek uydu noktaları (dinamik)
+        const satMarkers = [];
+        function clearSatMarkers() {
+            satMarkers.forEach(m => scene.remove(m));
+            satMarkers.length = 0;
+        }
+        function addSatMarker(lat, lon, alt, name, color=0x88aaff) {
+            // Koordinat dönüşümü (enlem, boylam, yükseklik)
+            const r = 3.2 + (alt / 1000) * 0.2; // basit ölçek
+            const phi = (90 - lat) * Math.PI / 180;
+            const theta = lon * Math.PI / 180;
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.cos(phi);
+            const z = r * Math.sin(phi) * Math.sin(theta);
+            const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), new THREE.MeshStandardMaterial({ color: color, emissive: 0x2266aa }));
+            sphere.position.set(x, y, z);
+            scene.add(sphere);
+            satMarkers.push(sphere);
+            // etiket
             const div = document.createElement('div');
-            div.textContent = `${orb.id} | ${orb.deg}° turn`;
-            div.style.color = `#${orb.color.toString(16)}`;
-            div.style.backgroundColor = 'rgba(0,0,0,0.6)';
-            div.style.padding = '2px 8px';
-            div.style.borderRadius = '20px';
-            div.style.borderLeft = `3px solid #${orb.color.toString(16)}`;
+            div.textContent = name;
+            div.style.color = '#fff';
+            div.style.fontSize = '10px';
+            div.style.backgroundColor = 'rgba(0,0,0,0.5)';
+            div.style.padding = '2px 4px';
+            div.style.borderRadius = '12px';
             const label = new CSS2DObject(div);
-            const angleRad = Math.PI / 4;
-            let xPos = orb.radius * Math.cos(angleRad);
-            let zPos = orb.radius * Math.sin(angleRad);
-            let yPos = 0;
-            const cosI = Math.cos(orb.inclination);
-            const sinI = Math.sin(orb.inclination);
-            const rotY = yPos * cosI - zPos * sinI;
-            const rotZ = yPos * sinI + zPos * cosI;
-            label.position.set(xPos, rotY, rotZ);
+            label.position.set(x, y+0.1, z);
             scene.add(label);
-            orb.label = label;
+            satMarkers.push(label);
+        }
 
-            // Parçacık akışı
-            for (let i = 0; i < 30; i++) {
-                const particleGeo = new THREE.SphereGeometry(0.03, 6, 6);
-                const particleMat = new THREE.MeshStandardMaterial({ color: orb.color, emissive: orb.color });
-                const particle = new THREE.Mesh(particleGeo, particleMat);
-                scene.add(particle);
-                orb.particles.push({ mesh: particle, angle: (i / 30) * Math.PI * 2, speed: 0.01 + Math.random() * 0.01 });
+        // ----- API Çağrıları (30 sn'de bir) -----
+        let apiKey = localStorage.getItem('n2yo_key') || '';
+        document.getElementById('apiKey').value = apiKey;
+        document.getElementById('saveApiKey').onclick = () => {
+            const newKey = document.getElementById('apiKey').value.trim();
+            localStorage.setItem('n2yo_key', newKey);
+            apiKey = newKey;
+            fetchData(); // hemen yenile
+        };
+
+        async function fetchData() {
+            // ISS
+            try {
+                const issRes = await fetch('/api/iss');
+                const iss = await issRes.json();
+                document.getElementById('issPos').innerText = `${iss.lat.toFixed(1)}°, ${iss.lon.toFixed(1)}°`;
+                document.getElementById('astronauts').innerText = iss.people;
+            } catch(e) { console.warn(e); }
+
+            // Uydular (N2YO)
+            if (apiKey) {
+                try {
+                    const satRes = await fetch(`/api/satellites?key=${apiKey}`);
+                    const sats = await satRes.json();
+                    if (sats.above) {
+                        clearSatMarkers();
+                        sats.above.forEach(sat => {
+                            addSatMarker(sat.satlat, sat.satlng, sat.satalt, sat.satname, 0x88ff88);
+                        });
+                        document.getElementById('satInfo').innerHTML = `🛰️ ${sats.above.length} uydu görünürde`;
+                    } else {
+                        document.getElementById('satInfo').innerHTML = `⚠️ Uydu verisi alınamadı`;
+                    }
+                } catch(e) { console.warn(e); }
+            } else {
+                document.getElementById('satInfo').innerHTML = `🔑 N2YO API anahtarı giriniz`;
             }
-            orbitObjects[orb.id] = orb;
-        });
 
-        // Ay
-        const moonGeo = new THREE.SphereGeometry(0.5, 64, 64);
-        const moonMat = new THREE.MeshStandardMaterial({ color: 0xccccaa, emissive: 0x332200 });
-        const moon = new THREE.Mesh(moonGeo, moonMat);
-        scene.add(moon);
-        let moonAngle = 0;
-        const moonOrbitRadius = 10;
-        let moonVisible = true;
-
-        // Uydu noktacıkları (simülasyon)
-        const satellites = [];
-        for (let i = 0; i < 60; i++) {
-            const satGeo = new THREE.SphereGeometry(0.04, 8, 8);
-            const satMat = new THREE.MeshStandardMaterial({ color: 0x88aaff, emissive: 0x2266aa });
-            const sat = new THREE.Mesh(satGeo, satMat);
-            scene.add(sat);
-            satellites.push({
-                mesh: sat,
-                radius: 4 + Math.random() * 5,
-                speed: 0.002 + Math.random() * 0.004,
-                angle: Math.random() * Math.PI * 2,
-                inclination: (Math.random() - 0.5) * 1.2,
-                yOffset: (Math.random() - 0.5) * 1.5
-            });
-        }
-
-        // Işık efektleri
-        const glowPoints = [];
-        for (let i=0; i<12; i++) {
-            const light = new THREE.PointLight(0x2266ff, 0.4, 12);
-            scene.add(light);
-            glowPoints.push(light);
-        }
-
-        // ---------- KONTROLLER ----------
-        document.getElementById('toggleOrbitGSPOG').addEventListener('change', e => orbitObjects.GSPOG.line.visible = e.target.checked);
-        document.getElementById('toggleOrbitFCK1EL').addEventListener('change', e => orbitObjects.FCK1EL.line.visible = e.target.checked);
-        document.getElementById('toggleOrbitHAMIC').addEventListener('change', e => orbitObjects.HAMIC.line.visible = e.target.checked);
-        document.getElementById('toggleMoon').addEventListener('change', e => moon.visible = e.target.checked);
-        document.getElementById('radiusGSPOG').addEventListener('input', e => {
-            orbitObjects.GSPOG.radius = parseFloat(e.target.value);
-            recreateOrbit(orbitObjects.GSPOG);
-        });
-        document.getElementById('inclGSPOG').addEventListener('input', e => {
-            orbitObjects.GSPOG.inclination = parseFloat(e.target.value);
-            recreateOrbit(orbitObjects.GSPOG);
-        });
-
-        function recreateOrbit(orb) {
-            const points = [];
-            for (let i = 0; i <= 180; i++) {
-                const angle = (i / 180) * Math.PI * 2;
-                let x = orb.radius * Math.cos(angle);
-                let z = orb.radius * Math.sin(angle);
-                let y = 0;
-                const cosInc = Math.cos(orb.inclination);
-                const sinInc = Math.sin(orb.inclination);
-                const newY = y * cosInc - z * sinInc;
-                const newZ = y * sinInc + z * cosInc;
-                points.push(new THREE.Vector3(x, newY, newZ));
+            // Geçiş tahmini
+            if (apiKey) {
+                try {
+                    const passRes = await fetch(`/api/passes?key=${apiKey}`);
+                    const pass = await passRes.json();
+                    if (pass.passes && pass.passes[0]) {
+                        const p = pass.passes[0];
+                        const date = new Date(p.startUTC * 1000).toLocaleTimeString();
+                        document.getElementById('passPredict').innerHTML = `ISS geçişi: ${date} (${p.duration}s)`;
+                    } else {
+                        document.getElementById('passPredict').innerHTML = 'Geçiş yok';
+                    }
+                } catch(e) { document.getElementById('passPredict').innerHTML = 'Hata'; }
             }
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            orb.line.geometry.dispose();
-            orb.line.geometry = geometry;
-            // etiketi güncelle
-            const angleRad = Math.PI / 4;
-            let xPos = orb.radius * Math.cos(angleRad);
-            let zPos = orb.radius * Math.sin(angleRad);
-            let yPos = 0;
-            const cosI = Math.cos(orb.inclination);
-            const sinI = Math.sin(orb.inclination);
-            const rotY = yPos * cosI - zPos * sinI;
-            const rotZ = yPos * sinI + zPos * cosI;
-            orb.label.position.set(xPos, rotY, rotZ);
-        }
 
-        function focusOnOrbit(orb) {
-            const pos = new THREE.Vector3(orb.radius, 0, 0);
-            controls.target.copy(pos);
-            camera.position.set(pos.x + 2, pos.y + 1, pos.z + 3);
-            controls.update();
-        }
-        document.getElementById('focusGSPOG').onclick = () => focusOnOrbit(orbitObjects.GSPOG);
-        document.getElementById('focusFCK1EL').onclick = () => focusOnOrbit(orbitObjects.FCK1EL);
-        document.getElementById('focusHAMIC').onclick = () => focusOnOrbit(orbitObjects.HAMIC);
-        document.getElementById('resetCam').onclick = () => { controls.target.set(0,0,0); camera.position.set(0,3,18); controls.update(); };
-
-        // ---------- VERİ PANELİ GÜNCELLEME (simülasyon) ----------
-        function updateDataPanel() {
-            const threat = Math.random() > 0.8 ? '⚠️ YÜKSEK' : 'NOMINAL';
-            document.getElementById('threatLevel').innerHTML = `12:26-03-03 · ${threat}`;
-            if (threat.includes('YÜKSEK') && document.getElementById('soundAlert').checked) {
-                const audio = new Audio('data:audio/wav;base64,U3RlcmVv...'); // dummy
-                audio.play().catch(e=>console.log);
-                if (document.getElementById('notificationAlert').checked && Notification.permission === 'granted') {
-                    new Notification('HORUS-EYE Uyarısı', { body: 'Yüksek tehdit seviyesi tespit edildi!' });
+            // Uzay hava durumu (NOAA)
+            try {
+                const weather = await fetch('/api/spaceweather');
+                const w = await weather.json();
+                document.getElementById('threatLevel').innerHTML = w.threat;
+                if (w.threat.includes('YÜKSEK') && document.getElementById('soundAlert').checked) {
+                    new Audio().play().catch(e=>{});
+                    if (Notification.permission === 'granted') new Notification('Uyarı', { body: 'Jeomanyetik fırtına seviyesi yükseldi!' });
                 }
-            }
-            const patterns = ['GSPOG (273°)', 'FCK1EL (312°)', 'HAMIC (295°)'];
-            document.getElementById('patternList').innerHTML = patterns.map(p => `<div class="pattern"><span class="pattern-name">ORBIT pattern: ${p.split(' ')[0]}</span><span class="pattern-deg">${p.split(' ')[1]}</span></div>`).join('');
-            document.getElementById('dataGrid').innerHTML = `
-                <div class="data-item"><span class="data-label">SIG/FRQ</span><br><span class="data-value">${(2.1+Math.random()*0.1).toFixed(3)}</span></div>
-                <div class="data-item"><span class="data-label">AZ/ELEV</span><br><span class="data-value">${Math.floor(45+Math.random()*40)}°</span></div>
-                <div class="data-item"><span class="data-label">STATUS</span><br><span class="data-value">5YS · NOMINAL</span></div>
-                <div class="data-item"><span class="data-label">UPLINK</span><br><span class="data-value">ACTIVE</span></div>
-                <div class="data-item"><span class="data-label">FEEDS</span><br><span class="data-value">2/3</span></div>
-                <div class="data-item"><span class="data-label">TOTAL</span><br><span class="data-value">${Math.floor(6800+Math.random()*200)}</span></div>
-                <div class="data-item"><span class="data-label">TTL/TVL</span><br><span class="data-value">${Math.floor(2400+Math.random()*100)} / ${Math.floor(4400+Math.random()*100)}</span></div>
-            `;
-            document.getElementById('liveStats').innerHTML = `${Math.floor(900+Math.random()*50)} / ${(1.2+Math.random()*0.2).toFixed(3)}`;
-        }
-        setInterval(updateDataPanel, 3000);
+            } catch(e) { console.warn(e); }
 
-        // Uydu listesi (sahte)
-        const satNames = ['GEO-1', 'GPS-23', 'STARLINK-45', 'ISS (ZARYA)', 'HST', 'TURKSAT-6A'];
-        function updateSatList() {
-            const listDiv = document.getElementById('satList');
-            listDiv.innerHTML = satNames.map(name => `<div class="sat-item" data-sat="${name}">🛰️ ${name}</div>`).join('');
-            document.querySelectorAll('.sat-item').forEach(el => {
-                el.addEventListener('click', () => { alert(`Uydu ${el.dataset.sat} seçildi (simülasyon).`); });
-            });
+            // NASA APOD
+            try {
+                const apod = await fetch('/api/apod');
+                const a = await apod.json();
+                document.getElementById('apodTitle').innerHTML = a.title;
+                const img = document.getElementById('apodImg');
+                if (a.url) {
+                    img.src = a.url;
+                    img.style.display = 'block';
+                }
+                document.getElementById('apodExplanation').innerHTML = a.explanation.substring(0, 150)+'...';
+            } catch(e) { console.warn(e); }
+
+            // Haberler
+            try {
+                const news = await fetch('/api/news');
+                const n = await news.json();
+                document.getElementById('newsList').innerHTML = n.slice(0,3).map(art => `<div class="news-item"><a href="${art.url}" target="_blank" style="color:#0ff;">${art.title}</a><br><span style="font-size:9px;">${art.publishedAt.substring(0,10)}</span></div>`).join('');
+            } catch(e) { console.warn(e); }
         }
-        updateSatList();
+
+        setInterval(fetchData, 30000);
+        fetchData();
 
         // Yorumlar (localStorage)
         let comments = JSON.parse(localStorage.getItem('horus_comments') || '[]');
         function renderComments() {
-            const list = document.getElementById('commentList');
-            list.innerHTML = comments.map(c => `<div><strong>${c.user}:</strong> ${c.text}</div>`).join('');
+            document.getElementById('commentList').innerHTML = comments.map(c => `<div><b>${c.user}:</b> ${c.text}</div>`).join('');
         }
         document.getElementById('postComment').onclick = () => {
             const user = localStorage.getItem('horus_user') || 'Anonim';
@@ -436,54 +371,8 @@ HTML_PAGE = """<!DOCTYPE html>
             }
         };
         renderComments();
-
-        // Kullanıcı girişi
-        document.getElementById('loginBtn').onclick = () => {
-            const username = document.getElementById('username').value.trim();
-            if (username) {
-                localStorage.setItem('horus_user', username);
-                document.getElementById('userStatus').innerHTML = `✅ Hoşgeldin, ${username}`;
-            } else {
-                localStorage.removeItem('horus_user');
-                document.getElementById('userStatus').innerHTML = `👤 Misafir`;
-            }
-        };
         const savedUser = localStorage.getItem('horus_user');
-        if (savedUser) document.getElementById('userStatus').innerHTML = `✅ Hoşgeldin, ${savedUser}`;
-        else document.getElementById('userStatus').innerHTML = `👤 Misafir`;
-
-        // Grafik (Chart.js)
-        const ctx = document.getElementById('angleGraph').getContext('2d');
-        let angleHistory = Array(20).fill(0);
-        let chart = new Chart(ctx, {
-            type: 'line',
-            data: { labels: Array(20).fill(''), datasets: [{ label: 'GSPOG Açısı (°)', data: angleHistory, borderColor: '#0ff', fill: false }] },
-            options: { responsive: true, maintainAspectRatio: true }
-        });
-        setInterval(() => {
-            const newAngle = (orbitObjects.GSPOG.angle * 180 / Math.PI) % 360;
-            angleHistory.push(newAngle);
-            if (angleHistory.length > 20) angleHistory.shift();
-            chart.data.datasets[0].data = [...angleHistory];
-            chart.update();
-        }, 1000);
-
-        // Anomali tespiti (basit: açı değişim hızı anormalse)
-        let lastAngle = 0;
-        setInterval(() => {
-            const current = orbitObjects.GSPOG.angle;
-            const delta = Math.abs(current - lastAngle);
-            if (delta > 0.5) {
-                document.getElementById('anomalyMsg').innerHTML = '⚠️ ANOMALİ: Açısal hız sapması!';
-                if (document.getElementById('soundAlert').checked) new Audio().play().catch(e=>{});
-            } else {
-                document.getElementById('anomalyMsg').innerHTML = '✅ İzleme normal, sapma yok.';
-            }
-            lastAngle = current;
-            // Tahmin (basit)
-            const nextTurn = (orbitObjects.GSPOG.deg + (orbitObjects.GSPOG.speed * 10)).toFixed(1);
-            document.getElementById('predictionMsg').innerHTML = `🔮 Tahmini kümülatif dönüş: ${nextTurn}° (10 sn içinde)`;
-        }, 5000);
+        if (!savedUser) localStorage.setItem('horus_user', 'Misafir');
 
         // Ekran görüntüsü
         document.getElementById('takeScreenshot').onclick = () => {
@@ -494,94 +383,37 @@ HTML_PAGE = """<!DOCTYPE html>
                 link.click();
             });
         };
-        document.getElementById('shareBtn').onclick = () => {
-            if (navigator.share) navigator.share({ title: 'HORUS-EYE', text: 'Global Asset Tracking', url: window.location.href });
-            else alert('Paylaşım desteklenmiyor.');
-        };
 
-        // Ses ve bildirim izni
-        if ('Notification' in window && document.getElementById('notificationAlert').checked) Notification.requestPermission();
-
-        // ---------- ANİMASYON DÖNGÜSÜ ----------
+        // Animasyon döngüsü (ay, dünya dönüşü)
         let time = 0;
         function animate() {
             requestAnimationFrame(animate);
             time += 0.005;
             earth.rotation.y += 0.0008;
             clouds.rotation.y += 0.0009;
-
-            // Yörünge cisimlerini hareket ettir (parçacıklar)
-            orbitsData.forEach(orb => {
-                orb.angle += orb.speed;
-                // Parçacıklar
-                orb.particles.forEach((p, idx) => {
-                    p.angle += p.speed;
-                    let x = orb.radius * Math.cos(p.angle);
-                    let z = orb.radius * Math.sin(p.angle);
-                    let y = 0;
-                    const cosInc = Math.cos(orb.inclination);
-                    const sinInc = Math.sin(orb.inclination);
-                    const newY = y * cosInc - z * sinInc;
-                    const newZ = y * sinInc + z * cosInc;
-                    p.mesh.position.set(x, newY, newZ);
-                });
-            });
-
-            // Ay hareketi
             moonAngle += 0.003;
-            const moonX = moonOrbitRadius * Math.cos(moonAngle);
-            const moonZ = moonOrbitRadius * Math.sin(moonAngle);
-            moon.position.set(moonX, 0.5, moonZ);
-
-            // Uydular
-            satellites.forEach(sat => {
-                sat.angle += sat.speed;
-                const x = sat.radius * Math.cos(sat.angle);
-                const z = sat.radius * Math.sin(sat.angle);
-                const y = Math.sin(sat.angle * 1.7) * 0.8 + sat.yOffset;
-                sat.mesh.position.set(x, y * 0.7, z);
-            });
-
-            glowPoints.forEach((light, idx) => {
-                light.position.x = Math.sin(time + idx) * 5.2;
-                light.position.z = Math.cos(time * 0.7 + idx) * 5.5;
-                light.position.y = Math.sin(time * 1.2 + idx) * 2;
-            });
-
+            moon.position.set(9 * Math.cos(moonAngle), 0.5, 9 * Math.sin(moonAngle));
             controls.update();
             renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
         }
         animate();
-
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             labelRenderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        // PWA manifest (basit)
-        const manifest = {
-            name: "HORUS-EYE",
-            short_name: "HORUS",
-            start_url: ".",
-            display: "standalone",
-            theme_color: "#010118",
-            background_color: "#000000"
-        };
-        const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-        const manifestURL = URL.createObjectURL(manifestBlob);
-        const manifestLink = document.createElement('link');
-        manifestLink.rel = 'manifest';
-        manifestLink.href = manifestURL;
-        document.head.appendChild(manifestLink);
+        if ('Notification' in window) Notification.requestPermission();
     </script>
 </body>
 </html>
 """
 
-# ======================= HTTP SUNUCU (serving HTML) =======================
+# ======================= PYTHON SUNUCU (API Endpoints) =======================
+import requests
+import json
+
 class CustomHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -591,23 +423,95 @@ class CustomHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(HTML_PAGE.encode("utf-8"))
         elif parsed.path == "/manifest.json":
-            manifest = {
-                "name": "HORUS-EYE",
-                "short_name": "HORUS",
-                "start_url": ".",
-                "display": "standalone",
-                "theme_color": "#010118",
-                "background_color": "#000000"
-            }
+            manifest = {"name": "HORUS-EYE", "short_name": "HORUS", "start_url": ".", "display": "standalone", "theme_color": "#010118"}
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(manifest).encode())
+        elif parsed.path.startswith("/api/satellites"):
+            key = self.get_query_param('key')
+            if not key:
+                self.send_json({"error": "No API key"})
+                return
+            # N2YO: 18 uydu, İstanbul (41.0082, 28.9784) üzeri
+            url = f"https://api.n2yo.com/rest/v1/satellite/above/41.0082/28.9784/0/70/18/&apiKey={key}"
+            try:
+                resp = requests.get(url, timeout=8)
+                data = resp.json()
+                self.send_json(data)
+            except Exception as e:
+                self.send_json({"error": str(e)})
+        elif parsed.path.startswith("/api/passes"):
+            key = self.get_query_param('key')
+            if not key:
+                self.send_json({"error": "No API key"})
+                return
+            # ISS (25544) için geçiş tahmini
+            url = f"https://api.n2yo.com/rest/v1/satellite/visualpasses/25544/41.0082/28.9784/0/5/1/&apiKey={key}"
+            try:
+                resp = requests.get(url, timeout=8)
+                data = resp.json()
+                self.send_json(data)
+            except:
+                self.send_json({"passes": []})
+        elif parsed.path == "/api/iss":
+            try:
+                resp = requests.get("http://api.open-notify.org/iss-now.json", timeout=5)
+                pos = resp.json()
+                lat = float(pos['iss_position']['latitude'])
+                lon = float(pos['iss_position']['longitude'])
+                people_resp = requests.get("http://api.open-notify.org/astros.json", timeout=5)
+                people = people_resp.json()['number']
+                self.send_json({"lat": lat, "lon": lon, "people": people})
+            except:
+                self.send_json({"lat": 0, "lon": 0, "people": 0})
+        elif parsed.path == "/api/spaceweather":
+            # NOAA SWPC - jeomanyetik fırtına seviyesi (simplified)
+            try:
+                # NOAA'nın JSON endpoint'i (Kp indeksi)
+                resp = requests.get("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json", timeout=5)
+                data = resp.json()
+                latest = data[-1]
+                kp = float(latest[1])
+                if kp >= 7:
+                    threat = "YÜKSEK (G3+)"
+                elif kp >= 5:
+                    threat = "ORTA (G2)"
+                else:
+                    threat = "DÜŞÜK (G1)"
+                self.send_json({"threat": threat, "kp": kp})
+            except:
+                self.send_json({"threat": "NOMINAL"})
+        elif parsed.path == "/api/apod":
+            try:
+                resp = requests.get("https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY", timeout=5)
+                data = resp.json()
+                self.send_json({"title": data.get('title', ''), "url": data.get('url', ''), "explanation": data.get('explanation', '')})
+            except:
+                self.send_json({"title": "NASA APOD", "url": "", "explanation": "Veri alınamadı."})
+        elif parsed.path == "/api/news":
+            try:
+                resp = requests.get("https://spaceflightnewsapi.net/api/v2/articles?_limit=5", timeout=5)
+                articles = resp.json()
+                self.send_json([{"title": a['title'], "url": a['url'], "publishedAt": a['publishedAt']} for a in articles])
+            except:
+                self.send_json([{"title": "Haber yüklenemedi", "url": "#", "publishedAt": ""}])
         else:
             self.send_response(404)
             self.end_headers()
-            self.wfile.write(b"404 - Not Found")
-    
+            self.wfile.write(b"404")
+
+    def get_query_param(self, name):
+        parsed = urlparse(self.path)
+        query = dict(qc.split("=") for qc in parsed.query.split("&") if "=" in qc)
+        return query.get(name, "")
+
+    def send_json(self, data):
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode())
+
     def log_message(self, format, *args):
         sys.stdout.write(f"[{self.address_string()}] {args[0]}\n")
 
@@ -642,4 +546,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-PYTHON_SCRIPT
