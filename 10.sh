@@ -1,56 +1,70 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -e
 
-# Renkli çıktı için
+# Renkler
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-echo -e "${CYAN}[+] Neon Exploit Panel - Otomatik Kurulum ve Çalıştırma${NC}"
+echo -e "${CYAN}[+] Neon Exploit Panel - Güvenli Kurulum${NC}"
 echo -e "${CYAN}[+] Sadece eğitim ve yetkilendirilmiş testler için kullanın.${NC}"
 
-# 1. Sistem güncelleme ve temel paketler
-echo -e "${GREEN}[1/6] Sistem güncelleniyor ve temel paketler yükleniyor...${NC}"
-echo -e "${YELLOW}>> pkg update -y${NC}"
+# Android API seviyesini otomatik al
+API_LEVEL=$(getprop ro.build.version.sdk 2>/dev/null || echo "28")
+export ANDROID_API_LEVEL=$API_LEVEL
+echo -e "${YELLOW}[+] Android API seviyesi: $ANDROID_API_LEVEL${NC}"
+
+# 1. Sistem güncelleme
+echo -e "${GREEN}[1/6] Sistem güncelleniyor...${NC}"
 pkg update -y | while IFS= read -r line; do echo "  $line"; done
-echo -e "${YELLOW}>> pkg install -y python python-pip netcat-openbsd${NC}"
 pkg install -y python python-pip netcat-openbsd | while IFS= read -r line; do echo "  $line"; done
 
-# 2. Rust kontrolü (cryptography derlemesi için)
+# 2. Rust kontrolü (cryptography için)
 echo -e "${GREEN}[2/6] Rust kontrol ediliyor...${NC}"
 if ! command -v rustc &> /dev/null; then
-    echo -e "${CYAN}Rust bulunamadı, kuruluyor...${NC}"
-    echo -e "${YELLOW}>> pkg install rust${NC}"
+    echo -e "${YELLOW}Rust bulunamadı, kuruluyor...${NC}"
     pkg install -y rust | while IFS= read -r line; do echo "  $line"; done
 else
-    echo -e "${CYAN}Rust zaten kurulu.${NC}"
+    echo -e "${GREEN}Rust zaten kurulu.${NC}"
 fi
 
 # 3. Python kütüphaneleri (flask, requests)
 echo -e "${GREEN}[3/6] Python kütüphaneleri yükleniyor...${NC}"
-echo -e "${YELLOW}>> pip install flask requests --progress-bar on${NC}"
 pip install flask requests --progress-bar on | while IFS= read -r line; do echo "  $line"; done
 
-# 4. Paramiko (önce pip, başarısız olursa pkg)
+# 4. Paramiko (dene, başarısız olursa devam et)
 echo -e "${GREEN}[4/6] Paramiko yükleniyor...${NC}"
-echo -e "${YELLOW}>> Deneme: pip install paramiko --progress-bar on${NC}"
+PARAMIKO_OK=false
+echo -e "${YELLOW}Paramiko pip ile deneniyor...${NC}"
 if pip install paramiko --progress-bar on 2>&1 | while IFS= read -r line; do echo "  $line"; done; then
-    echo -e "${GREEN}Paramiko pip ile başarıyla yüklendi.${NC}"
+    PARAMIKO_OK=true
+    echo -e "${GREEN}Paramiko başarıyla yüklendi.${NC}"
 else
-    echo -e "${YELLOW}Pip başarısız oldu, Termux paketi deneniyor...${NC}"
-    echo -e "${YELLOW}>> pkg install python-paramiko${NC}"
-    pkg install -y python-paramiko | while IFS= read -r line; do echo "  $line"; done
-    echo -e "${GREEN}Paramiko Termux paketi ile yüklendi.${NC}"
+    echo -e "${RED}Paramiko pip ile kurulamadı. SSH brute force devre dışı kalacak.${NC}"
+    # Termux'da belki farklı isimle var mı kontrol et
+    if pkg list-installed | grep -q paramiko; then
+        echo -e "${GREEN}Paramiko Termux paketi zaten kurulu.${NC}"
+        PARAMIKO_OK=true
+    else
+        echo -e "${YELLOW}Termux deposunda python-paramiko aranıyor...${NC}"
+        if pkg show python-paramiko &>/dev/null; then
+            pkg install -y python-paramiko | while IFS= read -r line; do echo "  $line"; done
+            PARAMIKO_OK=true
+            echo -e "${GREEN}Paramiko Termux paketi ile yüklendi.${NC}"
+        else
+            echo -e "${RED}Paramiko kurulamadı. SSH brute force kullanılamayacak.${NC}"
+        fi
+    fi
 fi
 
 # 5. Rastgele port seç
 PANEL_PORT=$(( RANDOM % 1000 + 5000 ))
 
-# 6. Python kodunu geçici dosyaya yaz
+# 6. Python kodunu geçici dosyaya yaz (paramiko durumuna göre modül ayarlanacak)
 echo -e "${GREEN}[5/6] Python panel kodu oluşturuluyor...${NC}"
-cat > /data/data/com.termux/files/usr/tmp/neon_panel_progress.py << 'EOF'
+cat > /data/data/com.termux/files/usr/tmp/neon_panel_fixed.py << EOF
 import random
 import socket
 import threading
@@ -63,12 +77,13 @@ import ftplib
 import requests
 from flask import Flask, render_template_string, request, jsonify
 
-# paramiko yüklü mü kontrol et
+# paramiko yüklü mü kontrol et (başarısız olursa False)
+PARAMIKO_AVAILABLE = False
 try:
     import paramiko
     PARAMIKO_AVAILABLE = True
 except ImportError:
-    PARAMIKO_AVAILABLE = False
+    pass
 
 app = Flask(__name__)
 
@@ -78,7 +93,6 @@ OPEN_PORTS = []
 TARGET_IP = "127.0.0.1"
 listener_process = None
 
-# ---------- Loglama ----------
 def log(message):
     with open(LOG_FILE, "a") as f:
         f.write(f"[{time.ctime()}] {message}\n")
@@ -543,14 +557,11 @@ if __name__ == '__main__':
 EOF
 
 # 7. Python dosyasındaki port değişkenini güncelle
-sed -i "s/\$PANEL_PORT/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_panel_progress.py
+sed -i "s/\$PANEL_PORT/$PANEL_PORT/" /data/data/com.termux/files/usr/tmp/neon_panel_fixed.py
 
 echo -e "${GREEN}[6/6] Panel başlatılıyor...${NC}"
 echo -e "${CYAN}Adres: http://localhost:$PANEL_PORT${NC}"
 echo -e "${RED}[!] Ctrl+C ile durdurabilirsiniz.${NC}"
 
 # 8. Python panelini çalıştır
-python /data/data/com.termux/files/usr/tmp/neon_panel_progress.py
-
-# (İsteğe bağlı: çıkışta geçici dosyayı sil)
-# rm /data/data/com.termux/files/usr/tmp/neon_panel_progress.py
+python /data/data/com.termux/files/usr/tmp/neon_panel_fixed.py
