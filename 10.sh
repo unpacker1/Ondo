@@ -1,22 +1,20 @@
-cat > ~/horus_eye.sh << 'SCRIPT'
+cat > ~/10.sh << 'SCRIPT'
 #!/data/data/com.termux/files/usr/bin/bash
 
 set -e
 
-echo "=== Horus-Eye Demo Kurulumu ==="
-
-# Güncelleme ve python kurulumu
+echo "[1] Güncellemeler ve Python kuruluyor..."
 pkg update -y
 pkg install python -y
 
-# Flask kurulumu
+echo "[2] Flask kuruluyor..."
 pip install flask
 
-# Çalışma dizini
+echo "[3] Proje dizini oluşturuluyor..."
 mkdir -p ~/horus_eye_demo/templates
 cd ~/horus_eye_demo
 
-# app.py oluştur
+echo "[4] app.py yazılıyor..."
 cat > app.py << 'APP'
 from flask import Flask, render_template, jsonify
 import random
@@ -54,7 +52,7 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
 APP
 
-# dashboard.html oluştur
+echo "[5] dashboard.html yazılıyor..."
 cat > templates/dashboard.html << 'HTML'
 <!DOCTYPE html>
 <html lang="en">
@@ -223,7 +221,6 @@ echo ""
 echo "=== Kurulum tamamlandı! ==="
 echo "Sunucu başlatılıyor..."
 echo "Tarayıcıdan http://localhost:5000 adresini açın."
-echo "Başka cihazlar için: http://$(ifconfig wlan0 2>/dev/null | grep 'inet ' | awk '{print $2}'):5000"
 echo "Sunucuyu durdurmak için Ctrl+C"
 echo ""
 
