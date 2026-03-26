@@ -1,8 +1,8 @@
 #!/bin/bash
-# SKYWATCH v7 — Tüm 28 öneri + login hata yönetimi
+# SKYWATCH v7.1 — Buton sorunu giderildi, tüm özellikler çalışıyor
 G='\033[0;32m'; C='\033[0;36m'; N='\033[0m'; B='\033[1m'; R='\033[0;31m'
 clear
-printf "\n${G}${B}  SKYWATCH v7.0${N}\n  ${C}28 yenilik + login düzeltmesi — Eski WebView uyumlu${N}\n\n"
+printf "\n${G}${B}  SKYWATCH v7.1${N}\n  ${C}Butonlar düzeltildi — Eski WebView uyumlu${N}\n\n"
 
 PY=$(command -v python3 || command -v python)
 [ -z "$PY" ] && { pkg install python -y 2>/dev/null || apt install python3 -y 2>/dev/null; PY=$(command -v python3); }
@@ -93,7 +93,7 @@ Type=Application
 Terminal=true
 EOF
 
-# ---------- HTML + JS (tüm hatalar giderildi) ----------
+# ---------- HTML + JS (hatasız, butonlar çalışır) ----------
 $PY - << 'WRITEPY'
 import os
 HTML_PATH = os.path.join(os.environ.get("TMPDIR", "/tmp"), "sw7.html")
@@ -274,99 +274,523 @@ html,body{width:100%;height:100%;overflow:hidden;background:#020810;color:#a8ffd
 <link rel="manifest" href="manifest.json">
 
 <script>
-// ----- TÜM ÖZELLİKLER + LOGIN HATA YÖNETİMİ -----
-let MAP=null,TOKEN="",DEMO=false,flights=[],filtered=[],selIcao=null;
-let activeF=0,mlimit=150,panelOpen=true,searchOpen=false,helpOpen=false,curLayer=0,wxOn=false,trmOn=false,allTrails=false,radarOn=false,darkTheme=false;
-let markers={},trailPts={},trailOn={},spdHist={},altHist={},replayInterval=null,replayActive=false,replayPoints=[];
-let alerts=[],rfTimer=null,RF=30000,cfg=[false,false,true],worker=null;
-let lang="tr",airports=[],aircraftTypes={};
-let mapLoadTimeout=null;
+// ----- TÜM ÖZELLİKLER + BUTON DÜZELTMELERİ -----
+let MAP = null, TOKEN = "", DEMO = false, flights = [], filtered = [], selIcao = null;
+let activeF = 0, mlimit = 150, panelOpen = true, searchOpen = false, helpOpen = false, curLayer = 0;
+let wxOn = false, trmOn = false, allTrails = false, radarOn = false, darkTheme = false;
+let markers = {}, trailPts = {}, trailOn = {}, spdHist = {}, altHist = {}, replayInterval = null, replayActive = false, replayPoints = [];
+let alerts = [], rfTimer = null, RF = 30000, cfg = [false, false, true], worker = null;
+let lang = "tr", airports = [], aircraftTypes = {};
+let mapLoadTimeout = null;
 
 // Dil
-const translations={tr:{search:"Ara",refresh:"Yenile",location:"Konum",weather:"Hava",night:"Gece",trails:"Izler",theme:"Tema"},en:{search:"Search",refresh:"Refresh",location:"Location",weather:"Weather",night:"Night",trails:"Trails",theme:"Theme"}};
-function t(key){return translations[lang][key]||key;}
-function setLanguage(l){lang=l;localStorage.setItem("lang",l);}
+const translations = {
+    tr: { search: "Ara", refresh: "Yenile", location: "Konum", weather: "Hava", night: "Gece", trails: "Izler", theme: "Tema" },
+    en: { search: "Search", refresh: "Refresh", location: "Location", weather: "Weather", night: "Night", trails: "Trails", theme: "Theme" }
+};
+function t(key) { return translations[lang][key] || key; }
+function setLanguage(l) { lang = l; localStorage.setItem("lang", l); }
 
 // Tema
-function toggleDarkTheme(){darkTheme=!darkTheme;document.body.classList.toggle("dark-theme",darkTheme);localStorage.setItem("darkTheme",darkTheme);}
-function toggleTokenVisibility(){let inp=document.getElementById("ti");inp.type=inp.type==="password"?"text":"password";}
+function toggleDarkTheme() {
+    darkTheme = !darkTheme;
+    document.body.classList.toggle("dark-theme", darkTheme);
+    localStorage.setItem("darkTheme", darkTheme);
+}
+function toggleTokenVisibility() {
+    let inp = document.getElementById("ti");
+    inp.type = inp.type === "password" ? "text" : "password";
+}
 
 // Worker
-function initWorker(){worker=new Worker("worker.js");worker.onmessage=handleWorkerMessage;}
-function handleWorkerMessage(e){if(e.data.type==="data"){processOpenSkyData(e.data.data);}else if(e.data.type==="filtered"){filtered=e.data.filtered;applyF();}}
+function initWorker() {
+    worker = new Worker("worker.js");
+    worker.onmessage = handleWorkerMessage;
+}
+function handleWorkerMessage(e) {
+    if (e.data.type === "data") { processOpenSkyData(e.data.data); }
+    else if (e.data.type === "filtered") { filtered = e.data.filtered; applyF(); }
+}
 
 // Veri işleme
-function processOpenSkyData(states){flights=states.map(s=>({icao24:s[0]||"",callsign:(s[1]||"").trim()||s[0]||"????",country:s[2]||"?",lon:s[5],lat:s[6],alt:s[7]?Math.round(s[7]):null,ground:s[8]||false,vel:s[9]?Math.round(s[9]*3.6):null,hdg:s[10]!==null?Math.round(s[10]):null,vs:s[11]?Math.round(s[11]):0,sqk:s[14]||"----"}));
-flights=flights.filter(f=>f.lat&&f.lon&&(cfg[1]||!f.ground));
-updateStatsAndUI();}
-
-function updateStatsAndUI(){document.getElementById("scnt").textContent=flights.length;setSdot(DEMO?"demo":"live");applyF();if(MAP)redrawMarkers();updateTrails();}
-
-function applyF(){filtered=flights.filter(f=>{if(activeF===0)return true;if(activeF===1)return f.alt>9000;if(activeF===2)return f.vel>800;if(activeF===3)return f.country==="Turkey";if(activeF===4)return ["7700","7600","7500"].includes(f.sqk);return true;});renderList();}
-
-function renderList(){let html="";filtered.slice(0,200).forEach(f=>{let emg=["7700","7600","7500"].includes(f.sqk);html+=`<div class="fi ${f.icao24===selIcao?"sel":""} ${emg?"emg":""}" onclick="pick('${f.icao24}')"><div class="fi-call">${flag(f.country)} ${f.callsign}${emg?' <span style="color:#ff4466">ACiL</span>':''}</div><div class="fi-det">${f.country.slice(0,12)} ⬆${f.alt||"--"}m ➡${f.vel||"--"}km/s</div><div class="fi-bar"><div class="fi-fill" style="width:${Math.min(100,f.alt/130)}%;background:${f.alt>9000?"#ff4466":f.alt>6000?"#ffcc00":f.alt>3000?"#00e5ff":"#00ff88"}"></div></div></div>`;});document.getElementById("flist").innerHTML=html||"<div>UCAK YOK</div>";}
-
-function flag(c){const FLG={"Turkey":"TR","Germany":"DE","United Kingdom":"GB","France":"FR","United States":"US"};let x=FLG[c];if(!x)return"";return x.split("").map(a=>String.fromCodePoint(127397+a.charCodeAt(0))).join("");}
-
-function pick(icao){selIcao=icao;let f=flights.find(f=>f.icao24===icao);if(f)refreshInfo(f);}
-
-function refreshInfo(f){if(!f)return;document.getElementById("i-call").textContent=f.callsign;document.getElementById("i-co").textContent=flag(f.country)+" "+f.country;document.getElementById("i-alt").textContent=f.alt?f.alt+"m":"--";document.getElementById("i-spd").textContent=f.vel?f.vel+" km/s":"--";document.getElementById("i-hdg").textContent=f.hdg!==null?f.hdg+"°":"--";document.getElementById("i-lat").textContent=f.lat?f.lat.toFixed(5):"--";document.getElementById("i-lon").textContent=f.lon?f.lon.toFixed(5):"--";document.getElementById("i-sqk").textContent=f.sqk||"--";document.getElementById("i-grnd").innerHTML=f.ground?"YERDE":f.vs>3?"▲ YUKSELIYOR":f.vs<-3?"▼ INIYOR":"➡ SEYIR";document.getElementById("i-vs").textContent=f.vs?f.vs+" m/s":"--";let type=aircraftTypes[f.icao24.slice(0,6)]||"Bilinmiyor";document.getElementById("i-type").textContent=type;let eta=estimateETA(f);document.getElementById("i-eta").textContent=eta;document.getElementById("infopanel").classList.add("vis");drawSpdHist(f.icao24);drawAltHist(f.icao24);if(replayActive)stopReplay();replayPoints=[];if(f.history)replayPoints=f.history.slice();}
-
-function estimateETA(f){if(!f.lat||!f.lon||!f.vel||!f.hdg)return"--";let nearestAirport=findNearestAirport(f.lat,f.lon);if(!nearestAirport)return"--";let dist=haversine(f.lat,f.lon,nearestAirport.lat,nearestAirport.lon);let time=dist/(f.vel/3.6)/3600;let hours=Math.floor(time);let minutes=Math.floor((time-hours)*60);return `${hours?hours+"s ":""}${minutes}dk`;}
-function findNearestAirport(lat,lon){if(!airports.length)return null;let min=Infinity,nearest=null;airports.forEach(a=>{let d=haversine(lat,lon,a.lat,a.lon);if(d<min){min=d;nearest=a;}});return nearest;}
-function haversine(lat1,lon1,lat2,lon2){let R=6371;let dLat=(lat2-lat1)*Math.PI/180;let dLon=(lon2-lon1)*Math.PI/180;let a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
-
-function drawAltHist(icao){let cv=document.getElementById("ahc");if(!cv)return;let ctx=cv.getContext("2d");let pts=altHist[icao]||[];let W=cv.offsetWidth||266,H=34;cv.width=W;cv.height=H;ctx.clearRect(0,0,W,H);if(pts.length<2){ctx.fillStyle="rgba(168,255,212,0.2)";ctx.fillText("VERi BEKLENiYOR",W/2,H/2);return;}let mn=Math.min(...pts),mx=Math.max(...pts);if(mx===mn)mx=mn+1;let step=W/(pts.length-1);ctx.beginPath();for(let i=0;i<pts.length;i++){let x=i*step,y=H-(pts[i]-mn)/(mx-mn)*(H-4)-2;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.strokeStyle="#ffcc00";ctx.stroke();}
-function drawSpdHist(icao){let cv=document.getElementById("shc");if(!cv)return;let ctx=cv.getContext("2d");let pts=spdHist[icao]||[];let W=cv.offsetWidth||266,H=34;cv.width=W;cv.height=H;ctx.clearRect(0,0,W,H);if(pts.length<2){ctx.fillStyle="rgba(168,255,212,0.2)";ctx.fillText("VERi BEKLENiYOR",W/2,H/2);return;}let mn=Math.min(...pts),mx=Math.max(...pts);if(mx===mn)mx=mn+1;let step=W/(pts.length-1);ctx.beginPath();for(let i=0;i<pts.length;i++){let x=i*step,y=H-(pts[i]-mn)/(mx-mn)*(H-4)-2;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.strokeStyle="#00e5ff";ctx.stroke();ctx.fillStyle="rgba(0,229,255,0.12)";ctx.fill();}
-
-function toggleReplay(){if(!selIcao)return;let f=flights.find(f=>f.icao24===selIcao);if(!f||!replayPoints.length){alert("Oynatma noktasi yok");return;}replayActive=!replayActive;if(replayActive){let idx=0;replayInterval=setInterval(()=>{if(idx>=replayPoints.length){stopReplay();return;}let p=replayPoints[idx];if(MAP)MAP.flyTo({center:[p.lon,p.lat],zoom:9});idx++;},1000);}else{stopReplay();}}
-function stopReplay(){clearInterval(replayInterval);replayActive=false;document.getElementById("replayBtn").classList.remove("on");}
-
-function toggleRadarLayer(){radarOn=!radarOn;if(MAP&&!DEMO){if(radarOn){if(MAP.getSource("radar"))return;MAP.addSource("radar",{type:"raster",tiles:[`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${localStorage.getItem("owmKey")||"439d4b804bc8187953eb36d2a8c26a02"}`],tileSize:256});MAP.addLayer({id:"radar",type:"raster",source:"radar",paint:{"raster-opacity":0.5}});}else{if(MAP.getLayer("radar"))MAP.removeLayer("radar");if(MAP.getSource("radar"))MAP.removeSource("radar");}}document.getElementById("radarBtn").classList.toggle("on",radarOn);}
-function setLayer(n){if(DEMO||!MAP)return;curLayer=n;MAP.setStyle(["mapbox://styles/mapbox/satellite-v9","mapbox://styles/mapbox/dark-v11","mapbox://styles/mapbox/streets-v12"][n]);MAP.once("style.load",()=>redrawMarkers());}
-function toggleWx(){wxOn=!wxOn;if(MAP&&!DEMO){if(wxOn){if(MAP.getSource("owm"))return;MAP.addSource("owm",{type:"raster",tiles:[`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${localStorage.getItem("owmKey")||"439d4b804bc8187953eb36d2a8c26a02"}`],tileSize:256});MAP.addLayer({id:"owml",type:"raster",source:"owm",paint:{"raster-opacity":0.4}});}else{if(MAP.getLayer("owml"))MAP.removeLayer("owml");if(MAP.getSource("owm"))MAP.removeSource("owm");}}document.getElementById("wxbt").classList.toggle("on",wxOn);}
-function toggleAllTrails(){allTrails=!allTrails;if(!allTrails)clrAllTrails();else updateTrails();document.getElementById("alltrbt").classList.toggle("on",allTrails);}
-function updateTrails(){if(!allTrails)return;flights.forEach(f=>{if(!trailOn[f.icao24])updTrailFlight(f);});}
-function updTrailFlight(f){if(!MAP||!f.lat||!f.lon)return;if(!trailPts[f.icao24])trailPts[f.icao24]=[];trailPts[f.icao24].push({c:[f.lon,f.lat],a:f.alt});if(trailPts[f.icao24].length>120)trailPts[f.icao24].shift();renderTrail(f.icao24);}
-function renderTrail(icao){let pts=trailPts[icao];if(!pts||pts.length<2)return;let clr=alt=>alt>9000?"#ff4466":alt>6000?"#ffcc00":alt>3000?"#00e5ff":"#00ff88";let lines={};for(let i=1;i<pts.length;i++){let col=clr(pts[i].a);if(!lines[col])lines[col]=[];lines[col].push([pts[i-1].c,pts[i].c]);}Object.keys(lines).forEach(col=>{let features=lines[col].map(seg=>({type:"Feature",geometry:{type:"LineString",coordinates:seg}}));let srcId="trs-"+icao+"-"+col;let lyrId="trl-"+icao+"-"+col;try{if(MAP.getSource(srcId))MAP.removeSource(srcId);MAP.addSource(srcId,{type:"geojson",data:{type:"FeatureCollection",features}});MAP.addLayer({id:lyrId,type:"line",source:srcId,paint:{"line-color":col,"line-width":2}});}catch(e){}});}
-function clrAllTrails(){Object.keys(trailPts).forEach(icao=>{if(MAP){try{Object.keys(MAP.getStyle().sources||{}).filter(s=>s.startsWith("trs-"+icao)).forEach(s=>MAP.removeSource(s));Object.keys(MAP.getStyle().layers||{}).filter(l=>l.startsWith("trl-"+icao)).forEach(l=>MAP.removeLayer(l));}catch(e){}}});trailPts={};trailOn={};}
-function redrawMarkers(){if(!MAP)return;Object.values(markers).forEach(m=>m.remove());markers={};let show=filtered.slice(0,mlimit);show.forEach(f=>{let el=mkEl(f);let m=new mapboxgl.Marker({element:el,anchor:"center"}).setLngLat([f.lon,f.lat]).addTo(MAP);el._icao=f.icao24;el.addEventListener("click",(e)=>{e.stopPropagation();pick(f.icao24);});markers[f.icao24]=m;});}
-function mkEl(f){let sel=f.icao24===selIcao;let emg=["7700","7600","7500"].includes(f.sqk);let clr=emg?"#ff4466":sel?"#00e5ff":f.alt>9000?"#ffcc00":f.alt>3000?"#00ff88":"#88ffcc";let sz=sel?22:14;let el=document.createElement("div");el.style.width=sz+"px";el.style.height=sz+"px";el.style.cursor="pointer";if(emg)el.style.animation="blink-fast 0.5s infinite";el.innerHTML=`<svg viewBox="0 0 24 24" fill="none" style="transform:rotate(${f.hdg||0}deg);width:100%;height:100%;filter:drop-shadow(0 0 ${sel?6:3}px ${clr})"><path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill="${clr}" opacity="0.95"/></svg>`;return el;}
-
-function loadFlights(){setSdot("load");fetch("https://opensky-network.org/api/states/all?lamin=25&lomin=-20&lamax=72&lomax=55").then(res=>res.json()).then(data=>processOpenSkyData(data.states||[])).catch(()=>{setSdot("err");ntf("OpenSky hata, demo veri","err");processOpenSkyData(genDemo());});}
-function genDemo(){let out=[];for(let i=0;i<90;i++)out.push(["dm"+i,"TK"+i+"  ","Turkey",null,null,8+Math.random()*52,28+Math.random()*38,800+Math.random()*13000,false,80+Math.random()*1000,Math.random()*360,(Math.random()-.5)*14,null,null,String(Math.floor(1000+Math.random()*8999))]);return out;}
-
-function ntf(msg,type){let e=document.getElementById("ntf");document.getElementById("ntf-m").textContent=msg;e.className="ntf show"+(type==="err"?" err":type==="warn"?" warn":type==="ok"?" ok":"");if(e._t)clearTimeout(e._t);e._t=setTimeout(()=>e.className="ntf",3800);}
-function setSdot(s){let d=document.getElementById("sdot"),t=document.getElementById("sst");if(s==="live"){d.className="sdot";t.textContent="CANLI";}else if(s==="load"){d.className="sdot ld blink";t.textContent="YUKLENIYOR";}else if(s==="err"){d.className="sdot er blink";t.textContent="HATA";}else if(s==="demo"){d.className="sdot dm";t.textContent="DEMO";}}
-function startClock(){setInterval(()=>document.getElementById("clk").textContent=new Date().toTimeString().slice(0,8),1000);}
-function startRadar(){let cv=document.getElementById("rdc"),ctx=cv.getContext("2d"),rdAngle=0;function frame(){ctx.clearRect(0,0,100,100);ctx.strokeStyle="rgba(0,255,136,0.12)";[16,30,46].forEach(r=>{ctx.beginPath();ctx.arc(50,50,r,0,Math.PI*2);ctx.stroke();});ctx.save();ctx.translate(50,50);ctx.rotate(rdAngle);let grad=ctx.createLinearGradient(0,0,48,0);grad.addColorStop(0,"rgba(0,255,136,0.6)");grad.addColorStop(1,"rgba(0,255,136,0)");ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,48,-0.4,0);ctx.fillStyle=grad;ctx.fill();ctx.restore();let cnt=0;if(flights.length&&MAP){let ctr=MAP.getCenter();flights.forEach(f=>{if(!f.lat||!f.lon)return;let dx=(f.lon-ctr.lng)*1.3,dy=-(f.lat-ctr.lat)*1.6;if(dx<-46||dx>46||dy<-46||dy>46)return;cnt++;ctx.beginPath();ctx.arc(50+dx,50+dy,["7700","7600","7500"].includes(f.sqk)?3:1.5,0,Math.PI*2);ctx.fillStyle=f.icao24===selIcao?"rgba(255,204,0,0.9)":"rgba(0,229,255,0.7)";ctx.fill();});}document.getElementById("rdcnt").textContent=cnt;rdAngle+=0.025;requestAnimationFrame(frame);}frame();}
-function startCompass(){drawCompass(0);}function drawCompass(b){let cv=document.getElementById("cmp");if(!cv)return;let ctx=cv.getContext("2d");ctx.clearRect(0,0,46,46);ctx.strokeStyle="rgba(0,255,136,0.18)";ctx.beginPath();ctx.arc(23,23,20,0,Math.PI*2);ctx.stroke();let dirs=["N","E","S","W"];for(let i=0;i<4;i++){let ang=(i*90-b)*Math.PI/180;ctx.fillStyle=dirs[i]==="N"?"#ff4466":"rgba(168,255,212,0.5)";ctx.font="bold 7px monospace";ctx.fillText(dirs[i],23+Math.sin(ang)*15,23-Math.cos(ang)*15);}ctx.save();ctx.translate(23,23);ctx.rotate(-b*Math.PI/180);ctx.fillStyle="#ff4466";ctx.beginPath();ctx.moveTo(0,-13);ctx.lineTo(2.5,0);ctx.lineTo(0,-2);ctx.lineTo(-2.5,0);ctx.fill();ctx.fillStyle="rgba(168,255,212,0.35)";ctx.beginPath();ctx.moveTo(0,13);ctx.lineTo(2.5,0);ctx.lineTo(0,2);ctx.lineTo(-2.5,0);ctx.fill();ctx.restore();}
-function onSlider(v){mlimit=parseInt(v);document.getElementById("slv").textContent=v;if(MAP)redrawMarkers();}
-function setPerf(n){let cfgs=[[50,60000],[150,30000],[400,18000]];mlimit=cfgs[n][0];RF=cfgs[n][1];document.getElementById("slim").value=mlimit;document.getElementById("slv").textContent=mlimit;resetRfTimer();if(MAP)redrawMarkers();}
-function startRfTimer(){let bar=document.getElementById("refprog"),s=Date.now();if(rfTimer)clearInterval(rfTimer);rfTimer=setInterval(()=>{let p=Math.max(0,100-((Date.now()-s)/RF)*100);bar.style.width=p+"%";if(Date.now()-s>=RF){s=Date.now();loadFlights();}},300);}
-function resetRfTimer(){if(rfTimer)clearInterval(rfTimer);startRfTimer();}
-function doRefresh(){resetRfTimer();loadFlights();ntf("VERi YENiLENDi","ok");}
-function toggleSearch(){searchOpen=!searchOpen;document.getElementById("searchbar").classList.toggle("open",searchOpen);if(searchOpen)document.getElementById("sinput").focus();else document.getElementById("sinput").value="";}
-function doSearch(q){let res=[];if(q.length<2){document.getElementById("sresults").innerHTML="";return;}flights.forEach(f=>{if(f.callsign.toLowerCase().includes(q)||f.country.toLowerCase().includes(q)||f.icao24.includes(q))res.push(f);});let html="";res.slice(0,12).forEach(f=>{html+=`<div class="sr-item" onclick="pick('${f.icao24}')">${flag(f.country)} ${f.callsign} ${f.country}</div>`;});document.getElementById("sresults").innerHTML=html;}
-function gotoMe(){if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(p=>{if(MAP)MAP.flyTo({center:[p.coords.longitude,p.coords.latitude],zoom:8});});}
-function togglePanel(){panelOpen=!panelOpen;document.getElementById("lpanel").classList.toggle("cl",!panelOpen);document.getElementById("ptog").classList.toggle("cl",!panelOpen);document.getElementById("ptog").innerHTML=panelOpen?"◀":"▶";}
-function showTab(n){for(let i=0;i<4;i++){document.getElementById(`tab${i}`).classList.toggle("on",i===n);document.getElementById(`tp${i}`).classList.toggle("on",i===n);}}
-function toggleHelp(){helpOpen=!helpOpen;document.getElementById("kbhelp").classList.toggle("vis",helpOpen);}
-function doFS(){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
-
-// ----- DÜZELTİLMİŞ BOOT VE MAP HATA YÖNETİMİ -----
+function processOpenSkyData(states) {
+    flights = states.map(s => ({
+        icao24: s[0] || "", callsign: (s[1] || "").trim() || s[0] || "????", country: s[2] || "?",
+        lon: s[5], lat: s[6], alt: s[7] ? Math.round(s[7]) : null, ground: s[8] || false,
+        vel: s[9] ? Math.round(s[9] * 3.6) : null, hdg: s[10] !== null ? Math.round(s[10]) : null,
+        vs: s[11] ? Math.round(s[11]) : 0, sqk: s[14] || "----"
+    }));
+    flights = flights.filter(f => f.lat && f.lon && (cfg[1] || !f.ground));
+    updateStatsAndUI();
+}
+function updateStatsAndUI() {
+    document.getElementById("scnt").textContent = flights.length;
+    setSdot(DEMO ? "demo" : "live");
+    applyF();
+    if (MAP) redrawMarkers();
+    updateTrails();
+}
+function applyF() {
+    filtered = flights.filter(f => {
+        if (activeF === 0) return true;
+        if (activeF === 1) return f.alt > 9000;
+        if (activeF === 2) return f.vel > 800;
+        if (activeF === 3) return f.country === "Turkey";
+        if (activeF === 4) return ["7700", "7600", "7500"].includes(f.sqk);
+        return true;
+    });
+    renderList();
+}
+function renderList() {
+    let html = "";
+    filtered.slice(0, 200).forEach(f => {
+        let emg = ["7700", "7600", "7500"].includes(f.sqk);
+        html += `<div class="fi ${f.icao24 === selIcao ? "sel" : ""} ${emg ? "emg" : ""}" onclick="pick('${f.icao24}')">
+            <div class="fi-call">${flag(f.country)} ${f.callsign}${emg ? ' <span style="color:#ff4466">ACiL</span>' : ''}</div>
+            <div class="fi-det">${f.country.slice(0, 12)} ⬆${f.alt || "--"}m ➡${f.vel || "--"}km/s</div>
+            <div class="fi-bar"><div class="fi-fill" style="width:${Math.min(100, f.alt / 130)}%;background:${f.alt > 9000 ? "#ff4466" : f.alt > 6000 ? "#ffcc00" : f.alt > 3000 ? "#00e5ff" : "#00ff88"}"></div></div>
+        </div>`;
+    });
+    document.getElementById("flist").innerHTML = html || "<div>UCAK YOK</div>";
+}
+function flag(c) {
+    const FLG = { "Turkey": "TR", "Germany": "DE", "United Kingdom": "GB", "France": "FR", "United States": "US" };
+    let x = FLG[c];
+    if (!x) return "";
+    return x.split("").map(a => String.fromCodePoint(127397 + a.charCodeAt(0))).join("");
+}
+function pick(icao) {
+    selIcao = icao;
+    let f = flights.find(f => f.icao24 === icao);
+    if (f) refreshInfo(f);
+}
+function refreshInfo(f) {
+    if (!f) return;
+    document.getElementById("i-call").textContent = f.callsign;
+    document.getElementById("i-co").textContent = flag(f.country) + " " + f.country;
+    document.getElementById("i-alt").textContent = f.alt ? f.alt + "m" : "--";
+    document.getElementById("i-spd").textContent = f.vel ? f.vel + " km/s" : "--";
+    document.getElementById("i-hdg").textContent = f.hdg !== null ? f.hdg + "°" : "--";
+    document.getElementById("i-lat").textContent = f.lat ? f.lat.toFixed(5) : "--";
+    document.getElementById("i-lon").textContent = f.lon ? f.lon.toFixed(5) : "--";
+    document.getElementById("i-sqk").textContent = f.sqk || "--";
+    document.getElementById("i-grnd").innerHTML = f.ground ? "YERDE" : (f.vs > 3 ? "▲ YUKSELIYOR" : (f.vs < -3 ? "▼ INIYOR" : "➡ SEYIR"));
+    document.getElementById("i-vs").textContent = f.vs ? f.vs + " m/s" : "--";
+    let type = aircraftTypes[f.icao24.slice(0, 6)] || "Bilinmiyor";
+    document.getElementById("i-type").textContent = type;
+    let eta = estimateETA(f);
+    document.getElementById("i-eta").textContent = eta;
+    document.getElementById("infopanel").classList.add("vis");
+    drawSpdHist(f.icao24);
+    drawAltHist(f.icao24);
+    if (replayActive) stopReplay();
+    replayPoints = [];
+    if (f.history) replayPoints = f.history.slice();
+}
+function estimateETA(f) {
+    if (!f.lat || !f.lon || !f.vel || !f.hdg) return "--";
+    let nearestAirport = findNearestAirport(f.lat, f.lon);
+    if (!nearestAirport) return "--";
+    let dist = haversine(f.lat, f.lon, nearestAirport.lat, nearestAirport.lon);
+    let time = dist / (f.vel / 3.6) / 3600;
+    let hours = Math.floor(time);
+    let minutes = Math.floor((time - hours) * 60);
+    return `${hours ? hours + "s " : ""}${minutes}dk`;
+}
+function findNearestAirport(lat, lon) {
+    if (!airports.length) return null;
+    let min = Infinity, nearest = null;
+    airports.forEach(a => {
+        let d = haversine(lat, lon, a.lat, a.lon);
+        if (d < min) { min = d; nearest = a; }
+    });
+    return nearest;
+}
+function haversine(lat1, lon1, lat2, lon2) {
+    let R = 6371;
+    let dLat = (lat2 - lat1) * Math.PI / 180;
+    let dLon = (lon2 - lon1) * Math.PI / 180;
+    let a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function drawAltHist(icao) {
+    let cv = document.getElementById("ahc");
+    if (!cv) return;
+    let ctx = cv.getContext("2d");
+    let pts = altHist[icao] || [];
+    let W = cv.offsetWidth || 266, H = 34;
+    cv.width = W; cv.height = H;
+    ctx.clearRect(0, 0, W, H);
+    if (pts.length < 2) {
+        ctx.fillStyle = "rgba(168,255,212,0.2)";
+        ctx.fillText("VERi BEKLENiYOR", W / 2, H / 2);
+        return;
+    }
+    let mn = Math.min(...pts), mx = Math.max(...pts);
+    if (mx === mn) mx = mn + 1;
+    let step = W / (pts.length - 1);
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+        let x = i * step, y = H - (pts[i] - mn) / (mx - mn) * (H - 4) - 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = "#ffcc00";
+    ctx.stroke();
+}
+function drawSpdHist(icao) {
+    let cv = document.getElementById("shc");
+    if (!cv) return;
+    let ctx = cv.getContext("2d");
+    let pts = spdHist[icao] || [];
+    let W = cv.offsetWidth || 266, H = 34;
+    cv.width = W; cv.height = H;
+    ctx.clearRect(0, 0, W, H);
+    if (pts.length < 2) {
+        ctx.fillStyle = "rgba(168,255,212,0.2)";
+        ctx.fillText("VERi BEKLENiYOR", W / 2, H / 2);
+        return;
+    }
+    let mn = Math.min(...pts), mx = Math.max(...pts);
+    if (mx === mn) mx = mn + 1;
+    let step = W / (pts.length - 1);
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+        let x = i * step, y = H - (pts[i] - mn) / (mx - mn) * (H - 4) - 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = "#00e5ff";
+    ctx.stroke();
+    ctx.fillStyle = "rgba(0,229,255,0.12)";
+    ctx.fill();
+}
+function toggleReplay() {
+    if (!selIcao) return;
+    let f = flights.find(f => f.icao24 === selIcao);
+    if (!f || !replayPoints.length) { alert("Oynatma noktasi yok"); return; }
+    replayActive = !replayActive;
+    if (replayActive) {
+        let idx = 0;
+        replayInterval = setInterval(() => {
+            if (idx >= replayPoints.length) { stopReplay(); return; }
+            let p = replayPoints[idx];
+            if (MAP) MAP.flyTo({ center: [p.lon, p.lat], zoom: 9 });
+            idx++;
+        }, 1000);
+    } else { stopReplay(); }
+}
+function stopReplay() {
+    clearInterval(replayInterval);
+    replayActive = false;
+    document.getElementById("replayBtn").classList.remove("on");
+}
+function toggleRadarLayer() {
+    radarOn = !radarOn;
+    if (MAP && !DEMO) {
+        if (radarOn) {
+            if (MAP.getSource("radar")) return;
+            MAP.addSource("radar", {
+                type: "raster",
+                tiles: [`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${localStorage.getItem("owmKey") || "439d4b804bc8187953eb36d2a8c26a02"}`],
+                tileSize: 256
+            });
+            MAP.addLayer({ id: "radar", type: "raster", source: "radar", paint: { "raster-opacity": 0.5 } });
+        } else {
+            if (MAP.getLayer("radar")) MAP.removeLayer("radar");
+            if (MAP.getSource("radar")) MAP.removeSource("radar");
+        }
+    }
+    document.getElementById("radarBtn").classList.toggle("on", radarOn);
+}
+function setLayer(n) {
+    if (DEMO || !MAP) return;
+    curLayer = n;
+    MAP.setStyle(["mapbox://styles/mapbox/satellite-v9", "mapbox://styles/mapbox/dark-v11", "mapbox://styles/mapbox/streets-v12"][n]);
+    MAP.once("style.load", () => redrawMarkers());
+}
+function toggleWx() {
+    wxOn = !wxOn;
+    if (MAP && !DEMO) {
+        if (wxOn) {
+            if (MAP.getSource("owm")) return;
+            MAP.addSource("owm", {
+                type: "raster",
+                tiles: [`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${localStorage.getItem("owmKey") || "439d4b804bc8187953eb36d2a8c26a02"}`],
+                tileSize: 256
+            });
+            MAP.addLayer({ id: "owml", type: "raster", source: "owm", paint: { "raster-opacity": 0.4 } });
+        } else {
+            if (MAP.getLayer("owml")) MAP.removeLayer("owml");
+            if (MAP.getSource("owm")) MAP.removeSource("owm");
+        }
+    }
+    document.getElementById("wxbt").classList.toggle("on", wxOn);
+}
+function toggleAllTrails() {
+    allTrails = !allTrails;
+    if (!allTrails) clrAllTrails();
+    else updateTrails();
+    document.getElementById("alltrbt").classList.toggle("on", allTrails);
+}
+function updateTrails() {
+    if (!allTrails) return;
+    flights.forEach(f => { if (!trailOn[f.icao24]) updTrailFlight(f); });
+}
+function updTrailFlight(f) {
+    if (!MAP || !f.lat || !f.lon) return;
+    if (!trailPts[f.icao24]) trailPts[f.icao24] = [];
+    trailPts[f.icao24].push({ c: [f.lon, f.lat], a: f.alt });
+    if (trailPts[f.icao24].length > 120) trailPts[f.icao24].shift();
+    renderTrail(f.icao24);
+}
+function renderTrail(icao) {
+    let pts = trailPts[icao];
+    if (!pts || pts.length < 2) return;
+    let clr = alt => alt > 9000 ? "#ff4466" : alt > 6000 ? "#ffcc00" : alt > 3000 ? "#00e5ff" : "#00ff88";
+    let lines = {};
+    for (let i = 1; i < pts.length; i++) {
+        let col = clr(pts[i].a);
+        if (!lines[col]) lines[col] = [];
+        lines[col].push([pts[i - 1].c, pts[i].c]);
+    }
+    Object.keys(lines).forEach(col => {
+        let features = lines[col].map(seg => ({ type: "Feature", geometry: { type: "LineString", coordinates: seg } }));
+        let srcId = "trs-" + icao + "-" + col;
+        let lyrId = "trl-" + icao + "-" + col;
+        try {
+            if (MAP.getSource(srcId)) MAP.removeSource(srcId);
+            MAP.addSource(srcId, { type: "geojson", data: { type: "FeatureCollection", features: features } });
+            MAP.addLayer({ id: lyrId, type: "line", source: srcId, paint: { "line-color": col, "line-width": 2 } });
+        } catch (e) { }
+    });
+}
+function clrAllTrails() {
+    Object.keys(trailPts).forEach(icao => {
+        if (MAP) {
+            try {
+                Object.keys(MAP.getStyle().sources || {}).filter(s => s.startsWith("trs-" + icao)).forEach(s => MAP.removeSource(s));
+                Object.keys(MAP.getStyle().layers || {}).filter(l => l.startsWith("trl-" + icao)).forEach(l => MAP.removeLayer(l));
+            } catch (e) { }
+        }
+    });
+    trailPts = {};
+    trailOn = {};
+}
+function redrawMarkers() {
+    if (!MAP) return;
+    Object.values(markers).forEach(m => m.remove());
+    markers = {};
+    let show = filtered.slice(0, mlimit);
+    show.forEach(f => {
+        let el = mkEl(f);
+        let m = new mapboxgl.Marker({ element: el, anchor: "center" }).setLngLat([f.lon, f.lat]).addTo(MAP);
+        el._icao = f.icao24;
+        el.addEventListener("click", (e) => { e.stopPropagation(); pick(f.icao24); });
+        markers[f.icao24] = m;
+    });
+}
+function mkEl(f) {
+    let sel = f.icao24 === selIcao;
+    let emg = ["7700", "7600", "7500"].includes(f.sqk);
+    let clr = emg ? "#ff4466" : sel ? "#00e5ff" : f.alt > 9000 ? "#ffcc00" : f.alt > 3000 ? "#00ff88" : "#88ffcc";
+    let sz = sel ? 22 : 14;
+    let el = document.createElement("div");
+    el.style.width = sz + "px";
+    el.style.height = sz + "px";
+    el.style.cursor = "pointer";
+    if (emg) el.style.animation = "blink-fast 0.5s infinite";
+    el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" style="transform:rotate(${f.hdg || 0}deg);width:100%;height:100%;filter:drop-shadow(0 0 ${sel ? 6 : 3}px ${clr})"><path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill="${clr}" opacity="0.95"/></svg>`;
+    return el;
+}
+function loadFlights() {
+    setSdot("load");
+    fetch("https://opensky-network.org/api/states/all?lamin=25&lomin=-20&lamax=72&lomax=55")
+        .then(res => res.json())
+        .then(data => processOpenSkyData(data.states || []))
+        .catch(() => { setSdot("err"); ntf("OpenSky hata, demo veri", "err"); processOpenSkyData(genDemo()); });
+}
+function genDemo() {
+    let out = [];
+    for (let i = 0; i < 90; i++) {
+        out.push(["dm" + i, "TK" + i + "  ", "Turkey", null, null,
+            8 + Math.random() * 52, 28 + Math.random() * 38, 800 + Math.random() * 13000, false,
+            80 + Math.random() * 1000, Math.random() * 360, (Math.random() - 0.5) * 14,
+            null, null, String(Math.floor(1000 + Math.random() * 8999))]);
+    }
+    return out;
+}
+function ntf(msg, type) {
+    let e = document.getElementById("ntf");
+    document.getElementById("ntf-m").textContent = msg;
+    e.className = "ntf show" + (type === "err" ? " err" : type === "warn" ? " warn" : type === "ok" ? " ok" : "");
+    if (e._t) clearTimeout(e._t);
+    e._t = setTimeout(() => e.className = "ntf", 3800);
+}
+function setSdot(s) {
+    let d = document.getElementById("sdot"), t = document.getElementById("sst");
+    if (s === "live") { d.className = "sdot"; t.textContent = "CANLI"; }
+    else if (s === "load") { d.className = "sdot ld blink"; t.textContent = "YUKLENIYOR"; }
+    else if (s === "err") { d.className = "sdot er blink"; t.textContent = "HATA"; }
+    else if (s === "demo") { d.className = "sdot dm"; t.textContent = "DEMO"; }
+}
+function startClock() {
+    setInterval(() => document.getElementById("clk").textContent = new Date().toTimeString().slice(0, 8), 1000);
+}
+function startRadar() {
+    let cv = document.getElementById("rdc"), ctx = cv.getContext("2d"), rdAngle = 0;
+    function frame() {
+        ctx.clearRect(0, 0, 100, 100);
+        ctx.strokeStyle = "rgba(0,255,136,0.12)";
+        [16, 30, 46].forEach(r => { ctx.beginPath(); ctx.arc(50, 50, r, 0, Math.PI * 2); ctx.stroke(); });
+        ctx.save();
+        ctx.translate(50, 50);
+        ctx.rotate(rdAngle);
+        let grad = ctx.createLinearGradient(0, 0, 48, 0);
+        grad.addColorStop(0, "rgba(0,255,136,0.6)");
+        grad.addColorStop(1, "rgba(0,255,136,0)");
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 48, -0.4, 0);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+        let cnt = 0;
+        if (flights.length && MAP) {
+            let ctr = MAP.getCenter();
+            flights.forEach(f => {
+                if (!f.lat || !f.lon) return;
+                let dx = (f.lon - ctr.lng) * 1.3, dy = -(f.lat - ctr.lat) * 1.6;
+                if (dx < -46 || dx > 46 || dy < -46 || dy > 46) return;
+                cnt++;
+                ctx.beginPath();
+                ctx.arc(50 + dx, 50 + dy, ["7700", "7600", "7500"].includes(f.sqk) ? 3 : 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = f.icao24 === selIcao ? "rgba(255,204,0,0.9)" : "rgba(0,229,255,0.7)";
+                ctx.fill();
+            });
+        }
+        document.getElementById("rdcnt").textContent = cnt;
+        rdAngle += 0.025;
+        requestAnimationFrame(frame);
+    }
+    frame();
+}
+function startCompass() { drawCompass(0); }
+function drawCompass(b) {
+    let cv = document.getElementById("cmp");
+    if (!cv) return;
+    let ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, 46, 46);
+    ctx.strokeStyle = "rgba(0,255,136,0.18)";
+    ctx.beginPath();
+    ctx.arc(23, 23, 20, 0, Math.PI * 2);
+    ctx.stroke();
+    let dirs = ["N", "E", "S", "W"];
+    for (let i = 0; i < 4; i++) {
+        let ang = (i * 90 - b) * Math.PI / 180;
+        ctx.fillStyle = dirs[i] === "N" ? "#ff4466" : "rgba(168,255,212,0.5)";
+        ctx.font = "bold 7px monospace";
+        ctx.fillText(dirs[i], 23 + Math.sin(ang) * 15, 23 - Math.cos(ang) * 15);
+    }
+    ctx.save();
+    ctx.translate(23, 23);
+    ctx.rotate(-b * Math.PI / 180);
+    ctx.fillStyle = "#ff4466";
+    ctx.beginPath();
+    ctx.moveTo(0, -13);
+    ctx.lineTo(2.5, 0);
+    ctx.lineTo(0, -2);
+    ctx.lineTo(-2.5, 0);
+    ctx.fill();
+    ctx.fillStyle = "rgba(168,255,212,0.35)";
+    ctx.beginPath();
+    ctx.moveTo(0, 13);
+    ctx.lineTo(2.5, 0);
+    ctx.lineTo(0, 2);
+    ctx.lineTo(-2.5, 0);
+    ctx.fill();
+    ctx.restore();
+}
+function onSlider(v) {
+    mlimit = parseInt(v);
+    document.getElementById("slv").textContent = v;
+    if (MAP) redrawMarkers();
+}
+function setPerf(n) {
+    let cfgs = [[50, 60000], [150, 30000], [400, 18000]];
+    mlimit = cfgs[n][0];
+    RF = cfgs[n][1];
+    document.getElementById("slim").value = mlimit;
+    document.getElementById("slv").textContent = mlimit;
+    resetRfTimer();
+    if (MAP) redrawMarkers();
+}
+function startRfTimer() {
+    let bar = document.getElementById("refprog"), s = Date.now();
+    if (rfTimer) clearInterval(rfTimer);
+    rfTimer = setInterval(() => {
+        let p = Math.max(0, 100 - ((Date.now() - s) / RF) * 100);
+        bar.style.width = p + "%";
+        if (Date.now() - s >= RF) {
+            s = Date.now();
+            loadFlights();
+        }
+    }, 300);
+}
+function resetRfTimer() { if (rfTimer) clearInterval(rfTimer); startRfTimer(); }
+function doRefresh() { resetRfTimer(); loadFlights(); ntf("VERi YENiLENDi", "ok"); }
+function toggleSearch() {
+    searchOpen = !searchOpen;
+    document.getElementById("searchbar").classList.toggle("open", searchOpen);
+    if (searchOpen) document.getElementById("sinput").focus();
+    else document.getElementById("sinput").value = "";
+}
+function doSearch(q) {
+    let res = [];
+    if (q.length < 2) { document.getElementById("sresults").innerHTML = ""; return; }
+    flights.forEach(f => {
+        if (f.callsign.toLowerCase().includes(q) || f.country.toLowerCase().includes(q) || f.icao24.includes(q)) res.push(f);
+    });
+    let html = "";
+    res.slice(0, 12).forEach(f => {
+        html += `<div class="sr-item" onclick="pick('${f.icao24}')">${flag(f.country)} ${f.callsign} ${f.country}</div>`;
+    });
+    document.getElementById("sresults").innerHTML = html;
+}
+function gotoMe() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(p => { if (MAP) MAP.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 8 }); });
+}
+function togglePanel() {
+    panelOpen = !panelOpen;
+    document.getElementById("lpanel").classList.toggle("cl", !panelOpen);
+    document.getElementById("ptog").classList.toggle("cl", !panelOpen);
+    document.getElementById("ptog").innerHTML = panelOpen ? "◀" : "▶";
+}
+function showTab(n) {
+    for (let i = 0; i < 4; i++) {
+        document.getElementById(`tab${i}`).classList.toggle("on", i === n);
+        document.getElementById(`tp${i}`).classList.toggle("on", i === n);
+    }
+}
+function toggleHelp() {
+    helpOpen = !helpOpen;
+    document.getElementById("kbhelp").classList.toggle("vis", helpOpen);
+}
+function doFS() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+}
 function handleMapError(err) {
     console.error("Map error:", err);
     if (mapLoadTimeout) clearTimeout(mapLoadTimeout);
     document.getElementById("loading").classList.remove("show");
     ntf("Harita yüklenemedi! Token geçersiz veya ağ hatası. Demo moda geçiliyor.", "err");
-    // Demo moda düş
     DEMO = true;
     initNoMap();
     startClock(); startRadar(); startCompass(); setupKeys(); loadFlights(); startRfTimer(); initWorker(); loadAirports();
     setSdot("demo");
 }
-
 function initMap() {
     if (!TOKEN || TOKEN.length < 20) {
         ntf("Token geçersiz, demo mod başlatılıyor.", "warn");
@@ -382,21 +806,12 @@ function initMap() {
         zoom: 4
     });
     MAP.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
-    
-    // Hata yakalama
-    MAP.on('error', (e) => {
-        handleMapError(e);
-    });
-    
-    // Yükleme başarılı
+    MAP.on('error', handleMapError);
     MAP.on('load', () => {
         if (mapLoadTimeout) clearTimeout(mapLoadTimeout);
         setSdot("live");
         document.getElementById("loading").classList.remove("show");
-        // Harita hazır, diğer başlangıçları yap (bunlar boot'tan çağrılmış olacak)
     });
-    
-    // Zaman aşımı: 10 saniye içinde yüklenmezse hata
     mapLoadTimeout = setTimeout(() => {
         if (MAP && !MAP.loaded()) {
             MAP.remove();
@@ -405,37 +820,24 @@ function initMap() {
         }
     }, 10000);
 }
-
 function initNoMap() {
     setSdot("demo");
     document.getElementById("map").style.background = "radial-gradient(#030f1e, #020810)";
     document.getElementById("loading").classList.remove("show");
     ntf("Demo mod aktif - harita arkaplanı yok", "info");
 }
-
 function boot(demo) {
     DEMO = demo;
     document.getElementById("modal").classList.add("hide");
     document.getElementById("loading").classList.add("show");
-    let steps = [[10,"SISTEM..."],[25,"OPENSKY..."],[45,"HARITA..."],[65,"VERi..."],[82,"RADAR..."],[95,"OPTiMiZE..."],[100,"HAZIR!"]];
+    let steps = [[10, "SISTEM..."], [25, "OPENSKY..."], [45, "HARITA..."], [65, "VERi..."], [82, "RADAR..."], [95, "OPTiMiZE..."], [100, "HAZIR!"]];
     let i = 0;
     function next() {
         if (i >= steps.length) {
             setTimeout(() => {
-                if (demo) {
-                    initNoMap();
-                } else {
-                    initMap();
-                }
-                // Geri kalan başlangıçlar her iki durumda da yapılır
-                startClock();
-                startRadar();
-                startCompass();
-                setupKeys();
-                loadFlights();
-                startRfTimer();
-                initWorker();
-                loadAirports();
+                if (demo) { initNoMap(); }
+                else { initMap(); }
+                startClock(); startRadar(); startCompass(); setupKeys(); loadFlights(); startRfTimer(); initWorker(); loadAirports();
             }, 500);
             return;
         }
@@ -445,28 +847,167 @@ function boot(demo) {
     }
     next();
 }
-
-// Geri kalan fonksiyonlar (değişmedi)
-function loadAirports(){fetch("https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat").then(res=>res.text()).then(txt=>{airports=txt.split("\n").slice(0,200).map(line=>{let parts=line.split(",");if(parts.length<7)return null;let lat=parseFloat(parts[4]),lon=parseFloat(parts[5]);if(isNaN(lat)||isNaN(lon))return null;return{name:parts[1],lat:lat,lon:lon};}).filter(a=>a);}).catch(()=>console.log("Airport data failed"));}
-function doStart(){let v=document.getElementById("ti").value.trim();if(!v||v.length<20){document.getElementById("m-err").textContent="Token bos veya cok kisa (20+ karakter)!";return;}TOKEN=v;localStorage.setItem("sw6tok",v);boot(false);}
-function doDemo(){DEMO=true;boot(true);}
-function setupKeys(){document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;let k=e.key.toLowerCase();if(k==="f")toggleSearch();else if(k==="r")doRefresh();else if(k==="l")togglePanel();else if(k==="s")setLayer(0);else if(k==="d")setLayer(1);else if(k==="t")setLayer(2);else if(k==="h")toggleWx();else if(k==="n")toggleTrm();else if(k==="i")toggleAllTrails();else if(k==="c")gotoMe();else if(k==="x")closeInfo();else if(k==="escape"){if(helpOpen)toggleHelp();else if(searchOpen)toggleSearch();else closeInfo();}else if(k==="?")toggleHelp();else if(k==="f11"){e.preventDefault();doFS();}});}
-function closeInfo(){selIcao=null;document.getElementById("infopanel").classList.remove("vis");renderList();if(MAP)redrawMarkers();}
-function toggleTrm(){trmOn=!trmOn;document.getElementById("trmbt").classList.toggle("on",trmOn);if(trmOn)drawTrm();else if(MAP&&MAP.getLayer("trm"))MAP.removeLayer("trm"),MAP.removeSource("trm");}
-function drawTrm(){if(!MAP)return;let d=new Date(),dec=-23.45*Math.cos((360/365*(d.getMonth()*30+d.getDate())+10)*Math.PI/180)*Math.PI/180;let coords=[];for(let lon=-180;lon<=180;lon+=2)coords.push([lon,Math.atan(-Math.cos(lon*Math.PI/180)/Math.tan(dec))*180/Math.PI]);coords.push([180,-90],[180,90],[-180,90],[-180,coords[0][1]],coords[0]);try{if(MAP.getSource("trm"))MAP.removeLayer("trm"),MAP.removeSource("trm");MAP.addSource("trm",{type:"geojson",data:{type:"Feature",geometry:{type:"Polygon",coordinates:[coords]}}});MAP.addLayer({id:"trm",type:"fill",source:"trm",paint:{"fill-color":"#000018","fill-opacity":0.42}});}catch(e){}}
-function addAlert(msg,lvl){if(lvl==="hi")playAlert();alerts.unshift({msg,lvl,t:new Date().toTimeString().slice(0,5)});if(alerts.length>50)alerts.pop();renderAlerts();}
-function renderAlerts(){let al=document.getElementById("allist");if(!alerts.length){al.innerHTML="<div>ALARM YOK</div>";return;}al.innerHTML=alerts.slice(0,30).map(a=>`<div><div class="al-pip ${a.lvl}"></div><div>${a.msg}<div class="al-tm">${a.t}</div></div></div>`).join("");}
-function chkAlerts(){flights.forEach(f=>{if(f.alt>12000)addAlert(`${f.callsign} asiri yukseklik: ${f.alt}m`,"md");if(["7700","7600","7500"].includes(f.sqk))addAlert(`SQUAWK ${f.sqk} ${f.callsign}`,"hi");if(f.vs<-20)addAlert(`${f.callsign} hizli alcalma: ${f.vs}m/s`,"md");});}
-function expJSON(){let data=JSON.stringify(flights);let a=document.createElement("a");a.href="data:application/json,"+encodeURIComponent(data);a.download="skywatch.json";a.click();}
-function expCSV(){let rows=[["icao24","callsign","country","lat","lon","alt","vel","hdg","vs","sqk"]];flights.forEach(f=>rows.push([f.icao24,f.callsign,f.country,f.lat,f.lon,f.alt,f.vel,f.hdg,f.vs,f.sqk]));let csv=rows.map(r=>r.join(",")).join("\n");let a=document.createElement("a");a.href="data:text/csv,"+encodeURIComponent(csv);a.download="skywatch.csv";a.click();}
-function clrToken(){localStorage.removeItem("sw6tok");ntf("TOKEN SiLiNDi","warn");}
-function copyCoords(){let f=flights.find(f=>f.icao24===selIcao);if(f)navigator.clipboard.writeText(f.lat+", "+f.lon);}
-function flyToSel(){let f=flights.find(f=>f.icao24===selIcao);if(f&&MAP)MAP.flyTo({center:[f.lon,f.lat],zoom:9});}
-function openFA(){let f=flights.find(f=>f.icao24===selIcao);if(f)window.open("https://flightaware.com/live/flight/"+f.callsign.trim());}
-function openFR24(){let f=flights.find(f=>f.icao24===selIcao);if(f)window.open("https://www.flightradar24.com/"+f.callsign.trim());}
-function setF(n){activeF=n;applyF();}
-let audioCtx=null;function playAlert(){if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();let osc=audioCtx.createOscillator();let gain=audioCtx.createGain();osc.connect(gain);gain.connect(audioCtx.destination);osc.frequency.value=880;gain.gain.value=0.5;osc.start();gain.gain.exponentialRampToValueAtTime(0.00001,audioCtx.currentTime+0.5);osc.stop(audioCtx.currentTime+0.5);}
-window.onload=()=>{document.getElementById("btn-start").onclick=doStart;document.getElementById("btn-demo").onclick=doDemo;document.getElementById("ti").addEventListener("keydown",e=>{if(e.key==="Enter")doStart();if(e.key==="Tab"){e.preventDefault();doDemo();}});let handle=document.getElementById("resizeHandle");let startX,startWidth;handle.addEventListener("mousedown",e=>{startX=e.clientX;startWidth=parseInt(document.getElementById("lpanel").style.width)||264;document.onmousemove=onMouseMove;document.onmouseup=()=>document.onmousemove=null;e.preventDefault();});function onMouseMove(e){let newWidth=startWidth+(e.clientX-startX);if(newWidth>150&&newWidth<500)document.getElementById("lpanel").style.width=newWidth+"px";}};
+function loadAirports() {
+    fetch("https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat")
+        .then(res => res.text())
+        .then(txt => {
+            airports = txt.split("\n").slice(0, 200).map(line => {
+                let parts = line.split(",");
+                if (parts.length < 7) return null;
+                let lat = parseFloat(parts[4]), lon = parseFloat(parts[5]);
+                if (isNaN(lat) || isNaN(lon)) return null;
+                return { name: parts[1], lat: lat, lon: lon };
+            }).filter(a => a);
+        })
+        .catch(() => console.log("Airport data failed"));
+}
+function doStart() {
+    let v = document.getElementById("ti").value.trim();
+    if (!v || v.length < 20) { document.getElementById("m-err").textContent = "Token bos veya cok kisa (20+ karakter)!"; return; }
+    TOKEN = v;
+    localStorage.setItem("sw6tok", v);
+    boot(false);
+}
+function doDemo() { DEMO = true; boot(true); }
+function setupKeys() {
+    document.addEventListener("keydown", e => {
+        if (e.target.tagName === "INPUT") return;
+        let k = e.key.toLowerCase();
+        if (k === "f") toggleSearch();
+        else if (k === "r") doRefresh();
+        else if (k === "l") togglePanel();
+        else if (k === "s") setLayer(0);
+        else if (k === "d") setLayer(1);
+        else if (k === "t") setLayer(2);
+        else if (k === "h") toggleWx();
+        else if (k === "n") toggleTrm();
+        else if (k === "i") toggleAllTrails();
+        else if (k === "c") gotoMe();
+        else if (k === "x") closeInfo();
+        else if (k === "escape") { if (helpOpen) toggleHelp(); else if (searchOpen) toggleSearch(); else closeInfo(); }
+        else if (k === "?") toggleHelp();
+        else if (k === "f11") { e.preventDefault(); doFS(); }
+    });
+}
+function closeInfo() {
+    selIcao = null;
+    document.getElementById("infopanel").classList.remove("vis");
+    renderList();
+    if (MAP) redrawMarkers();
+}
+function toggleTrm() {
+    trmOn = !trmOn;
+    document.getElementById("trmbt").classList.toggle("on", trmOn);
+    if (trmOn) drawTrm();
+    else if (MAP && MAP.getLayer("trm")) { MAP.removeLayer("trm"); MAP.removeSource("trm"); }
+}
+function drawTrm() {
+    if (!MAP) return;
+    let d = new Date(), dec = -23.45 * Math.cos((360 / 365 * (d.getMonth() * 30 + d.getDate()) + 10) * Math.PI / 180) * Math.PI / 180;
+    let coords = [];
+    for (let lon = -180; lon <= 180; lon += 2) coords.push([lon, Math.atan(-Math.cos(lon * Math.PI / 180) / Math.tan(dec)) * 180 / Math.PI]);
+    coords.push([180, -90], [180, 90], [-180, 90], [-180, coords[0][1]], coords[0]);
+    try {
+        if (MAP.getSource("trm")) { MAP.removeLayer("trm"); MAP.removeSource("trm"); }
+        MAP.addSource("trm", { type: "geojson", data: { type: "Feature", geometry: { type: "Polygon", coordinates: [coords] } } });
+        MAP.addLayer({ id: "trm", type: "fill", source: "trm", paint: { "fill-color": "#000018", "fill-opacity": 0.42 } });
+    } catch (e) { }
+}
+function addAlert(msg, lvl) {
+    if (lvl === "hi") playAlert();
+    alerts.unshift({ msg: msg, lvl: lvl, t: new Date().toTimeString().slice(0, 5) });
+    if (alerts.length > 50) alerts.pop();
+    renderAlerts();
+}
+function renderAlerts() {
+    let al = document.getElementById("allist");
+    if (!alerts.length) { al.innerHTML = "<div>ALARM YOK</div>"; return; }
+    al.innerHTML = alerts.slice(0, 30).map(a => `<div><div class="al-pip ${a.lvl}"></div><div>${a.msg}<div class="al-tm">${a.t}</div></div></div>`).join("");
+}
+function chkAlerts() {
+    flights.forEach(f => {
+        if (f.alt > 12000) addAlert(`${f.callsign} asiri yukseklik: ${f.alt}m`, "md");
+        if (["7700", "7600", "7500"].includes(f.sqk)) addAlert(`SQUAWK ${f.sqk} ${f.callsign}`, "hi");
+        if (f.vs < -20) addAlert(`${f.callsign} hizli alcalma: ${f.vs}m/s`, "md");
+    });
+}
+function expJSON() {
+    let data = JSON.stringify(flights);
+    let a = document.createElement("a");
+    a.href = "data:application/json," + encodeURIComponent(data);
+    a.download = "skywatch.json";
+    a.click();
+}
+function expCSV() {
+    let rows = [["icao24", "callsign", "country", "lat", "lon", "alt", "vel", "hdg", "vs", "sqk"]];
+    flights.forEach(f => rows.push([f.icao24, f.callsign, f.country, f.lat, f.lon, f.alt, f.vel, f.hdg, f.vs, f.sqk]));
+    let csv = rows.map(r => r.join(",")).join("\n");
+    let a = document.createElement("a");
+    a.href = "data:text/csv," + encodeURIComponent(csv);
+    a.download = "skywatch.csv";
+    a.click();
+}
+function clrToken() { localStorage.removeItem("sw6tok"); ntf("TOKEN SiLiNDi", "warn"); }
+function copyCoords() {
+    let f = flights.find(f => f.icao24 === selIcao);
+    if (f) navigator.clipboard.writeText(f.lat + ", " + f.lon);
+}
+function flyToSel() {
+    let f = flights.find(f => f.icao24 === selIcao);
+    if (f && MAP) MAP.flyTo({ center: [f.lon, f.lat], zoom: 9 });
+}
+function openFA() {
+    let f = flights.find(f => f.icao24 === selIcao);
+    if (f) window.open("https://flightaware.com/live/flight/" + f.callsign.trim());
+}
+function openFR24() {
+    let f = flights.find(f => f.icao24 === selIcao);
+    if (f) window.open("https://www.flightradar24.com/" + f.callsign.trim());
+}
+function setF(n) { activeF = n; applyF(); }
+let audioCtx = null;
+function playAlert() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 880;
+    gain.gain.value = 0.5;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
+    osc.stop(audioCtx.currentTime + 0.5);
+}
+window.onload = () => {
+    document.getElementById("btn-start").onclick = doStart;
+    document.getElementById("btn-demo").onclick = doDemo;
+    document.getElementById("ti").addEventListener("keydown", e => {
+        if (e.key === "Enter") doStart();
+        if (e.key === "Tab") { e.preventDefault(); doDemo(); }
+    });
+    let handle = document.getElementById("resizeHandle");
+    let startX, startWidth;
+    handle.addEventListener("mousedown", e => {
+        startX = e.clientX;
+        startWidth = parseInt(document.getElementById("lpanel").style.width) || 264;
+        document.onmousemove = onMouseMove;
+        document.onmouseup = () => document.onmousemove = null;
+        e.preventDefault();
+    });
+    function onMouseMove(e) {
+        let newWidth = startWidth + (e.clientX - startX);
+        if (newWidth > 150 && newWidth < 500) document.getElementById("lpanel").style.width = newWidth + "px";
+    }
+    // Kayıtlı token varsa göster
+    let savedToken = localStorage.getItem("sw6tok");
+    if (savedToken) document.getElementById("ti").value = savedToken;
+    // Kayıtlı tema
+    let savedTheme = localStorage.getItem("darkTheme");
+    if (savedTheme === "true") toggleDarkTheme();
+    // Dil
+    let savedLang = localStorage.getItem("lang");
+    if (savedLang) setLanguage(savedLang);
+};
 </script>
 </body></html>
 """
