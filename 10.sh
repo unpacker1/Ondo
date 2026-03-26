@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║  AIS Gemi Takip – MarineTraffic Demo (SON ÇARE)                 ║
-# ║  Çalıştır: ./ais-marinetraffic.sh                               ║
+# ║  AIS Gemi Takip – OpenSky AIS (Garantili)                       ║
+# ║  Çalıştır: ./ais-opensky.sh                                     ║
+# ║  Not: Kayıtlı kullanıcı daha yüksek limit için önerilir         ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 set -e
 
-CACHE_DIR="$HOME/.cache/ais-mt"
+CACHE_DIR="$HOME/.cache/ais-opensky"
 mkdir -p "$CACHE_DIR"
 SERVER_SCRIPT="$CACHE_DIR/ais_server.py"
 HTML_FILE="$CACHE_DIR/ais.html"
 
-echo "🔧 MarineTraffic AIS sunucusu hazırlanıyor..."
+echo "🔧 OpenSky AIS sunucusu hazırlanıyor..."
 
-# Python sunucu (MarineTraffic demo feed)
+# Python sunucu (OpenSky AIS API)
 cat > "$SERVER_SCRIPT" << 'PYEOF'
 #!/usr/bin/env python3
 import os
@@ -21,111 +22,110 @@ import json
 import time
 import threading
 import urllib.request
-import urllib.parse
+import urllib.error
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
 
-# MarineTraffic demo feed (herkese açık)
-MT_URL = "https://www.marinetraffic.com/getData/get_data_json_4"
+# OpenSky AIS API (gemiler için)
+# Dökümantasyon: https://opensky-network.org/apidoc/ais.html
+OPENSKY_AIS_URL = "https://opensky-network.org/api/positions/all"
+
+# AIS tüm gemiler için bounding box (tüm dünya)
+BOUNDING_BOX = "minlat=-90&maxlat=90&minlon=-180&maxlon=180"
+
+# OpenSky kullanıcı adı/şifre (opsiyonel – boş bırakılırsa anonim)
+# Kayıt: https://opensky-network.org/register
+OPENSKY_USER = ""  # e-posta adresin
+OPENSKY_PASS = ""  # şifren
 
 latest_vessels = {}
 last_update = 0
 error_count = 0
 total_fetches = 0
 
-def fetch_marinetraffic():
+def fetch_opensky_ais():
     global latest_vessels, last_update, error_count, total_fetches
-    print("🔄 MarineTraffic demo feed'inden veri çekiliyor...")
+    print("🔄 OpenSky AIS'den veri çekiliyor...")
     
     while True:
         try:
             total_fetches += 1
-            # MarineTraffic demo isteği
-            params = {
-                "ts": int(time.time()),
-                "protocol": "jsono",
-                "callback": "",
-                "uid": "public",
-                "mmsi": "",
-                "msg_type": "positions",
-                "size": "500"
-            }
-            url = f"{MT_URL}?{urllib.parse.urlencode(params)}"
+            url = f"{OPENSKY_AIS_URL}?{BOUNDING_BOX}&time=0"
+            
+            # Auth bilgisi (varsa)
+            password_mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+            if OPENSKY_USER and OPENSKY_PASS:
+                password_mgr.add_password(None, url, OPENSKY_USER, OPENSKY_PASS)
+                auth_handler = urllib.request.HTTPBasicAuthHandler(password_mgr)
+                opener = urllib.request.build_opener(auth_handler)
+                urllib.request.install_opener(opener)
+                print("   🔐 Kayıtlı kullanıcı modu (yüksek limit)")
+            else:
+                print("   🌐 Anonim mod (günde 100 istek limiti)")
             
             req = urllib.request.Request(
                 url,
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json',
-                    'Referer': 'https://www.marinetraffic.com/'
-                }
+                headers={'User-Agent': 'Mozilla/5.0 (Termux AIS Tracker)'}
             )
             
-            with urllib.request.urlopen(req, timeout=15) as response:
+            with urllib.request.urlopen(req, timeout=20) as response:
                 data = response.read().decode('utf-8')
+                vessels_data = json.loads(data)
                 
-                # JSONP callback temizliği
-                if data.startswith('(') or data.startswith('['):
-                    json_data = json.loads(data)
-                elif data.startswith('jsono'):
-                    json_str = data.split('(', 1)[1].rsplit(')', 1)[0]
-                    json_data = json.loads(json_str)
-                else:
-                    json_data = json.loads(data)
+                # OpenSky AIS formatı: {"time": xxx, "states": [...]}
+                states = vessels_data.get("states", [])
                 
-                # Gemileri parse et
-                vessels = []
-                if isinstance(json_data, list):
-                    vessels = json_data
-                elif isinstance(json_data, dict) and "data" in json_data:
-                    vessels = json_data.get("data", [])
-                elif isinstance(json_data, dict) and "rows" in json_data:
-                    vessels = json_data.get("rows", [])
-                
-                # Gemileri işle
                 new_count = 0
-                for v in vessels:
-                    if isinstance(v, dict):
-                        # Farklı formatları dene
-                        lat = v.get("LAT") or v.get("lat") or v.get("latitude")
-                        lon = v.get("LON") or v.get("lon") or v.get("longitude")
-                        mmsi = v.get("MMSI") or v.get("mmsi") or v.get("MMSI_PRESENT")
-                        name = v.get("SHIPNAME") or v.get("name") or v.get("SHIPNAME_CLEAN")
-                        speed = v.get("SPEED") or v.get("speed") or v.get("SOG") or 0
-                        heading = v.get("HEADING") or v.get("heading") or v.get("COG") or 0
+                for v in states:
+                    if v and len(v) >= 10:
+                        # OpenSky AIS formatı:
+                        # [mmsi, shipname, lat, lon, sog, cog, heading, navstatus, timestamp, ...]
+                        mmsi = v[0] if v[0] else None
+                        name = v[1] if v[1] else "Bilinmiyor"
+                        lat = v[2] if v[2] is not None else None
+                        lon = v[3] if v[3] is not None else None
+                        speed = v[4] if v[4] is not None else 0  # knots
+                        heading = v[6] if v[6] is not None else 0  # degrees
                         
-                        if mmsi and lat and lon:
+                        if mmsi and lat is not None and lon is not None:
                             latest_vessels[str(mmsi)] = {
                                 "mmsi": str(mmsi),
-                                "name": str(name) if name else "Bilinmiyor",
+                                "name": str(name),
                                 "lat": float(lat),
                                 "lon": float(lon),
-                                "speed": float(speed) if speed else 0,
-                                "heading": float(heading) if heading else 0,
+                                "speed": float(speed),
+                                "heading": float(heading),
                                 "timestamp": time.time()
                             }
                             new_count += 1
                 
                 last_update = time.time()
                 error_count = 0
-                print(f"✅ {new_count} gemi alındı (toplam: {len(latest_vessels)} | istek: {total_fetches})")
+                print(f"✅ {new_count} gemi alındı (toplam: {len(latest_vessels)} | istek #{total_fetches})")
+                
+                # Rate limit bilgisi (header'dan alınamıyor, genel uyarı)
+                if not OPENSKY_USER and total_fetches > 90:
+                    print("⚠️ Anonim modda günlük limit 100 istek! Kayıt olmanız önerilir.")
                 
         except urllib.error.HTTPError as e:
             error_count += 1
             print(f"❌ HTTP {e.code}: {e.reason} (hata #{error_count})")
-            if error_count > 10:
-                print("⚠️ Çok fazla hata, 60 saniye bekleniyor...")
+            if e.code == 429:
+                print("   ⚠️ Rate limit aşıldı! 60 saniye bekleniyor...")
                 time.sleep(60)
+            elif error_count > 5:
+                time.sleep(30)
         except Exception as e:
             error_count += 1
             print(f"❌ Hata ({error_count}): {e}")
-            if error_count > 10:
-                time.sleep(60)
+            time.sleep(20)
         
-        time.sleep(15)  # 15 saniyede bir yenile
+        # Anonim: 15 saniye, Kayıtlı: 10 saniye
+        wait_time = 15 if not OPENSKY_USER else 10
+        time.sleep(wait_time)
 
 @app.route('/')
 def index():
@@ -142,7 +142,8 @@ def get_vessels():
         "count": len(vessels_list),
         "total": len(latest_vessels),
         "last_update": last_update,
-        "fetches": total_fetches
+        "fetches": total_fetches,
+        "authenticated": bool(OPENSKY_USER)
     })
 
 @app.route('/api/status')
@@ -157,10 +158,15 @@ def get_status():
 
 if __name__ == '__main__':
     print("🚢 AIS Sunucu başlatılıyor...")
-    print("   Kaynak: MarineTraffic Demo Feed (ücretsiz)")
-    print("   📡 Veriler 15 saniyede bir güncelleniyor")
+    print("   Kaynak: OpenSky Network AIS (ücretsiz)")
+    if OPENSKY_USER and OPENSKY_PASS:
+        print(f"   🔐 Kayıtlı kullanıcı: {OPENSKY_USER}")
+    else:
+        print("   🌐 Anonim mod (günde 100 istek limiti)")
+        print("   💡 Kayıt: https://opensky-network.org/register")
+    print("   📡 Veriler dünya genelindeki gemileri kapsar")
     
-    thread = threading.Thread(target=fetch_marinetraffic, daemon=True)
+    thread = threading.Thread(target=fetch_opensky_ais, daemon=True)
     thread.start()
     
     port = int(os.environ.get("PORT", 8080))
@@ -168,13 +174,13 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 PYEOF
 
-# HTML istemci
+# HTML istemci (basit ve hızlı)
 cat > "$HTML_FILE" << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>AIS Gemi Takip - MarineTraffic</title>
+    <title>AIS Gemi Takip - OpenSky</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -255,7 +261,7 @@ cat > "$HTML_FILE" << 'HTMLEOF'
             document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
             if (data.connected) {
                 document.getElementById('status-indicator').className = 'status-badge status-online';
-                document.getElementById('status-text').innerText = '🌍 Aktif';
+                document.getElementById('status-text').innerText = '🌍 OpenSky AIS';
             }
             return data;
         } catch(e) { return { vessels: [] }; }
@@ -266,7 +272,8 @@ cat > "$HTML_FILE" << 'HTMLEOF'
         vessels.forEach(v => {
             if (!v.lat || !v.lon) return;
             newIds.add(v.mmsi);
-            const popup = `<b>${v.name}</b><br>MMSI: ${v.mmsi}<br>Hız: ${(v.speed*1.852).toFixed(1)} km/h`;
+            const speedKmh = (v.speed * 1.852).toFixed(1);
+            const popup = `<b>${v.name}</b><br>MMSI: ${v.mmsi}<br>Hız: ${speedKmh} km/h (${v.speed} knot)<br>Yön: ${v.heading}°`;
             
             if (currentMarkers[v.mmsi]) {
                 currentMarkers[v.mmsi].setLatLng([v.lat, v.lon]);
@@ -277,9 +284,10 @@ cat > "$HTML_FILE" << 'HTMLEOF'
                 marker.on('click', () => {
                     document.getElementById('vessel-name').innerText = v.name;
                     document.getElementById('vessel-detail').innerHTML = `
-                        MMSI: ${v.mmsi}<br>
-                        Hız: ${(v.speed*1.852).toFixed(1)} km/h<br>
-                        Yön: ${v.heading}°
+                        <strong>MMSI:</strong> ${v.mmsi}<br>
+                        <strong>Hız:</strong> ${v.speed} knot (${speedKmh} km/h)<br>
+                        <strong>Yön:</strong> ${v.heading}°<br>
+                        <strong>Son güncelleme:</strong> ${new Date(v.timestamp * 1000).toLocaleTimeString()}
                     `;
                     document.getElementById('info-panel').classList.add('visible');
                 });
@@ -325,10 +333,12 @@ LOCAL_IP=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([
 
 export PORT="$PORT"
 
-echo -e "\n🚢 AIS Gemi Takip (MarineTraffic Demo) Başlatıldı"
+echo -e "\n🚢 AIS Gemi Takip (OpenSky) Başlatıldı"
 echo -e "📍 http://${LOCAL_IP}:${PORT}"
 echo -e "📍 http://localhost:${PORT}"
-echo -e "📡 Veri kaynağı: MarineTraffic (demo feed)"
+echo -e "📡 Veri kaynağı: OpenSky Network AIS (dünya geneli)"
+echo -e "💡 Daha yüksek limit için: https://opensky-network.org/register"
+echo -e "   (Betikte OPENSKY_USER ve OPENSKY_PASS değişkenlerini doldurun)"
 echo -e "⏹️  Durdurmak için Ctrl+C\n"
 
 cd "$CACHE_DIR"
