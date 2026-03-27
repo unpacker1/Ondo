@@ -17,7 +17,7 @@ MAGENTA='\033[0;35m'
 WHITE='\033[1;37m'
 BOLD='\033[1m'
 NC='\033[0m'
-
+ 
 # Semboller
 CHAR_NETWORK='◉'
 CHAR_CPU='⚡'
