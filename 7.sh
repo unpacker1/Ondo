@@ -32,7 +32,19 @@ PEGASUS_VERSION="6.0"
 PEGASUS_BUILD="zd404"
 RANDOM_PORT=$((RANDOM % 40000 + 8000))  # 8000-48000 arası random port
 HTTP_SERVER_PID=0
-WORK_DIR="/tmp/pegasus_$$"
+
+# Çalışma dizini seçimi - /tmp yazılabilir değilse home veya Termux tmp kullan
+if [ -w "/tmp" ]; then
+    WORK_DIR="/tmp/pegasus_$$"
+else
+    # Termux'ta /data/local/tmp kullanılabilir, değilse home'a düş
+    if [ -d "/data/local/tmp" ] && [ -w "/data/local/tmp" ]; then
+        WORK_DIR="/data/local/tmp/pegasus_$$"
+    else
+        WORK_DIR="$HOME/.pegasus_$$"
+    fi
+fi
+
 SCRIPT_NAME="pegasus-all-in-one.sh"
 
 # Sistem değişkenleri
