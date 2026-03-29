@@ -1,1366 +1,788 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
+# ╔══════════════════════════════════════════════════════════════╗
+# ║          PHANTOM OSINT PANEL — Termux Single-File           ║
+# ║     Tüm OSINT kaynakları tek panelde — Cyberpunk HUD        ║
+# ╚══════════════════════════════════════════════════════════════╝
 
-################################################################################
-# PEGASUS PROJECT v6.0 - ALL IN ONE COMPLETE SYSTEM
-# Single Script with HTTP Server & System Monitoring
-# Termux Compatible - Random Port - All Features Included
-################################################################################
+# --- Bağımlılık kontrolü ---
+for cmd in python3; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "[!] $cmd bulunamadı. Yükleniyor..."
+    pkg install python -y
+  fi
+done
 
-set -e
+# --- Random port seç ---
+PORT=$((RANDOM % 40000 + 10000))
+TMPDIR_PHANTOM=$(mktemp -d)
+HTML_FILE="$TMPDIR_PHANTOM/index.html"
 
-# Renkler
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-WHITE='\033[1;37m'
-BOLD='\033[1m'
-NC='\033[0m'
+echo ""
+echo "  ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗"
+echo "  ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║"
+echo "  ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║"
+echo "  ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║"
+echo "  ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║"
+echo "  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝"
+echo ""
+echo "  ╔═══════════════════════════════════════════════╗"
+echo "  ║         PHANTOM OSINT INTELLIGENCE PANEL      ║"
+echo "  ╚═══════════════════════════════════════════════╝"
+echo ""
+echo "  [*] Port: $PORT"
+echo "  [*] URL: http://localhost:$PORT"
+echo "  [*] Panel başlatılıyor..."
+echo "  [!] Çıkmak için CTRL+C"
+echo ""
 
-# Semboller
-CHAR_NETWORK='◉'
-CHAR_CPU='⚡'
-CHAR_MEMORY='▓'
-CHAR_STORAGE='◆'
-CHAR_PROCESS='◈'
-CHAR_ALERT='⚠'
-CHAR_GOOD='✓'
-
-# Global Değişkenler
-PEGASUS_VERSION="6.0"
-PEGASUS_BUILD="zd404"
-RANDOM_PORT=$((RANDOM % 40000 + 8000))  # 8000-48000 arası random port
-HTTP_SERVER_PID=0
-
-# Çalışma dizini seçimi - /tmp yazılabilir değilse home veya Termux tmp kullan
-if [ -w "/tmp" ]; then
-    WORK_DIR="/tmp/pegasus_$$"
-else
-    if [ -d "/data/local/tmp" ] && [ -w "/data/local/tmp" ]; then
-        WORK_DIR="/data/local/tmp/pegasus_$$"
-    else
-        WORK_DIR="$HOME/.pegasus_$$"
-    fi
-fi
-
-SCRIPT_NAME="pegasus-all-in-one.sh"
-
-# Sistem değişkenleri (bash tarafı için)
-CPU_USAGE=0
-MEMORY_USAGE=0
-STORAGE_USAGE=0
-ACTIVE_CONNECTIONS=0
-TOTAL_PROCESSES=0
-
-################################################################################
-# UTILITY FUNCTIONS
-################################################################################
-
-cleanup() {
-    echo -e "\n${CYAN}Temizleniyor...${NC}"
-    if [ $HTTP_SERVER_PID -ne 0 ]; then
-        kill $HTTP_SERVER_PID 2>/dev/null || true
-    fi
-    rm -rf "$WORK_DIR" 2>/dev/null || true
-    echo -e "${GREEN}${CHAR_GOOD} Çıkış yapıldı${NC}"
-}
-
-trap cleanup EXIT INT TERM
-
-log_event() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] - $1" >> "$WORK_DIR/pegasus.log"
-}
-
-print_status() {
-    echo -e "${GREEN}${CHAR_GOOD} $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}${CHAR_ALERT} HATA: $1${NC}"
-}
-
-print_info() {
-    echo -e "${CYAN}[ℹ] $1${NC}"
-}
-
-print_warning() {
-    echo -e "${YELLOW}${CHAR_ALERT} $1${NC}"
-}
-
-show_header() {
-    clear
-    echo -e "${CYAN}"
-    echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                ║"
-    echo "║         🔴 PEGASUS PROJECT v${PEGASUS_VERSION} - ALL IN ONE 🔴           ║"
-    echo "║                                                                ║"
-    echo "║      Cyberpunk System Monitor & Network Analyzer              ║"
-    echo "║                                                                ║"
-    echo "╚════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-}
-
-progress_bar() {
-    local percent=$1
-    local width=20
-    local filled=$((percent * width / 100))
-    local empty=$((width - filled))
-    
-    printf "["
-    printf "%${filled}s" | tr ' ' '█'
-    printf "%${empty}s" | tr ' ' '░'
-    printf "] %3d%%" "$percent"
-}
-
-status_indicator() {
-    local value=$1
-    if (( value > 80 )); then
-        echo -e "${RED}●${NC}"
-    elif (( value > 50 )); then
-        echo -e "${YELLOW}●${NC}"
-    else
-        echo -e "${GREEN}●${NC}"
-    fi
-}
-
-################################################################################
-# SİSTEM BİLGİSİ FONKSIYONLARI (BASH)
-################################################################################
-
-get_cpu_info() {
-    if [ -f /proc/stat ]; then
-        awk '/^cpu / {print int((($2+$3+$4) / ($2+$3+$4+$5)) * 100)}' /proc/stat
-    else
-        echo "0"
-    fi
-}
-
-get_memory_info() {
-    if [ -f /proc/meminfo ]; then
-        awk 'NR==1{total=$2} NR==2{free=$2} END{if(total>0) print int(((total-free)/total)*100); else print "0"}' /proc/meminfo
-    else
-        echo "0"
-    fi
-}
-
-get_storage_info() {
-    if command -v df &> /dev/null; then
-        df /sdcard 2>/dev/null | awk 'NR==2{if(NF>=5) print int($5); else print "0"}' || echo "0"
-    else
-        echo "0"
-    fi
-}
-
-get_active_connections() {
-    if [ -f /proc/net/tcp ]; then
-        awk 'NR>1 {count++} END {print count}' /proc/net/tcp
-    else
-        echo "0"
-    fi
-}
-
-get_process_count() {
-    if [ -d /proc ]; then
-        ls -d /proc/[0-9]* 2>/dev/null | wc -l
-    else
-        echo "0"
-    fi
-}
-
-################################################################################
-# HTML / JS / CSS (Ana Web Arayüzü) - Slider'lar küçültüldü
-################################################################################
-
-generate_index_html() {
-    cat > "$WORK_DIR/index.html" << 'HTMLEOF'
+# --- HTML dosyasını oluştur ---
+cat > "$HTML_FILE" << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔴 PEGASUS PROJECT v6.0</title>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHANTOM OSINT PANEL</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cyan: #00fff7;
+    --magenta: #ff00aa;
+    --gold: #ffd700;
+    --green: #00ff88;
+    --red: #ff3355;
+    --bg: #020a0f;
+    --panel: rgba(0,255,247,0.04);
+    --border: rgba(0,255,247,0.15);
+    --text: #a0d8e0;
+    --dim: rgba(0,255,247,0.5);
+  }
 
-        :root {
-            --bg: #0a0e27;
-            --text: #00ff41;
-            --card-bg: rgba(0, 15, 50, 0.8);
-            --border: #00ff41;
-            --accent: #ff0055;
-            --accent2: #00ffff;
-            --warning: #ffaa00;
-        }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; background:var(--bg); font-family:'Share Tech Mono',monospace; color:var(--text); }
 
-        body.light {
-            --bg: #f0f0f0;
-            --text: #1a1a2e;
-            --card-bg: #ffffff;
-            --border: #1a1a2e;
-            --accent: #cc0055;
-            --accent2: #0077aa;
-            --warning: #aa6600;
-        }
+  /* ─── SCANLINE OVERLAY ─── */
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:9999;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+    animation: scanMove 8s linear infinite;
+  }
+  @keyframes scanMove { from{background-position:0 0} to{background-position:0 100%} }
 
-        body.cyberpunk {
-            --bg: #0a0e27;
-            --text: #00ff41;
-            --card-bg: rgba(0, 15, 50, 0.8);
-            --border: #00ff41;
-            --accent: #ff0055;
-            --accent2: #00ffff;
-            --warning: #ffaa00;
-        }
+  /* ─── GRID BACKGROUND ─── */
+  body::after {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(0,255,247,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,247,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
 
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Monaco', 'Courier New', monospace;
-            line-height: 1.6;
-            transition: all 0.3s;
-        }
+  /* ══════════════════════ LOGIN SCREEN ══════════════════════ */
+  #login-screen {
+    position:fixed; inset:0; z-index:1000;
+    display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(ellipse at center, rgba(0,20,30,0.98) 0%, #020a0f 100%);
+    transition: opacity 0.8s ease, visibility 0.8s;
+  }
+  #login-screen.hidden { opacity:0; visibility:hidden; }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+  .login-box {
+    width: min(460px, 92vw);
+    border: 1px solid var(--cyan);
+    background: rgba(0,10,15,0.95);
+    padding: 48px 40px;
+    position:relative;
+    box-shadow: 0 0 60px rgba(0,255,247,0.12), inset 0 0 30px rgba(0,255,247,0.03);
+  }
+  .login-box::before, .login-box::after {
+    content:''; position:absolute; width:20px; height:20px; border-color:var(--magenta); border-style:solid;
+  }
+  .login-box::before { top:-1px; left:-1px; border-width:2px 0 0 2px; }
+  .login-box::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
 
-        .header {
-            text-align: center;
-            border: 3px solid var(--border);
-            padding: 20px;
-            margin-bottom: 30px;
-            background: var(--card-bg);
-            border-radius: 5px;
-        }
+  .login-logo {
+    text-align:center; margin-bottom:36px;
+  }
+  .login-logo .logo-text {
+    font-family:'Orbitron',sans-serif; font-size:28px; font-weight:900;
+    color:var(--cyan); letter-spacing:6px; text-shadow:0 0 20px var(--cyan), 0 0 40px var(--cyan);
+    display:block; margin-bottom:6px;
+  }
+  .login-logo .logo-sub {
+    font-size:11px; letter-spacing:4px; color:var(--magenta);
+    text-shadow:0 0 10px var(--magenta);
+  }
+  .login-logo .logo-eye {
+    font-size:48px; display:block; margin-bottom:12px;
+    filter: drop-shadow(0 0 12px var(--cyan));
+    animation: eyePulse 3s ease-in-out infinite;
+  }
+  @keyframes eyePulse { 0%,100%{filter:drop-shadow(0 0 8px var(--cyan))} 50%{filter:drop-shadow(0 0 24px var(--cyan)) drop-shadow(0 0 40px var(--magenta))} }
 
-        .header h1 {
-            color: var(--accent);
-            font-size: 32px;
-            text-shadow: 0 0 10px var(--border);
-            margin-bottom: 10px;
-        }
+  .login-label { font-size:11px; letter-spacing:3px; color:var(--dim); margin-bottom:8px; display:block; }
+  .login-input {
+    width:100%; padding:12px 16px; margin-bottom:20px;
+    background:rgba(0,255,247,0.04); border:1px solid var(--border);
+    color:var(--cyan); font-family:'Share Tech Mono',monospace; font-size:14px;
+    outline:none; transition:all 0.3s; letter-spacing:2px;
+  }
+  .login-input:focus { border-color:var(--cyan); box-shadow:0 0 20px rgba(0,255,247,0.15); background:rgba(0,255,247,0.07); }
+  .login-input::placeholder { color:rgba(0,255,247,0.2); }
 
-        .header p {
-            color: var(--accent2);
-            font-size: 14px;
-        }
+  .login-btn {
+    width:100%; padding:14px; margin-top:8px;
+    background:transparent; border:1px solid var(--cyan);
+    color:var(--cyan); font-family:'Orbitron',sans-serif; font-size:13px;
+    letter-spacing:4px; cursor:pointer; position:relative; overflow:hidden;
+    transition:all 0.3s;
+  }
+  .login-btn::before {
+    content:''; position:absolute; top:0; left:-100%; width:100%; height:100%;
+    background:linear-gradient(90deg, transparent, rgba(0,255,247,0.15), transparent);
+    transition:left 0.4s;
+  }
+  .login-btn:hover::before { left:100%; }
+  .login-btn:hover { background:rgba(0,255,247,0.08); box-shadow:0 0 30px rgba(0,255,247,0.2); text-shadow:0 0 10px var(--cyan); }
 
-        .theme-switch {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: var(--card-bg);
-            padding: 5px 10px;
-            border: 1px solid var(--border);
-            cursor: pointer;
-            border-radius: 20px;
-            font-size: 12px;
-        }
+  .login-status { height:20px; margin-top:16px; text-align:center; font-size:11px; letter-spacing:2px; }
+  .login-status.err { color:var(--red); }
+  .login-status.ok  { color:var(--green); }
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
+  .login-hints { margin-top:28px; border-top:1px solid var(--border); padding-top:20px; font-size:11px; color:rgba(0,255,247,0.3); letter-spacing:1px; }
+  .login-hints span { color:var(--gold); }
 
-        .card {
-            border: 2px solid var(--border);
-            padding: 20px;
-            background: var(--card-bg);
-            border-radius: 3px;
-            position: relative;
-            overflow: hidden;
-        }
+  /* ══════════════════════ MAIN PANEL ══════════════════════ */
+  #main-panel { display:flex; flex-direction:column; height:100vh; position:relative; z-index:1; }
 
-        .card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(0, 255, 65, 0.1), transparent);
-            animation: shimmer 2s infinite;
-        }
+  /* ─── TOP BAR ─── */
+  .topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 20px; border-bottom:1px solid var(--border);
+    background:rgba(0,10,15,0.9); backdrop-filter:blur(10px);
+    flex-shrink:0;
+  }
+  .topbar-logo { font-family:'Orbitron',sans-serif; font-size:16px; font-weight:900; color:var(--cyan); letter-spacing:4px; text-shadow:0 0 15px var(--cyan); }
+  .topbar-logo span { color:var(--magenta); }
+  .topbar-status { display:flex; gap:16px; align-items:center; font-size:11px; }
+  .status-dot { width:8px; height:8px; border-radius:50%; animation:blink 2s infinite; }
+  .status-dot.online { background:var(--green); box-shadow:0 0 6px var(--green); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .topbar-clock { font-size:12px; color:var(--gold); letter-spacing:2px; }
+  .topbar-user { font-size:11px; color:var(--magenta); letter-spacing:2px; }
 
-        @keyframes shimmer {
-            0% { left: -100%; }
-            100% { left: 100%; }
-        }
+  /* ─── LAYOUT ─── */
+  .layout { display:flex; flex:1; overflow:hidden; }
 
-        .card h2 {
-            color: var(--accent2);
-            margin-bottom: 15px;
-            font-size: 18px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
+  /* ─── SIDEBAR ─── */
+  .sidebar {
+    width:220px; flex-shrink:0; border-right:1px solid var(--border);
+    background:rgba(0,5,10,0.8); overflow-y:auto; padding:12px 0;
+    scrollbar-width:thin; scrollbar-color:var(--border) transparent;
+  }
+  .sidebar-section { margin-bottom:6px; }
+  .sidebar-cat {
+    padding:8px 16px; font-size:10px; letter-spacing:3px; color:var(--magenta);
+    text-transform:uppercase; opacity:0.7; display:flex; align-items:center; gap:8px;
+  }
+  .sidebar-cat::after { content:''; flex:1; height:1px; background:var(--border); }
+  .sidebar-item {
+    display:flex; align-items:center; gap:10px;
+    padding:9px 16px 9px 20px; cursor:pointer;
+    font-size:12px; letter-spacing:1px; color:var(--text);
+    transition:all 0.2s; position:relative;
+  }
+  .sidebar-item:hover { background:rgba(0,255,247,0.06); color:var(--cyan); }
+  .sidebar-item.active { background:rgba(0,255,247,0.1); color:var(--cyan); }
+  .sidebar-item.active::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .sidebar-icon { font-size:14px; flex-shrink:0; }
+  .sidebar-count { margin-left:auto; font-size:10px; background:rgba(0,255,247,0.1); color:var(--cyan); padding:2px 7px; border-radius:2px; border:1px solid var(--border); }
 
-        .metric {
-            margin: 15px 0;
-        }
+  /* ─── CONTENT AREA ─── */
+  .content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
 
-        .metric-label {
-            color: var(--warning);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 5px;
-        }
+  /* ─── SEARCH BAR ─── */
+  .search-bar {
+    padding:14px 20px; border-bottom:1px solid var(--border);
+    background:rgba(0,5,10,0.6); display:flex; gap:12px; align-items:center; flex-shrink:0;
+  }
+  .search-input {
+    flex:1; padding:10px 16px; background:rgba(0,255,247,0.04);
+    border:1px solid var(--border); color:var(--cyan);
+    font-family:'Share Tech Mono',monospace; font-size:13px; outline:none;
+    transition:all 0.3s; letter-spacing:1px;
+  }
+  .search-input:focus { border-color:var(--cyan); box-shadow:0 0 15px rgba(0,255,247,0.1); }
+  .search-input::placeholder { color:rgba(0,255,247,0.25); }
+  .search-btn {
+    padding:10px 20px; background:rgba(0,255,247,0.08); border:1px solid var(--cyan);
+    color:var(--cyan); font-family:'Orbitron',sans-serif; font-size:11px;
+    letter-spacing:2px; cursor:pointer; transition:all 0.2s; white-space:nowrap;
+  }
+  .search-btn:hover { background:rgba(0,255,247,0.15); box-shadow:0 0 15px rgba(0,255,247,0.2); }
+  .filter-select {
+    padding:10px 12px; background:rgba(0,255,247,0.04); border:1px solid var(--border);
+    color:var(--text); font-family:'Share Tech Mono',monospace; font-size:12px; outline:none;
+  }
+  .filter-select option { background:#020a0f; }
 
-        .metric-value {
-            font-size: 20px;
-            font-weight: bold;
-        }
+  /* ─── CARDS GRID ─── */
+  .cards-container { flex:1; overflow-y:auto; padding:20px; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
 
-        /* Küçültülmüş slider */
-        .progress-bar {
-            width: 100%;
-            height: 12px;
-            background: #1a1a2e;
-            border: 1px solid var(--border);
-            margin-top: 5px;
-            overflow: hidden;
-        }
+  .category-header {
+    display:flex; align-items:center; gap:14px;
+    margin-bottom:16px; margin-top:4px;
+  }
+  .category-header h2 {
+    font-family:'Orbitron',sans-serif; font-size:13px; letter-spacing:3px;
+    color:var(--cyan); text-shadow:0 0 10px rgba(0,255,247,0.5);
+  }
+  .category-header .cat-line { flex:1; height:1px; background:linear-gradient(90deg,var(--border),transparent); }
+  .category-header .cat-icon { font-size:18px; }
+  .cat-count-badge { font-size:11px; padding:2px 8px; border:1px solid var(--magenta); color:var(--magenta); border-radius:2px; }
 
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #00ff41, #00ffff);
-            transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #000;
-            font-size: 8px;
-            font-weight: bold;
-        }
+  .cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; margin-bottom:32px; }
 
-        .status-good { color: #00ff41; }
-        .status-warning { color: #ffaa00; }
-        .status-critical { color: #ff0055; }
+  .card {
+    border:1px solid var(--border); background:var(--panel);
+    padding:18px 20px; cursor:pointer; position:relative; overflow:hidden;
+    transition:all 0.25s; group:true;
+    animation: cardIn 0.4s ease both;
+  }
+  @keyframes cardIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  .card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+    opacity:0; transition:opacity 0.3s;
+  }
+  .card:hover { border-color:rgba(0,255,247,0.4); background:rgba(0,255,247,0.07); transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,0,0,0.4), 0 0 20px rgba(0,255,247,0.08); }
+  .card:hover::before { opacity:1; }
 
-        .docs-section, .settings-section {
-            border: 2px solid var(--accent2);
-            padding: 20px;
-            margin-bottom: 20px;
-            background: rgba(0, 255, 255, 0.05);
-            border-radius: 3px;
-        }
+  .card-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px; }
+  .card-icon { font-size:22px; }
+  .card-badges { display:flex; gap:6px; flex-wrap:wrap; }
+  .badge {
+    font-size:9px; letter-spacing:2px; padding:2px 7px; border-radius:1px;
+    font-family:'Orbitron',sans-serif;
+  }
+  .badge-free { border:1px solid var(--green); color:var(--green); }
+  .badge-paid { border:1px solid var(--gold); color:var(--gold); }
+  .badge-api  { border:1px solid var(--magenta); color:var(--magenta); }
+  .badge-tor  { border:1px solid #9b59b6; color:#9b59b6; }
 
-        .docs-section h3, .settings-section h3 {
-            color: var(--accent2);
-            margin-bottom: 15px;
-            font-size: 16px;
-        }
+  .card-title { font-family:'Rajdhani',sans-serif; font-size:16px; font-weight:700; color:#e0f8ff; margin-bottom:4px; letter-spacing:1px; }
+  .card-desc  { font-size:11px; color:rgba(160,216,224,0.7); line-height:1.6; margin-bottom:14px; }
 
-        .terminal-box {
-            background: #1a1a2e;
-            border: 1px solid var(--border);
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 3px;
-            font-size: 12px;
-            overflow-x: auto;
-        }
+  .card-footer { display:flex; align-items:center; justify-content:space-between; }
+  .card-link {
+    font-size:10px; letter-spacing:2px; color:var(--cyan); text-decoration:none;
+    border:1px solid var(--border); padding:5px 12px;
+    transition:all 0.2s; display:inline-flex; align-items:center; gap:6px;
+  }
+  .card-link:hover { border-color:var(--cyan); background:rgba(0,255,247,0.1); box-shadow:0 0 10px rgba(0,255,247,0.15); }
+  .card-cat-tag { font-size:9px; color:var(--dim); letter-spacing:2px; }
 
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 20px;
-        }
+  /* ─── STATS BAR ─── */
+  .statsbar {
+    padding:8px 20px; border-top:1px solid var(--border);
+    background:rgba(0,5,10,0.9); display:flex; gap:24px; align-items:center;
+    flex-shrink:0; font-size:11px; letter-spacing:1px;
+  }
+  .stat-item { display:flex; gap:6px; align-items:center; }
+  .stat-val { color:var(--cyan); font-weight:bold; }
+  .stat-label { color:rgba(160,216,224,0.4); }
 
-        .btn {
-            padding: 12px 20px;
-            border: 2px solid var(--border);
-            background: var(--card-bg);
-            color: var(--text);
-            cursor: pointer;
-            font-family: monospace;
-            text-decoration: none;
-            display: inline-block;
-            border-radius: 3px;
-            transition: all 0.3s;
-            text-align: center;
-        }
+  /* ─── TOOL MODAL ─── */
+  .modal-overlay { position:fixed; inset:0; z-index:500; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; opacity:0; visibility:hidden; transition:all 0.3s; }
+  .modal-overlay.open { opacity:1; visibility:visible; }
+  .modal {
+    width:min(600px,95vw); border:1px solid var(--cyan);
+    background:rgba(2,10,15,0.98); padding:32px; position:relative;
+    box-shadow:0 0 60px rgba(0,255,247,0.15);
+    animation:modalIn 0.3s ease;
+  }
+  @keyframes modalIn { from{transform:scale(0.9) translateY(20px)} to{transform:scale(1) translateY(0)} }
+  .modal-close { position:absolute; top:16px; right:16px; background:none; border:none; color:var(--dim); font-size:20px; cursor:pointer; transition:color 0.2s; }
+  .modal-close:hover { color:var(--red); }
+  .modal-title { font-family:'Orbitron',sans-serif; font-size:18px; color:var(--cyan); margin-bottom:6px; text-shadow:0 0 15px var(--cyan); }
+  .modal-url { font-size:12px; color:var(--magenta); margin-bottom:20px; letter-spacing:1px; }
+  .modal-desc { font-size:13px; color:var(--text); line-height:1.8; margin-bottom:24px; }
+  .modal-tags { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px; }
+  .modal-tag { font-size:10px; padding:3px 10px; border:1px solid var(--border); color:var(--dim); letter-spacing:2px; }
+  .modal-actions { display:flex; gap:12px; }
+  .modal-btn {
+    padding:12px 24px; border:1px solid var(--cyan); background:rgba(0,255,247,0.06);
+    color:var(--cyan); font-family:'Orbitron',sans-serif; font-size:11px;
+    letter-spacing:2px; cursor:pointer; text-decoration:none; display:inline-block;
+    transition:all 0.2s;
+  }
+  .modal-btn:hover { background:rgba(0,255,247,0.15); box-shadow:0 0 20px rgba(0,255,247,0.2); }
+  .modal-btn.secondary { border-color:var(--border); color:var(--dim); }
+  .modal-btn.secondary:hover { border-color:var(--magenta); color:var(--magenta); }
 
-        .btn:hover {
-            background: var(--border);
-            color: var(--bg);
-            text-shadow: none;
-            box-shadow: 0 0 15px var(--border);
-        }
+  /* ─── SCROLLBAR ─── */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); }
+  ::-webkit-scrollbar-thumb:hover { background:var(--dim); }
 
-        .footer {
-            text-align: center;
-            border-top: 2px solid var(--border);
-            padding-top: 20px;
-            margin-top: 40px;
-            color: var(--accent2);
-        }
+  /* ─── FAVORITES STAR ─── */
+  .fav-btn { background:none; border:none; cursor:pointer; font-size:14px; opacity:0.4; transition:all 0.2s; }
+  .fav-btn:hover, .fav-btn.active { opacity:1; filter:drop-shadow(0 0 6px var(--gold)); }
 
-        .chart-container {
-            max-height: 300px;
-            margin: 20px 0;
-        }
-
-        @media (max-width: 768px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-            .header h1 {
-                font-size: 24px;
-            }
-        }
-    </style>
+  /* ─── RESPONSIVE ─── */
+  @media(max-width:600px) {
+    .sidebar { display:none; }
+    .cards-grid { grid-template-columns:1fr; }
+  }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="theme-switch" id="themeSwitch">🌓 Tema</div>
-        <div class="header">
-            <h1>🔴 PEGASUS PROJECT v6.0 🔴</h1>
-            <p>Cyberpunk System Monitor & Network Analyzer - ALL IN ONE</p>
-            <p style="margin-top: 10px; color: #ffaa00;">Build: zd404 | Status: ACTIVE ✓</p>
-        </div>
 
-        <div class="grid" id="systemMetrics">
-            <!-- Dinamik metrikler -->
-        </div>
-
-        <!-- Grafikler -->
-        <div class="card" style="grid-column: span 2;">
-            <h2>📈 ZAMAN SERİSİ</h2>
-            <canvas id="cpuChart" width="400" height="200"></canvas>
-        </div>
-
-        <!-- İşlemler Tablosu -->
-        <div class="docs-section">
-            <h3>⚙️ EN ÇOK CPU KULLANAN İŞLEMLER</h3>
-            <div id="processList" class="terminal-box" style="font-size: 11px;">Yükleniyor...</div>
-        </div>
-
-        <!-- Ağ Bilgileri -->
-        <div class="docs-section">
-            <h3>🌐 AĞ ARABIRIMLERİ VE PORTLAR</h3>
-            <div id="networkInfo" class="terminal-box">Yükleniyor...</div>
-        </div>
-
-        <!-- Sistem Logları -->
-        <div class="docs-section">
-            <h3>📜 SİSTEM LOGLARI (dmesg)</h3>
-            <div id="systemLogs" class="terminal-box" style="max-height: 200px; overflow-y: auto;">Yükleniyor...</div>
-        </div>
-
-        <!-- Dosya Gezgini -->
-        <div class="docs-section">
-            <h3>📁 DOSYA GEZGİNİ (SDCARD)</h3>
-            <div id="fileList" class="terminal-box">Yükleniyor...</div>
-        </div>
-
-        <!-- Ayarlar -->
-        <div class="settings-section">
-            <h3>⚙️ AYARLAR</h3>
-            <div>
-                <label>Yenileme aralığı (saniye):</label>
-                <input type="number" id="refreshInterval" value="2" min="0.5" step="0.5" style="width: 80px;">
-                <button class="btn" id="saveSettings">Kaydet</button>
-            </div>
-            <div>
-                <label>CPU Uyarı Eşiği (%):</label>
-                <input type="number" id="cpuThreshold" value="80" min="0" max="100">
-            </div>
-            <div>
-                <label>RAM Uyarı Eşiği (%):</label>
-                <input type="number" id="memThreshold" value="80" min="0" max="100">
-            </div>
-            <div class="button-group">
-                <button class="btn" id="exportDataBtn">📊 Dışa Aktar (HTML)</button>
-                <button class="btn" id="remoteAccessBtn">🌍 Uzaktan Erişim (ngrok)</button>
-                <button class="btn" id="restartScriptBtn">🔄 Script'i Yeniden Başlat</button>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p>🔴 PEGASUS PROJECT v6.0 🔴</p>
-            <p style="font-size: 12px;">Build: zd404 | Platform: Termux/Linux | License: MIT</p>
-        </div>
+<!-- ══════════════════ LOGIN SCREEN ══════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <span class="logo-eye">👁</span>
+      <span class="logo-text">PHANTOM</span>
+      <span class="logo-sub">OSINT INTELLIGENCE PANEL v2.0</span>
     </div>
 
-    <script>
-        let refreshTimer = null;
-        let cpuChart = null;
-        let historyData = { cpu: [], mem: [], time: [] };
-        let settings = { refreshInterval: 2, cpuThreshold: 80, memThreshold: 80 };
+    <label class="login-label">ACCESS CODE</label>
+    <input class="login-input" type="text" id="login-user" placeholder="operator_id" autocomplete="off" spellcheck="false">
 
-        // Tema değiştirme
-        document.getElementById('themeSwitch').addEventListener('click', () => {
-            const body = document.body;
-            if (body.classList.contains('cyberpunk')) body.classList.add('light');
-            else if (body.classList.contains('light')) body.classList.remove('light', 'cyberpunk');
-            else body.classList.add('cyberpunk');
-        });
+    <label class="login-label">CIPHER KEY</label>
+    <input class="login-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="off">
 
-        // API çağrıları
-        async function fetchMetrics() {
-            try {
-                const res = await fetch('/api/metrics');
-                const data = await res.json();
-                updateMetricsUI(data);
-                updateChart(data);
-                checkAlerts(data);
-                return data;
-            } catch (e) { console.error(e); }
-        }
+    <button class="login-btn" onclick="doLogin()">▶ AUTHENTICATE</button>
+    <div class="login-status" id="login-status"></div>
 
-        async function fetchProcesses() {
-            try {
-                const res = await fetch('/api/processes');
-                const data = await res.text();
-                document.getElementById('processList').innerHTML = `<pre>${data}</pre>`;
-            } catch(e) {}
-        }
+    <div class="login-hints">
+      <div>DEFAULT: <span>phantom</span> / <span>osint2024</span></div>
+      <div style="margin-top:6px">GUEST: <span>guest</span> / <span>guest</span></div>
+    </div>
+  </div>
+</div>
 
-        async function fetchNetwork() {
-            try {
-                const res = await fetch('/api/network');
-                const data = await res.text();
-                document.getElementById('networkInfo').innerHTML = `<pre>${data}</pre>`;
-            } catch(e) {}
-        }
+<!-- ══════════════════ MAIN PANEL ══════════════════ -->
+<div id="main-panel" style="display:none">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-logo">PH<span>ANT</span>OM <span style="color:var(--gold);font-size:12px;letter-spacing:2px">OSINT</span></div>
+    <div class="topbar-status">
+      <div class="status-dot online"></div>
+      <span style="color:var(--green);font-size:11px;letter-spacing:2px">ONLINE</span>
+      <span class="topbar-clock" id="clock">--:--:--</span>
+    </div>
+    <div class="topbar-user" id="top-user">◈ OPERATOR</div>
+  </div>
 
-        async function fetchLogs() {
-            try {
-                const res = await fetch('/api/logs');
-                const data = await res.text();
-                document.getElementById('systemLogs').innerHTML = `<pre>${data}</pre>`;
-            } catch(e) {}
-        }
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar"></div>
 
-        async function fetchFiles() {
-            try {
-                const res = await fetch('/api/files?path=/sdcard');
-                const data = await res.text();
-                document.getElementById('fileList').innerHTML = `<pre>${data}</pre>`;
-            } catch(e) {}
-        }
+    <!-- CONTENT -->
+    <div class="content">
+      <div class="search-bar">
+        <input class="search-input" id="search-input" placeholder="🔍  OSINT araç veya URL ara..." oninput="filterCards()">
+        <select class="filter-select" id="filter-type" onchange="filterCards()">
+          <option value="all">TÜM TIPLER</option>
+          <option value="free">ÜCRETSİZ</option>
+          <option value="paid">ÜCRETLI</option>
+          <option value="api">API</option>
+          <option value="tor">TOR</option>
+        </select>
+        <button class="search-btn" onclick="filterCards()">⚡ TARA</button>
+      </div>
 
-        function updateMetricsUI(data) {
-            const metrics = [
-                { title: '⚡ CPU', label: 'Kullanım', value: data.cpu, unit: '%', color: data.cpu > 80 ? 'critical' : (data.cpu > 50 ? 'warning' : 'good') },
-                { title: '▓ RAM', label: 'Kullanım', value: data.memory, unit: '%', color: data.memory > 80 ? 'critical' : (data.memory > 50 ? 'warning' : 'good') },
-                { title: '◆ DISK', label: 'Kullanım', value: data.storage, unit: '%', color: data.storage > 80 ? 'critical' : (data.storage > 50 ? 'warning' : 'good') },
-                { title: '◉ NETWORK', label: 'Aktif Bağlantı', value: data.connections, unit: 'adet', color: 'good' },
-                { title: '◈ PROCESS', label: 'İşlem Sayısı', value: data.processes, unit: 'adet', color: 'good' },
-                { title: '📊 LOAD AVG', label: '1/5/15 dk', value: data.loadavg, unit: '', color: 'good' }
-            ];
-            let html = '';
-            metrics.forEach(m => {
-                let cls = '';
-                if (m.color === 'critical') cls = 'status-critical';
-                else if (m.color === 'warning') cls = 'status-warning';
-                else cls = 'status-good';
-                html += `<div class="card">
-                    <h2>${m.title}</h2>
-                    <div class="metric">
-                        <div class="metric-label">${m.label}</div>
-                        <div class="metric-value ${cls}">${m.value} ${m.unit}</div>
-                        <div class="progress-bar"><div class="progress-fill" style="width: ${typeof m.value === 'number' ? m.value : 0}%">${typeof m.value === 'number' ? m.value+'%' : ''}</div></div>
-                    </div>
-                </div>`;
-            });
-            document.getElementById('systemMetrics').innerHTML = html;
-        }
+      <div class="cards-container" id="cards-container"></div>
 
-        function updateChart(data) {
-            const now = new Date().toLocaleTimeString();
-            historyData.cpu.push(data.cpu);
-            historyData.mem.push(data.memory);
-            historyData.time.push(now);
-            if (historyData.cpu.length > 20) {
-                historyData.cpu.shift();
-                historyData.mem.shift();
-                historyData.time.shift();
-            }
-            if (cpuChart) {
-                cpuChart.data.datasets[0].data = historyData.cpu;
-                cpuChart.data.datasets[1].data = historyData.mem;
-                cpuChart.data.labels = historyData.time;
-                cpuChart.update();
-            } else {
-                const ctx = document.getElementById('cpuChart').getContext('2d');
-                cpuChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: historyData.time,
-                        datasets: [
-                            { label: 'CPU %', data: historyData.cpu, borderColor: '#ff0055', fill: false },
-                            { label: 'RAM %', data: historyData.mem, borderColor: '#00ffff', fill: false }
-                        ]
-                    },
-                    options: { responsive: true, maintainAspectRatio: true }
-                });
-            }
-        }
+      <div class="statsbar">
+        <div class="stat-item"><span class="stat-val" id="stat-total">0</span><span class="stat-label">TOPLAM ARAÇ</span></div>
+        <div class="stat-item"><span class="stat-val" id="stat-shown">0</span><span class="stat-label">GÖRÜNTÜLENEN</span></div>
+        <div class="stat-item"><span class="stat-val" id="stat-cats">0</span><span class="stat-label">KATEGORİ</span></div>
+        <div class="stat-item"><span class="stat-val" id="stat-favs">0</span><span class="stat-label">FAVORİ</span></div>
+        <div style="margin-left:auto;color:var(--dim);font-size:10px;letter-spacing:2px">PHANTOM OSINT PANEL</div>
+      </div>
+    </div>
+  </div>
+</div>
 
-        function checkAlerts(data) {
-            if (data.cpu > settings.cpuThreshold) {
-                alert(`⚠️ CPU Kullanımı ${data.cpu}% (Eşik: ${settings.cpuThreshold}%)`);
-            }
-            if (data.memory > settings.memThreshold) {
-                alert(`⚠️ RAM Kullanımı ${data.memory}% (Eşik: ${settings.memThreshold}%)`);
-            }
-        }
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-box">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="m-title"></div>
+    <div class="modal-url" id="m-url"></div>
+    <div class="modal-desc" id="m-desc"></div>
+    <div class="modal-tags" id="m-tags"></div>
+    <div class="modal-actions">
+      <a class="modal-btn" id="m-link" href="#" target="_blank" rel="noopener">⬡ SİTEYE GİT</a>
+      <button class="modal-btn secondary" onclick="closeModal()">◁ KAPAT</button>
+    </div>
+  </div>
+</div>
 
-        function loadSettings() {
-            fetch('/api/settings').then(res => res.json()).then(s => {
-                if (s.refreshInterval) settings = s;
-                document.getElementById('refreshInterval').value = settings.refreshInterval;
-                document.getElementById('cpuThreshold').value = settings.cpuThreshold;
-                document.getElementById('memThreshold').value = settings.memThreshold;
-                startRefreshTimer();
-            }).catch(() => {});
-        }
+<script>
+// ══════════════════════════════════════════════
+// OSINT VERİTABANI — 100+ Araç
+// ══════════════════════════════════════════════
+const OSINT_DATA = [
+  // ── KİŞİ & KİMLİK ──
+  { id:1, cat:"KİŞİ & KİMLİK", icon:"👤", name:"Pipl", url:"https://pipl.com", desc:"Dünyanın en kapsamlı kişi arama motoru. E-posta, isim, telefon ve sosyal medya üzerinden detaylı profil.", tags:["kişi","arama","sosyal","e-posta"], types:["paid"] },
+  { id:2, cat:"KİŞİ & KİMLİK", icon:"👤", name:"Spokeo", url:"https://spokeo.com", desc:"ABD odaklı kişi arama; adres, telefon, e-posta ve sosyal medya bağlantıları.", tags:["kişi","adres","telefon"], types:["paid"] },
+  { id:3, cat:"KİŞİ & KİMLİK", icon:"👤", name:"TruthFinder", url:"https://truthfinder.com", desc:"Arka plan kontrolü, suç sicili, aile kayıtları. ABD vatandaşları için.", tags:["arka plan","sicil"], types:["paid"] },
+  { id:4, cat:"KİŞİ & KİMLİK", icon:"👤", name:"Intelius", url:"https://intelius.com", desc:"Adres, telefon, e-posta, suç sicili ve aile üyeleri dahil kişi raporları.", tags:["rapor","adres"], types:["paid"] },
+  { id:5, cat:"KİŞİ & KİMLİK", icon:"👤", name:"Whitepages", url:"https://whitepages.com", desc:"Telefon, adres ve kişi bilgisi sorgulama. Temel arama ücretsiz.", tags:["telefon","adres"], types:["free","paid"] },
+  { id:6, cat:"KİŞİ & KİMLİK", icon:"👤", name:"411.com", url:"https://411.com", desc:"ABD telefon defteri ve kişi arama hizmeti.", tags:["telefon","kişi"], types:["free"] },
+  { id:7, cat:"KİŞİ & KİMLİK", icon:"👤", name:"ZabaSearch", url:"https://zabasearch.com", desc:"Ücretsiz kişi arama; isim, şehir, eyalet bazlı.", tags:["kişi","ücretsiz"], types:["free"] },
 
-        function saveSettings() {
-            const newSettings = {
-                refreshInterval: parseFloat(document.getElementById('refreshInterval').value),
-                cpuThreshold: parseInt(document.getElementById('cpuThreshold').value),
-                memThreshold: parseInt(document.getElementById('memThreshold').value)
-            };
-            fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newSettings) })
-                .then(() => { settings = newSettings; startRefreshTimer(); alert('Ayarlar kaydedildi.'); });
-        }
+  // ── SOSYAL MEDYA ──
+  { id:8, cat:"SOSYAL MEDYA", icon:"📱", name:"Sherlock", url:"https://github.com/sherlock-project/sherlock", desc:"Kullanıcı adını 300+ platformda sorgulayan açık kaynak araç. Python tabanlı.", tags:["kullanıcı adı","platform"], types:["free"] },
+  { id:9, cat:"SOSYAL MEDYA", icon:"📱", name:"WhatsMyName", url:"https://whatsmyname.app", desc:"Kullanıcı adı araması — 500+ site, anlık sonuç, tarayıcı üzerinde.", tags:["kullanıcı adı","tarayıcı"], types:["free"] },
+  { id:10, cat:"SOSYAL MEDYA", icon:"📱", name:"Social-Searcher", url:"https://social-searcher.com", desc:"Gerçek zamanlı sosyal medya izleme. Twitter, Facebook, Instagram, Reddit.", tags:["izleme","anahtar kelime"], types:["free","paid"] },
+  { id:11, cat:"SOSYAL MEDYA", icon:"📱", name:"Namechk", url:"https://namechk.com", desc:"Kullanıcı adı ve alan adı müsaitlik kontrolü, 100+ platform.", tags:["kullanıcı adı","alan"], types:["free"] },
+  { id:12, cat:"SOSYAL MEDYA", icon:"📱", name:"IntelX Social", url:"https://intelx.io", desc:"Sosyal medya, dark web ve veri sızıntılarını tek arayüzde tarayan premium araç.", tags:["dark web","sızıntı","sosyal"], types:["paid","api"] },
+  { id:13, cat:"SOSYAL MEDYA", icon:"📱", name:"Mention", url:"https://mention.com", desc:"Marka ve kişi izleme; sosyal medya, haber ve blog takibi.", tags:["marka","izleme"], types:["paid"] },
+  { id:14, cat:"SOSYAL MEDYA", icon:"📱", name:"TweetDeck", url:"https://tweetdeck.twitter.com", desc:"Twitter/X için gelişmiş izleme ve arama aracı.", tags:["twitter","x","izleme"], types:["free"] },
+  { id:15, cat:"SOSYAL MEDYA", icon:"📱", name:"Aware Online", url:"https://www.aware-online.com/osint-tools", desc:"Sosyal medya OSINT araçları koleksiyonu ve kursları.", tags:["koleksiyon","kurs"], types:["free"] },
 
-        function startRefreshTimer() {
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(() => {
-                fetchMetrics();
-                fetchProcesses();
-                fetchNetwork();
-                fetchLogs();
-                fetchFiles();
-            }, settings.refreshInterval * 1000);
-        }
+  // ── E-POSTA & KULLANICI ──
+  { id:16, cat:"E-POSTA & KULLANICI", icon:"✉️", name:"Hunter.io", url:"https://hunter.io", desc:"Alan adına bağlı e-posta adreslerini bul, doğrula ve çıkar.", tags:["e-posta","alan adı","doğrulama"], types:["free","api"] },
+  { id:17, cat:"E-POSTA & KULLANICI", icon:"✉️", name:"EmailRep", url:"https://emailrep.io", desc:"E-posta itibar skoru; spam, phishing, breach geçmişi.", tags:["itibar","spam","ihlal"], types:["free","api"] },
+  { id:18, cat:"E-POSTA & KULLANICI", icon:"✉️", name:"HaveIBeenPwned", url:"https://haveibeenpwned.com", desc:"E-posta adresinin veri ihlallerine dahil olup olmadığını kontrol et.", tags:["ihlal","şifre","sızıntı"], types:["free","api"] },
+  { id:19, cat:"E-POSTA & KULLANICI", icon:"✉️", name:"Epieos", url:"https://epieos.com", desc:"E-posta veya telefon ile Google ve sosyal medya hesaplarını bul.", tags:["google","hesap","telefon"], types:["free"] },
+  { id:20, cat:"E-POSTA & KULLANICI", icon:"✉️", name:"Holehe", url:"https://github.com/megadose/holehe", desc:"E-posta adresinin hangi sitelere kayıtlı olduğunu test eder (Python).", tags:["kayıt","site"], types:["free"] },
+  { id:21, cat:"E-POSTA & KULLANICI", icon:"✉️", name:"Snov.io", url:"https://snov.io", desc:"E-posta bulma, doğrulama ve soğuk e-posta otomasyonu.", tags:["bulma","doğrulama"], types:["paid","api"] },
+  { id:22, cat:"E-POSTA & KULLANICI", icon:"✉️", name:"Clearbit", url:"https://clearbit.com", desc:"E-posta üzerinden şirket ve kişi bilgisi zenginleştirme API'si.", tags:["zenginleştirme","şirket"], types:["paid","api"] },
 
-        document.getElementById('saveSettings').addEventListener('click', saveSettings);
-        document.getElementById('exportDataBtn').addEventListener('click', () => {
-            window.open('/api/export', '_blank');
-        });
-        document.getElementById('remoteAccessBtn').addEventListener('click', async () => {
-            const res = await fetch('/api/remote', { method: 'POST' });
-            const data = await res.json();
-            alert(data.url || data.error);
-        });
-        document.getElementById('restartScriptBtn').addEventListener('click', async () => {
-            if (confirm('Script yeniden başlatılacak, emin misiniz?')) {
-                await fetch('/api/restart', { method: 'POST' });
-                alert('Yeniden başlatılıyor...');
-            }
-        });
+  // ── TELEFON & SMS ──
+  { id:23, cat:"TELEFON & SMS", icon:"📞", name:"Truecaller", url:"https://truecaller.com", desc:"Telefon numarası arama, spam tespiti ve arayanı tanımlama.", tags:["numara","spam"], types:["free","paid"] },
+  { id:24, cat:"TELEFON & SMS", icon:"📞", name:"NumLookup", url:"https://www.numlookup.com", desc:"Ücretsiz ters telefon arama; taşıyıcı, konum ve tip bilgisi.", tags:["ters arama","taşıyıcı"], types:["free"] },
+  { id:25, cat:"TELEFON & SMS", icon:"📞", name:"PhoneInfoga", url:"https://github.com/sundowndev/phoneinfoga", desc:"Uluslararası telefon numarası istihbarat aracı. OSINT tabanlı.", tags:["uluslararası","istihbarat"], types:["free"] },
+  { id:26, cat:"TELEFON & SMS", icon:"📞", name:"Sync.me", url:"https://sync.me", desc:"Sosyal medya entegrasyonlu ters telefon arama.", tags:["sosyal","ters arama"], types:["free"] },
+  { id:27, cat:"TELEFON & SMS", icon:"📞", name:"SpyDialer", url:"https://spydialer.com", desc:"Ücretsiz ters telefon, e-posta ve kişi arama.", tags:["ters arama","e-posta"], types:["free"] },
 
-        // İlk yükleme
-        loadSettings();
-        fetchMetrics();
-        fetchProcesses();
-        fetchNetwork();
-        fetchLogs();
-        fetchFiles();
-    </script>
+  // ── IP & AĞ ──
+  { id:28, cat:"IP & AĞ", icon:"🌐", name:"Shodan", url:"https://shodan.io", desc:"İnternete bağlı cihazları, servisleri ve açık portları tarayan OSINT motoru.", tags:["iot","port","servis","cihaz"], types:["free","paid","api"] },
+  { id:29, cat:"IP & AĞ", icon:"🌐", name:"Censys", url:"https://censys.io", desc:"İnternet altyapısı arama — sertifikalar, IP'ler, domainler.", tags:["altyapı","sertifika"], types:["free","api"] },
+  { id:30, cat:"IP & AĞ", icon:"🌐", name:"IPinfo", url:"https://ipinfo.io", desc:"IP coğrafi konum, ASN, taşıyıcı ve şirket bilgisi.", tags:["geo","asn","konum"], types:["free","api"] },
+  { id:31, cat:"IP & AĞ", icon:"🌐", name:"GreyNoise", url:"https://greynoise.io", desc:"İnternet gürültüsü analizi; hangi IP'lerin tarama yaptığını takip et.", tags:["tarama","gürültü","tehdit"], types:["free","api"] },
+  { id:32, cat:"IP & AĞ", icon:"🌐", name:"BGPView", url:"https://bgpview.io", desc:"ASN, IP prefix, BGP rota ve peer bilgilerini görselleştir.", tags:["asn","bgp","rota"], types:["free"] },
+  { id:33, cat:"IP & AĞ", icon:"🌐", name:"MXToolbox", url:"https://mxtoolbox.com", desc:"DNS, MX, blacklist, SMTP ve ağ araçları süiti.", tags:["dns","mx","blacklist"], types:["free"] },
+  { id:34, cat:"IP & AĞ", icon:"🌐", name:"Hurricane Electric BGP", url:"https://bgp.he.net", desc:"ASN ve IP prefix sorgulama, BGP topoloji haritası.", tags:["bgp","asn","harita"], types:["free"] },
+
+  // ── ALAN ADI & DNS ──
+  { id:35, cat:"ALAN ADI & DNS", icon:"🔗", name:"WHOIS (IANA)", url:"https://lookup.icann.org", desc:"Resmi ICANN WHOIS sorgulama; kayıt sahibi, NS ve tarihler.", tags:["whois","kayıt","ns"], types:["free"] },
+  { id:36, cat:"ALAN ADI & DNS", icon:"🔗", name:"DomainTools", url:"https://domaintools.com", desc:"WHOIS geçmişi, DNS kayıtları ve domain risk skoru.", tags:["whois","geçmiş","risk"], types:["paid","api"] },
+  { id:37, cat:"ALAN ADI & DNS", icon:"🔗", name:"SecurityTrails", url:"https://securitytrails.com", desc:"DNS ve domain geçmişi, WHOIS değişiklikleri, subdomainler.", tags:["dns","geçmiş","subdomain"], types:["free","api"] },
+  { id:38, cat:"ALAN ADI & DNS", icon:"🔗", name:"DNSDumpster", url:"https://dnsdumpster.com", desc:"Alan adı keşfi; DNS kayıtları ve sunucu haritası.", tags:["dns","keşif","harita"], types:["free"] },
+  { id:39, cat:"ALAN ADI & DNS", icon:"🔗", name:"crt.sh", url:"https://crt.sh", desc:"SSL/TLS sertifika şeffaflık logu araması; subdomainleri keşfet.", tags:["ssl","sertifika","subdomain"], types:["free"] },
+  { id:40, cat:"ALAN ADI & DNS", icon:"🔗", name:"Amass (OWASP)", url:"https://github.com/owasp-amass/amass", desc:"Subdomain keşfi ve haritalama. OWASP destekli aktif/pasif OSINT.", tags:["subdomain","haritalama"], types:["free"] },
+  { id:41, cat:"ALAN ADI & DNS", icon:"🔗", name:"ViewDNS", url:"https://viewdns.info", desc:"Ters IP, DNS, WHOIS, spam DB ve daha fazlası için ücretsiz araçlar.", tags:["ters ip","dns","spam"], types:["free"] },
+  { id:42, cat:"ALAN ADI & DNS", icon:"🔗", name:"Sublist3r", url:"https://github.com/aboul3la/Sublist3r", desc:"Python tabanlı hızlı subdomain listeleme aracı.", tags:["subdomain","python"], types:["free"] },
+
+  // ── GÖRSELARAma & YÜZLER ──
+  { id:43, cat:"GÖRSEL & YÜZLER", icon:"🖼️", name:"Google Lens", url:"https://lens.google.com", desc:"Görsel arama, metin tanıma ve ürün tanımlama. En geniş indeks.", tags:["görsel","arama","ocr"], types:["free"] },
+  { id:44, cat:"GÖRSEL & YÜZLER", icon:"🖼️", name:"TinEye", url:"https://tineye.com", desc:"Ters görsel arama; fotoğrafın internetteki tüm kullanımlarını bul.", tags:["ters görsel","kaynak"], types:["free","api"] },
+  { id:45, cat:"GÖRSEL & YÜZLER", icon:"🖼️", name:"Yandex Görseller", url:"https://yandex.com/images", desc:"Yüz tanıma konusunda Google'dan üstün performans gösteren Rus arama.", tags:["yüz","görsel","rusya"], types:["free"] },
+  { id:46, cat:"GÖRSEL & YÜZLER", icon:"🖼️", name:"PimEyes", url:"https://pimeyes.com", desc:"Yüz tanıma tabanlı ters arama; internetteki yüz eşleşmelerini bul.", tags:["yüz tanıma","eşleşme"], types:["paid"] },
+  { id:47, cat:"GÖRSEL & YÜZLER", icon:"🖼️", name:"FaceCheck.ID", url:"https://facecheck.id", desc:"Yüz fotoğrafı ile sosyal medya ve web profili eşleştirme.", tags:["yüz","profil","sosyal"], types:["paid"] },
+  { id:48, cat:"GÖRSEL & YÜZLER", icon:"🖼️", name:"Exif.tools", url:"https://exif.tools", desc:"Fotoğraf meta verisi (EXIF) okuma; GPS, kamera, tarih bilgisi.", tags:["exif","metadata","gps"], types:["free"] },
+
+  // ── DARK WEB ──
+  { id:49, cat:"DARK WEB & LEAK", icon:"🕵️", name:"IntelX", url:"https://intelx.io", desc:"Dark web, Tor, Pastebin ve sızıntı veritabanı araması. Profesyonel OSINT.", tags:["dark web","sızıntı","pastebin"], types:["paid","api"] },
+  { id:50, cat:"DARK WEB & LEAK", icon:"🕵️", name:"Ahmia", url:"https://ahmia.fi", desc:"Tor ağındaki .onion sitelerini indeksleyen arama motoru.", tags:["tor","onion","arama"], types:["free","tor"] },
+  { id:51, cat:"DARK WEB & LEAK", icon:"🕵️", name:"Breach Directory", url:"https://breachdirectory.org", desc:"E-posta ve kullanıcı adı bazlı veri ihlali araması.", tags:["ihlal","e-posta","şifre"], types:["free"] },
+  { id:52, cat:"DARK WEB & LEAK", icon:"🕵️", name:"LeakCheck", url:"https://leakcheck.io", desc:"Kombolist ve veri ihlali arama; e-posta, kullanıcı adı, hash.", tags:["kombolist","hash","ihlal"], types:["free","paid"] },
+  { id:53, cat:"DARK WEB & LEAK", icon:"🕵️", name:"DeHashed", url:"https://dehashed.com", desc:"Kapsamlı ihlal veritabanı arama; e-posta, IP, kullanıcı adı.", tags:["ihlal","ip","e-posta"], types:["paid"] },
+  { id:54, cat:"DARK WEB & LEAK", icon:"🕵️", name:"SnusBase", url:"https://snusbase.com", desc:"Veri sızıntısı veritabanı araması; şifre hash ve plaintext.", tags:["sızıntı","şifre","hash"], types:["paid"] },
+  { id:55, cat:"DARK WEB & LEAK", icon:"🕵️", name:"OnionSearch", url:"https://github.com/megadose/OnionSearch", desc:"Çoklu Tor arama motorlarını aynı anda sorgulayan Python aracı.", tags:["tor","python","çoklu"], types:["free","tor"] },
+
+  // ── HARİTA & KONUM ──
+  { id:56, cat:"HARİTA & KONUM", icon:"🗺️", name:"Google Earth Pro", url:"https://earth.google.com", desc:"Uydu görüntüleri, 3D arazi, geçmiş görüntüler ve coğrafi analiz.", tags:["uydu","3d","geçmiş"], types:["free"] },
+  { id:57, cat:"HARİTA & KONUM", icon:"🗺️", name:"Sentinel Hub", url:"https://apps.sentinel-hub.com", desc:"ESA uydu görüntüleri; NDVI, değişim tespiti ve anlık izleme.", tags:["uydu","esa","değişim"], types:["free","paid"] },
+  { id:58, cat:"HARİTA & KONUM", icon:"🗺️", name:"GeoHack", url:"https://geohack.toolforge.org", desc:"Koordinat tabanlı hızlı harita ve coğrafi bilgi kaynağı linki.", tags:["koordinat","harita"], types:["free"] },
+  { id:59, cat:"HARİTA & KONUM", icon:"🗺️", name:"Overpass Turbo", url:"https://overpass-turbo.eu", desc:"OpenStreetMap veri sorgu arayüzü; gelişmiş coğrafi filtreleme.", tags:["osm","sorgu","coğrafi"], types:["free"] },
+  { id:60, cat:"HARİTA & KONUM", icon:"🗺️", name:"Mapillary", url:"https://mapillary.com", desc:"Kalabalık kaynaklı sokak fotoğrafları; OSINT coğrafi doğrulama.", tags:["sokak","fotoğraf","doğrulama"], types:["free"] },
+  { id:61, cat:"HARİTA & KONUM", icon:"🗺️", name:"SunCalc", url:"https://suncalc.org", desc:"Güneş açısı ve gölge analizi; fotoğraf zaman-konum tespiti.", tags:["güneş","gölge","zaman"], types:["free"] },
+  { id:62, cat:"HARİTA & KONUM", icon:"🗺️", name:"GeoGuessr Radar", url:"https://geotips.net", desc:"Coğrafi ipuçları veritabanı; GeoGuessr ve OSINT konum tahmini.", tags:["coğrafi","ipucu"], types:["free"] },
+
+  // ── ARAÇ TAKIP ──
+  { id:63, cat:"ARAÇ & TAŞIMA", icon:"🚗", name:"MarineTraffic", url:"https://marinetraffic.com", desc:"Gerçek zamanlı gemi takibi, AIS verileri, liman istatistikleri.", tags:["gemi","ais","gerçek zamanlı"], types:["free","paid"] },
+  { id:64, cat:"ARAÇ & TAŞIMA", icon:"🚗", name:"FlightAware", url:"https://flightaware.com", desc:"Uçuş takibi, rota geçmişi ve hava trafik verileri.", tags:["uçak","uçuş","rota"], types:["free","paid"] },
+  { id:65, cat:"ARAÇ & TAŞIMA", icon:"🚗", name:"FlightRadar24", url:"https://flightradar24.com", desc:"Anlık uçuş takibi; 3D görünüm, hava aracı geçmişi.", tags:["uçak","3d","anlık"], types:["free","paid"] },
+  { id:66, cat:"ARAÇ & TAŞIMA", icon:"🚗", name:"ADS-B Exchange", url:"https://globe.adsbexchange.com", desc:"Sansürsüz, gerçek zamanlı uçak takibi. Askeri dahil.", tags:["adsb","askeri","sansürsüz"], types:["free"] },
+  { id:67, cat:"ARAÇ & TAŞIMA", icon:"🚗", name:"OpenRailwayMap", url:"https://openrailwaymap.org", desc:"Dünya demiryolu ağı haritası ve altyapı bilgisi.", tags:["tren","demiryolu","harita"], types:["free"] },
+  { id:68, cat:"ARAÇ & TAŞIMA", icon:"🚗", name:"VesselFinder", url:"https://vesselfinder.com", desc:"Gemi takibi ve liman hareketleri; AIS tabanlı.", tags:["gemi","liman","ais"], types:["free"] },
+
+  // ── ŞİRKET & FİNANS ──
+  { id:69, cat:"ŞİRKET & FİNANS", icon:"🏢", name:"OpenCorporates", url:"https://opencorporates.com", desc:"140M+ şirket kaydı; küresel kurumsal veri tabanı.", tags:["şirket","kayıt","küresel"], types:["free","api"] },
+  { id:70, cat:"ŞİRKET & FİNANS", icon:"🏢", name:"Crunchbase", url:"https://crunchbase.com", desc:"Startup, yatırım, girişimci ve yönetici verileri.", tags:["startup","yatırım","girişim"], types:["free","paid"] },
+  { id:71, cat:"ŞİRKET & FİNANS", icon:"🏢", name:"SEC EDGAR", url:"https://efts.sec.gov/LATEST/search-index", desc:"ABD şirket finansal ifadeleri ve hisse bilgileri.", tags:["sec","finans","hisse"], types:["free"] },
+  { id:72, cat:"ŞİRKET & FİNANS", icon:"🏢", name:"LinkedIn (OSINT)", url:"https://linkedin.com", desc:"Çalışan profilleri, şirket yapısı ve iş bağlantıları analizi.", tags:["çalışan","profil","iş"], types:["free"] },
+  { id:73, cat:"ŞİRKET & FİNANS", icon:"🏢", name:"Glassdoor", url:"https://glassdoor.com", desc:"Şirket incelemeleri, maaş verileri ve çalışan yorumları.", tags:["maaş","inceleme","çalışan"], types:["free"] },
+  { id:74, cat:"ŞİRKET & FİNANS", icon:"🏢", name:"ICIJ Offshore Leaks", url:"https://offshoreleaks.icij.org", desc:"Panama, Pandora, Paradise Papers sızıntı veritabanı araması.", tags:["offshore","sızıntı","vergi"], types:["free"] },
+
+  // ── SİBER TEHDİT İSTİHBARAT ──
+  { id:75, cat:"SİBER TEHDİT", icon:"⚠️", name:"VirusTotal", url:"https://virustotal.com", desc:"URL, dosya, IP ve domain üzerinde 70+ antivirüs ile analiz.", tags:["antivirüs","url","dosya","domain"], types:["free","api"] },
+  { id:76, cat:"SİBER TEHDİT", icon:"⚠️", name:"AbuseIPDB", url:"https://abuseipdb.com", desc:"Kötücül IP adresleri raporlama ve sorgulama veritabanı.", tags:["ip","kötücül","rapor"], types:["free","api"] },
+  { id:77, cat:"SİBER TEHDİT", icon:"⚠️", name:"AlienVault OTX", url:"https://otx.alienvault.com", desc:"Açık kaynak tehdit istihbarat paylaşım platformu.", tags:["tehdit","ioc","paylaşım"], types:["free","api"] },
+  { id:78, cat:"SİBER TEHDİT", icon:"⚠️", name:"URLScan.io", url:"https://urlscan.io", desc:"URL tarama ve analiz; ekran görüntüsü, DOM, ağ istekleri.", tags:["url","tarama","dom"], types:["free","api"] },
+  { id:79, cat:"SİBER TEHDİT", icon:"⚠️", name:"Any.run", url:"https://any.run", desc:"İnteraktif kötücül yazılım analiz sanal makinesi.", tags:["malware","sandbox","analiz"], types:["free","paid"] },
+  { id:80, cat:"SİBER TEHDİT", icon:"⚠️", name:"Hybrid Analysis", url:"https://hybrid-analysis.com", desc:"Ücretsiz kötücül yazılım analiz hizmeti; Falcon Sandbox.", tags:["malware","falcon","sandbox"], types:["free","api"] },
+  { id:81, cat:"SİBER TEHDİT", icon:"⚠️", name:"Maltiverse", url:"https://maltiverse.com", desc:"Tehdit istihbarat toplayıcı; IP, URL, domain ve hash sorgulama.", tags:["tehdit","ioc","hash"], types:["free","paid"] },
+  { id:82, cat:"SİBER TEHDİT", icon:"⚠️", name:"ThreatFox", url:"https://threatfox.abuse.ch", desc:"IOC paylaşım platformu; malware hash, URL ve IP.", tags:["ioc","malware","hash"], types:["free","api"] },
+
+  // ── WEB ARŞİV & CACHE ──
+  { id:83, cat:"WEB ARŞİV & CACHE", icon:"📦", name:"Wayback Machine", url:"https://web.archive.org", desc:"İnternetin belleği; silinen ve değiştirilen sayfaları arşivlede bul.", tags:["arşiv","geçmiş","cache"], types:["free","api"] },
+  { id:84, cat:"WEB ARŞİV & CACHE", icon:"📦", name:"CachedView", url:"https://cachedview.nl", desc:"Google, Wayback ve Bing cache kaynaklarını karşılaştır.", tags:["cache","google","bing"], types:["free"] },
+  { id:85, cat:"WEB ARŞİV & CACHE", icon:"📦", name:"Archive.ph", url:"https://archive.ph", desc:"Sayfa anlık görüntüsü alma ve paylaşma; içerik değişimini izle.", tags:["anlık görüntü","paylaşma"], types:["free"] },
+  { id:86, cat:"WEB ARŞİV & CACHE", icon:"📦", name:"CommonCrawl", url:"https://commoncrawl.org", desc:"8 yıllık web tarama arşivi; büyük veri analizi için.", tags:["tarama","arşiv","büyük veri"], types:["free"] },
+
+  // ── DÖKÜMAN & METAVERİ ──
+  { id:87, cat:"DÖKÜMAN & METAVERİ", icon:"📄", name:"FOCA", url:"https://www.elevenpaths.com/labstools/foca", desc:"Döküman meta verisi analizi; yazar, yazılım, yol bilgisi.", tags:["metadata","yazar","belge"], types:["free"] },
+  { id:88, cat:"DÖKÜMAN & METAVERİ", icon:"📄", name:"MetaShield", url:"https://metashield.net", desc:"Online döküman metadata temizleme ve görüntüleme.", tags:["metadata","temizleme"], types:["free"] },
+  { id:89, cat:"DÖKÜMAN & METAVERİ", icon:"📄", name:"PDF Examiner", url:"https://pdfexaminer.com", desc:"PDF dosyası güvenlik analizi; zararlı içerik tespiti.", tags:["pdf","analiz","güvenlik"], types:["free"] },
+  { id:90, cat:"DÖKÜMAN & METAVERİ", icon:"📄", name:"Dorks (Google)", url:"https://dorksearch.com", desc:"Google dork sorguları veritabanı; gizli dosya ve dizin keşfi.", tags:["dork","google","keşif"], types:["free"] },
+
+  // ── BLOCKCHAIN & KRİPTO ──
+  { id:91, cat:"BLOCKCHAIN & KRİPTO", icon:"₿", name:"Blockchain Explorer", url:"https://blockchain.com/explorer", desc:"Bitcoin işlemleri, cüzdan ve blok analizi.", tags:["bitcoin","işlem","cüzdan"], types:["free"] },
+  { id:92, cat:"BLOCKCHAIN & KRİPTO", icon:"₿", name:"Etherscan", url:"https://etherscan.io", desc:"Ethereum blok zinciri; işlem, sözleşme ve token takibi.", tags:["ethereum","sözleşme","token"], types:["free","api"] },
+  { id:93, cat:"BLOCKCHAIN & KRİPTO", icon:"₿", name:"Chainalysis Reactor", url:"https://chainalysis.com", desc:"Kripto para akışı takibi ve kara para aklama tespiti.", tags:["kripto","akış","kara para"], types:["paid"] },
+  { id:94, cat:"BLOCKCHAIN & KRİPTO", icon:"₿", name:"Crystal Blockchain", url:"https://crystalblockchain.com", desc:"Kripto uyumluluk ve risk değerlendirme platformu.", tags:["uyumluluk","risk","kripto"], types:["paid"] },
+
+  // ── FRAMEWORK & TOPLAMA ──
+  { id:95, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"Maltego", url:"https://maltego.com", desc:"Görsel link analizi ve OSINT otomasyon platformu. Endüstri standardı.", tags:["link analizi","görsel","otomasyon"], types:["free","paid"] },
+  { id:96, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"SpiderFoot", url:"https://spiderfoot.net", desc:"Otomatik OSINT veri toplama framework'ü; 200+ modül.", tags:["otomasyon","modül","toplama"], types:["free"] },
+  { id:97, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"Recon-ng", url:"https://github.com/lanmaster53/recon-ng", desc:"Python tabanlı tam özellikli OSINT keşif framework'ü.", tags:["python","framework","keşif"], types:["free"] },
+  { id:98, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"theHarvester", url:"https://github.com/laramies/theHarvester", desc:"E-posta, domain, IP ve subdomain toplama aracı. Pentest klasiği.", tags:["e-posta","subdomain","pentest"], types:["free"] },
+  { id:99, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"OSINT Framework", url:"https://osintframework.com", desc:"OSINT araçlarının kategorize edilmiş interaktif ağacı.", tags:["koleksiyon","ağaç","kategori"], types:["free"] },
+  { id:100, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"Bellingcat Toolkit", url:"https://docs.google.com/spreadsheets/d/18rtqh8EG2q1xBo2cLNyhIDuK9jrPGwYr9DI2UncoqJQ", desc:"Bellingcat'ın araştırmacı gazeteciler için hazırladığı OSINT araç listesi.", tags:["gazetecilik","araştırma","koleksiyon"], types:["free"] },
+  { id:101, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"Hunchly", url:"https://hunch.ly", desc:"Otomatik web içeriği yakalama ve araştırma belgesi oluşturma.", tags:["yakalama","belgeleme","araştırma"], types:["paid"] },
+  { id:102, cat:"FRAMEWORK & KOLEKSIYON", icon:"🛠️", name:"Start.me OSINT", url:"https://start.me/p/DPYPMz/the-ultimate-osint-collection", desc:"Binlerce OSINT kaynağını kategorize eden start.me sayfası.", tags:["koleksiyon","başlangıç","kapsamlı"], types:["free"] },
+];
+
+// ══════════ UYGULAMA DURUMU ══════════
+let currentCat = "TÜMÜ";
+let favorites = JSON.parse(localStorage.getItem("phantom_favs") || "[]");
+let currentUser = "OPERATOR";
+
+// ══════════ LOGIN ══════════
+const CREDS = { "phantom":"osint2024", "admin":"phantom123", "guest":"guest" };
+
+function doLogin() {
+  const u = document.getElementById("login-user").value.trim();
+  const p = document.getElementById("login-pass").value;
+  const s = document.getElementById("login-status");
+  s.className = "login-status";
+  s.textContent = "[ AUTHENTICATING... ]";
+  setTimeout(() => {
+    if (CREDS[u] && CREDS[u] === p) {
+      s.className = "login-status ok";
+      s.textContent = "[ ACCESS GRANTED ]";
+      currentUser = u.toUpperCase();
+      setTimeout(() => {
+        document.getElementById("login-screen").classList.add("hidden");
+        document.getElementById("main-panel").style.display = "flex";
+        initPanel();
+      }, 600);
+    } else {
+      s.className = "login-status err";
+      s.textContent = "[ ACCESS DENIED — INVALID CREDENTIALS ]";
+      document.getElementById("login-pass").value = "";
+    }
+  }, 800);
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !document.getElementById("login-screen").classList.contains("hidden")) doLogin();
+});
+
+// ══════════ INIT ══════════
+function initPanel() {
+  document.getElementById("top-user").textContent = `◈ ${currentUser}`;
+  updateClock();
+  setInterval(updateClock, 1000);
+  buildSidebar();
+  renderCards("TÜMÜ");
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent =
+    now.toLocaleTimeString("tr-TR", {hour12:false}) + " | " +
+    now.toLocaleDateString("tr-TR");
+}
+
+// ══════════ SIDEBAR ══════════
+function buildSidebar() {
+  const cats = ["TÜMÜ", ...new Set(OSINT_DATA.map(t => t.cat))];
+  const sidebar = document.getElementById("sidebar");
+  const catGroups = {
+    "GENEL": ["TÜMÜ","FAVORİLER"],
+    "KİŞİ": ["KİŞİ & KİMLİK","SOSYAL MEDYA","E-POSTA & KULLANICI","TELEFON & SMS"],
+    "TEKNİK": ["IP & AĞ","ALAN ADI & DNS","SİBER TEHDİT","DARK WEB & LEAK"],
+    "KEŞİF": ["GÖRSEL & YÜZLER","HARİTA & KONUM","ARAÇ & TAŞIMA","WEB ARŞİV & CACHE"],
+    "ANALİZ": ["ŞİRKET & FİNANS","DÖKÜMAN & METAVERİ","BLOCKCHAIN & KRİPTO","FRAMEWORK & KOLEKSIYON"]
+  };
+  const icons = {
+    "TÜMÜ":"🌐","FAVORİLER":"⭐","KİŞİ & KİMLİK":"👤","SOSYAL MEDYA":"📱",
+    "E-POSTA & KULLANICI":"✉️","TELEFON & SMS":"📞","IP & AĞ":"🌐","ALAN ADI & DNS":"🔗",
+    "SİBER TEHDİT":"⚠️","DARK WEB & LEAK":"🕵️","GÖRSEL & YÜZLER":"🖼️",
+    "HARİTA & KONUM":"🗺️","ARAÇ & TAŞIMA":"🚗","WEB ARŞİV & CACHE":"📦",
+    "ŞİRKET & FİNANS":"🏢","DÖKÜMAN & METAVERİ":"📄","BLOCKCHAIN & KRİPTO":"₿",
+    "FRAMEWORK & KOLEKSIYON":"🛠️"
+  };
+
+  let html = "";
+  for (const [group, items] of Object.entries(catGroups)) {
+    html += `<div class="sidebar-section"><div class="sidebar-cat">${group}</div>`;
+    for (const cat of items) {
+      const count = cat === "TÜMÜ" ? OSINT_DATA.length : cat === "FAVORİLER" ? favorites.length : OSINT_DATA.filter(t => t.cat === cat).length;
+      html += `<div class="sidebar-item ${cat===currentCat?'active':''}" onclick="selectCat('${cat}')" data-cat="${cat}">
+        <span class="sidebar-icon">${icons[cat]||"◈"}</span>
+        <span>${cat}</span>
+        <span class="sidebar-count">${count}</span>
+      </div>`;
+    }
+    html += "</div>";
+  }
+  sidebar.innerHTML = html;
+}
+
+function selectCat(cat) {
+  currentCat = cat;
+  document.querySelectorAll(".sidebar-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.cat === cat);
+  });
+  filterCards();
+}
+
+// ══════════ CARDS ══════════
+function filterCards() {
+  const q = document.getElementById("search-input").value.toLowerCase();
+  const type = document.getElementById("filter-type").value;
+  let data = currentCat === "TÜMÜ" ? OSINT_DATA : currentCat === "FAVORİLER" ? OSINT_DATA.filter(t => favorites.includes(t.id)) : OSINT_DATA.filter(t => t.cat === currentCat);
+  if (q) data = data.filter(t => t.name.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q) || t.tags.some(g => g.includes(q)));
+  if (type !== "all") data = data.filter(t => t.types.includes(type));
+  renderCards(null, data);
+}
+
+function renderCards(cat, data) {
+  if (cat) { currentCat = cat; filterCards(); return; }
+  const container = document.getElementById("cards-container");
+  if (!data || data.length === 0) {
+    container.innerHTML = `<div style="padding:60px;text-align:center;color:var(--dim);font-size:14px;letter-spacing:3px">[ SONUÇ BULUNAMADI ]</div>`;
+    updateStats(0); return;
+  }
+
+  // Kategorilere göre grupla
+  const groups = {};
+  data.forEach(t => { if (!groups[t.cat]) groups[t.cat] = []; groups[t.cat].push(t); });
+
+  let html = "";
+  for (const [cat, tools] of Object.entries(groups)) {
+    html += `<div class="category-header">
+      <span class="cat-icon">${tools[0].icon}</span>
+      <h2>${cat}</h2>
+      <span class="cat-count-badge">${tools.length} ARAÇ</span>
+      <div class="cat-line"></div>
+    </div>
+    <div class="cards-grid">`;
+    tools.forEach((t, i) => {
+      const isFav = favorites.includes(t.id);
+      html += `<div class="card" style="animation-delay:${i*0.03}s" onclick="openModal(${t.id})">
+        <div class="card-top">
+          <span class="card-icon">${t.icon}</span>
+          <div class="card-badges">
+            ${t.types.map(ty => `<span class="badge badge-${ty}">${ty.toUpperCase()}</span>`).join("")}
+          </div>
+        </div>
+        <div class="card-title">${t.name}</div>
+        <div class="card-desc">${t.desc}</div>
+        <div class="card-footer">
+          <a class="card-link" href="${t.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">⬡ ZİYARET ET</a>
+          <button class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav(${t.id},this)" title="Favorilere ekle">★</button>
+        </div>
+      </div>`;
+    });
+    html += "</div>";
+  }
+  container.innerHTML = html;
+  updateStats(data.length);
+}
+
+function updateStats(shown) {
+  document.getElementById("stat-total").textContent = OSINT_DATA.length;
+  document.getElementById("stat-shown").textContent = shown;
+  document.getElementById("stat-cats").textContent = new Set(OSINT_DATA.map(t=>t.cat)).size;
+  document.getElementById("stat-favs").textContent = favorites.length;
+}
+
+// ══════════ MODAL ══════════
+function openModal(id) {
+  const t = OSINT_DATA.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById("m-title").textContent = t.name;
+  document.getElementById("m-url").textContent = t.url;
+  document.getElementById("m-desc").textContent = t.desc;
+  document.getElementById("m-link").href = t.url;
+  document.getElementById("m-tags").innerHTML = t.tags.map(g => `<span class="modal-tag">${g.toUpperCase()}</span>`).join("") + t.types.map(ty => `<span class="badge badge-${ty}" style="padding:4px 10px">${ty.toUpperCase()}</span>`).join("");
+  document.getElementById("modal-overlay").classList.add("open");
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById("modal-overlay"))
+    document.getElementById("modal-overlay").classList.remove("open");
+}
+
+// ══════════ FAVORİLER ══════════
+function toggleFav(id, btn) {
+  if (favorites.includes(id)) {
+    favorites = favorites.filter(f => f !== id);
+    btn.classList.remove("active");
+  } else {
+    favorites.push(id);
+    btn.classList.add("active");
+  }
+  localStorage.setItem("phantom_favs", JSON.stringify(favorites));
+  document.getElementById("stat-favs").textContent = favorites.length;
+  // Sidebar güncelle
+  document.querySelectorAll("[data-cat='FAVORİLER'] .sidebar-count").forEach(el => el.textContent = favorites.length);
+}
+</script>
 </body>
 </html>
 HTMLEOF
+
+# --- Python HTTP sunucusu başlat ---
+cd "$TMPDIR_PHANTOM"
+python3 -m http.server "$PORT" --bind 127.0.0.1 2>/dev/null &
+SERVER_PID=$!
+
+# Yüklenme kontrolü
+sleep 1
+if kill -0 $SERVER_PID 2>/dev/null; then
+  echo "  [✓] Sunucu çalışıyor: http://localhost:$PORT"
+  echo "  [i] Eğer Android'de açmak istersen: http://127.0.0.1:$PORT"
+  echo ""
+else
+  echo "  [✗] Sunucu başlatılamadı! Python3 kurulu mu?"
+  exit 1
+fi
+
+# --- Temizlik fonksiyonu ---
+cleanup() {
+  echo ""
+  echo "  [*] PHANTOM OSINT Panel kapatılıyor..."
+  kill $SERVER_PID 2>/dev/null
+  rm -rf "$TMPDIR_PHANTOM"
+  echo "  [✓] Temizlik tamamlandı."
+  exit 0
 }
+trap cleanup INT TERM
 
-################################################################################
-# PYTHON SERVER (Tüm API'leri içerir)
-################################################################################
-
-generate_python_server() {
-    cat > "$WORK_DIR/server.py" << 'PYEOF'
-#!/usr/bin/env python3
-import os
-import json
-import time
-import subprocess
-import urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-
-WORK_DIR = os.path.dirname(__file__)
-SETTINGS_FILE = os.path.join(WORK_DIR, 'settings.json')
-HISTORY_FILE = os.path.join(WORK_DIR, 'history.json')
-
-# Varsayılan ayarlar
-settings = {
-    'refreshInterval': 2,
-    'cpuThreshold': 80,
-    'memThreshold': 80
-}
-
-# Geçmiş veriler (son 20)
-history = {'cpu': [], 'mem': [], 'time': []}
-
-def load_settings():
-    global settings
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE) as f:
-                settings.update(json.load(f))
-        except: pass
-
-def save_settings():
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(settings, f)
-
-def get_metrics():
-    """Sistem metriklerini toplar (bash komutları ile)"""
-    def get_cpu():
-        try:
-            with open('/proc/stat') as f:
-                line = f.readline().split()
-                user = int(line[1]); nice = int(line[2]); system = int(line[3]); idle = int(line[4])
-                total = user + nice + system + idle
-                # Basit kullanım hesaplama (ilk okumada 0 döner)
-                if not hasattr(get_cpu, 'prev_total'):
-                    get_cpu.prev_total = total
-                    get_cpu.prev_idle = idle
-                    return 0
-                total_diff = total - get_cpu.prev_total
-                idle_diff = idle - get_cpu.prev_idle
-                get_cpu.prev_total = total
-                get_cpu.prev_idle = idle
-                return int((total_diff - idle_diff) * 100 / total_diff) if total_diff else 0
-        except: return 0
-    get_cpu.prev_total = 0
-    get_cpu.prev_idle = 0
-
-    cpu = get_cpu()
-    mem = 0
-    try:
-        with open('/proc/meminfo') as f:
-            for line in f:
-                if line.startswith('MemTotal:'):
-                    total = int(line.split()[1])
-                elif line.startswith('MemFree:'):
-                    free = int(line.split()[1])
-            mem = int((total - free) * 100 / total) if total else 0
-    except: pass
-    storage = 0
-    try:
-        out = subprocess.check_output(['df', '/sdcard'], stderr=subprocess.DEVNULL).decode()
-        lines = out.strip().split('\n')
-        if len(lines) > 1:
-            storage = int(lines[1].split()[4].replace('%', ''))
-    except: pass
-    connections = 0
-    try:
-        with open('/proc/net/tcp') as f:
-            connections = sum(1 for _ in f) - 1
-    except: pass
-    processes = 0
-    try:
-        processes = len([d for d in os.listdir('/proc') if d.isdigit()])
-    except: pass
-    loadavg = ''
-    try:
-        with open('/proc/loadavg') as f:
-            loadavg = f.read().split()[:3]
-            loadavg = ' '.join(loadavg)
-    except: pass
-    return {
-        'cpu': cpu,
-        'memory': mem,
-        'storage': storage,
-        'connections': connections,
-        'processes': processes,
-        'loadavg': loadavg,
-        'timestamp': time.time()
-    }
-
-def get_top_processes():
-    """En çok CPU kullanan 5 işlem"""
-    try:
-        out = subprocess.check_output(['ps', '-eo', 'pcpu,comm', '--sort=-pcpu'], stderr=subprocess.DEVNULL).decode()
-        lines = out.strip().split('\n')[1:6]
-        result = ''
-        for line in lines:
-            parts = line.strip().split(None, 1)
-            if len(parts) == 2:
-                result += f"{parts[0]:>6}%  {parts[1][:40]}\n"
-        return result
-    except:
-        return "İşlem listesi alınamadı."
-
-def get_network_info():
-    """Ağ arayüzleri ve açık portlar"""
-    info = "AĞ ARABİRİMLERİ:\n"
-    try:
-        out = subprocess.check_output(['ip', 'addr'], stderr=subprocess.DEVNULL).decode()
-        info += out + "\n"
-    except:
-        pass
-    info += "AÇIK PORTLAR (LISTEN):\n"
-    try:
-        with open('/proc/net/tcp') as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) > 3 and parts[3] == '0A':
-                    # hex port -> decimal
-                    hex_port = parts[1].split(':')[1]
-                    port = int(hex_port, 16)
-                    info += f"  Port {port} (LISTEN)\n"
-    except: pass
-    return info
-
-def get_system_logs():
-    """dmesg çıktısının son 20 satırı"""
-    try:
-        out = subprocess.check_output(['dmesg'], stderr=subprocess.DEVNULL).decode()
-        lines = out.strip().split('\n')[-20:]
-        return '\n'.join(lines)
-    except:
-        return "Loglar alınamadı."
-
-def get_file_list(path='/sdcard'):
-    """Dosya listesi (basit)"""
-    try:
-        if not os.path.exists(path):
-            return f"Yol bulunamadı: {path}"
-        items = os.listdir(path)[:30]
-        result = []
-        for item in sorted(items):
-            full = os.path.join(path, item)
-            if os.path.isdir(full):
-                result.append(f"[DIR]  {item}")
-            else:
-                size = os.path.getsize(full)
-                result.append(f"[FILE] {item} ({size} bytes)")
-        return '\n'.join(result)
-    except Exception as e:
-        return f"Hata: {e}"
-
-def export_report():
-    """HTML rapor oluştur"""
-    metrics = get_metrics()
-    html = f"""<html><head><title>Pegasus Raporu</title></head>
-    <body><h1>Pegasus Raporu</h1>
-    <pre>CPU: {metrics['cpu']}%
-    RAM: {metrics['memory']}%
-    Disk: {metrics['storage']}%
-    Bağlantılar: {metrics['connections']}
-    İşlemler: {metrics['processes']}
-    Yük: {metrics['loadavg']}
-    </pre></body></html>"""
-    return html
-
-class PegasusHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        if path == '/':
-            self.serve_file('index.html')
-        elif path == '/api/metrics':
-            self.send_json(get_metrics())
-        elif path == '/api/processes':
-            self.send_text(get_top_processes())
-        elif path == '/api/network':
-            self.send_text(get_network_info())
-        elif path == '/api/logs':
-            self.send_text(get_system_logs())
-        elif path == '/api/files':
-            query = urllib.parse.parse_qs(parsed.query)
-            path_arg = query.get('path', ['/sdcard'])[0]
-            self.send_text(get_file_list(path_arg))
-        elif path == '/api/settings':
-            self.send_json(settings)
-        elif path == '/api/export':
-            self.send_text(export_report(), 'text/html')
-        else:
-            self.serve_file(path.lstrip('/'))
-
-    def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == '/api/settings':
-            length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(length)
-            try:
-                new = json.loads(body)
-                settings.update(new)
-                save_settings()
-                self.send_json({'status': 'ok'})
-            except:
-                self.send_error(400)
-        elif parsed.path == '/api/remote':
-            # Basit ngrok başlatma (eğer ngrok yüklüyse)
-            try:
-                # Dışarıdan gelen port bilgisini almak için environment veya argüman gerek
-                # Şimdilik varsayılan port 8000
-                port = os.environ.get('PEGASUS_PORT', '8000')
-                ngrok_url = subprocess.check_output(['ngrok', 'http', port], stderr=subprocess.DEVNULL).decode()
-                # Aslında ngrok arka planda çalışır, URL'yi parse etmek zor. Basitçe mesaj verelim.
-                self.send_json({'url': f'http://localhost:4040/api/tunnels'})
-            except Exception as e:
-                self.send_json({'error': f'ngrok hatası: {e}'})
-        elif parsed.path == '/api/restart':
-            # Script'i yeniden başlatmak için bir flag dosyası oluştur
-            with open(os.path.join(WORK_DIR, 'restart.flag'), 'w') as f:
-                f.write('restart')
-            self.send_json({'status': 'restarting'})
-        else:
-            self.send_error(404)
-
-    def serve_file(self, filename):
-        filepath = os.path.join(WORK_DIR, filename)
-        if os.path.exists(filepath) and os.path.isfile(filepath):
-            with open(filepath, 'rb') as f:
-                self.send_response(200)
-                self.send_header('Content-type', self.guess_type(filename))
-                self.end_headers()
-                self.wfile.write(f.read())
-        else:
-            self.send_error(404)
-
-    def send_json(self, data):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
-
-    def send_text(self, text, mime='text/plain'):
-        self.send_response(200)
-        self.send_header('Content-type', mime)
-        self.end_headers()
-        self.wfile.write(text.encode())
-
-    def guess_type(self, path):
-        if path.endswith('.html'): return 'text/html'
-        if path.endswith('.css'): return 'text/css'
-        if path.endswith('.js'): return 'application/javascript'
-        if path.endswith('.png'): return 'image/png'
-        return 'text/plain'
-
-def run_server(port):
-    load_settings()
-    server = HTTPServer(('0.0.0.0', port), PegasusHandler)
-    print(f"HTTP Sunucusu {port} portunda çalışıyor")
-    server.serve_forever()
-
-if __name__ == '__main__':
-    import sys
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    run_server(port)
-PYEOF
-    chmod +x "$WORK_DIR/server.py"
-}
-
-################################################################################
-# REHBER DOSYALARI OLUŞTUR
-################################################################################
-
-generate_guides() {
-    # README
-    cat > "$WORK_DIR/README.txt" << 'READMEEOF'
-╔════════════════════════════════════════════════════════════════╗
-║          🔴 PEGASUS PROJECT v6.0 - ALL IN ONE 🔴             ║
-║     Cyberpunk System Monitor & Network Analyzer - Termux      ║
-╚════════════════════════════════════════════════════════════════╝
-
-📋 İÇERDİKLER:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✓ Gerçek zamanlı sistem izleme (CPU, RAM, Disk, Ağ, İşlemler)
-✓ Web arayüzünde grafikler (Chart.js)
-✓ Tema desteği (Cyberpunk / Light)
-✓ Uyarı sistemi (eşik değerleri)
-✓ Ağ analizi (arabirimler, portlar)
-✓ İşlem listesi (en çok CPU kullananlar)
-✓ Sistem logları (dmesg)
-✓ Basit dosya gezgini (/sdcard)
-✓ Veri dışa aktarma (HTML rapor)
-✓ Ayarlar (yenileme aralığı, eşikler)
-✓ Uzaktan erişim (ngrok entegrasyonu)
-✓ Script yeniden başlatma
-
-⚡ HIZLI BAŞLAMA:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-$ bash pegasus-all-in-one.sh
-# Tarayıcı otomatik açılır: http://localhost:<random_port>
-
-📖 MENÜ SEÇENEKLERİ (Terminal):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. Sistem İzleme    2. Ağ Analizi
-3. Detaylı Tarama   4. Güvenlik Denetimi
-5. Performans Test  6. Veri Dışa Aktar
-0. Çıkış
-
-🔧 TERMUX KURULUMU:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-$ termux-setup-storage
-$ pkg update && pkg install bash coreutils procps python
-$ bash pegasus-all-in-one.sh
-
-💡 İPUÇLARI:
-• Tüm özellikler web arayüzünden kullanılabilir.
-• Ayarlar kaydedilir, yeniden başlatmada hatırlanır.
-• Uzaktan erişim için ngrok yüklü olmalıdır.
-
-🚀 BAŞLAYIN!
-READMEEOF
-}
-
-################################################################################
-# SİSTEM DURUMU GÖSTER (BASH)
-################################################################################
-
-show_system_status() {
-    CPU_USAGE=$(get_cpu_info)
-    MEMORY_USAGE=$(get_memory_info)
-    STORAGE_USAGE=$(get_storage_info)
-    ACTIVE_CONNECTIONS=$(get_active_connections)
-    TOTAL_PROCESSES=$(get_process_count)
-    
-    echo -e "${CYAN}┌─────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${CYAN}│${NC} ${CHAR_CPU} CPU RESOURCES"
-    echo -e "${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -ne "${CYAN}│${NC} Usage: "
-    progress_bar "$CPU_USAGE"
-    echo -ne "  $(status_indicator $CPU_USAGE) ${NC}\n"
-    echo -e "${CYAN}└─────────────────────────────────────────────────────────────────┘${NC}"
-    echo ""
-    
-    echo -e "${MAGENTA}┌─────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${MAGENTA}│${NC} ${CHAR_MEMORY} MEMORY ALLOCATION"
-    echo -e "${MAGENTA}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -ne "${MAGENTA}│${NC} Usage: "
-    progress_bar "$MEMORY_USAGE"
-    echo -ne "  $(status_indicator $MEMORY_USAGE) ${NC}\n"
-    echo -e "${MAGENTA}└─────────────────────────────────────────────────────────────────┘${NC}"
-    echo ""
-    
-    echo -e "${YELLOW}┌─────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${YELLOW}│${NC} ${CHAR_STORAGE} STORAGE STATUS"
-    echo -e "${YELLOW}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -ne "${YELLOW}│${NC} Usage: "
-    progress_bar "$STORAGE_USAGE"
-    echo -ne "  $(status_indicator $STORAGE_USAGE) ${NC}\n"
-    echo -e "${YELLOW}└─────────────────────────────────────────────────────────────────┘${NC}"
-    echo ""
-    
-    echo -e "${GREEN}┌─────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${GREEN}│${NC} ${CHAR_NETWORK} NETWORK TOPOLOGY"
-    echo -e "${GREEN}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${GREEN}│${NC} ${CHAR_NETWORK} Active Connections: ${CYAN}$ACTIVE_CONNECTIONS${NC}"
-    echo -e "${GREEN}│${NC} ${CHAR_PROCESS} Running Processes: ${CYAN}$TOTAL_PROCESSES${NC}"
-    echo -e "${GREEN}└─────────────────────────────────────────────────────────────────┘${NC}"
-    echo ""
-}
-
-################################################################################
-# HTTP SUNUCUSU BAŞLAT (Python server ile)
-################################################################################
-
-start_http_server() {
-    print_info "Python HTTP Sunucusu başlatılıyor..."
-    if command -v python3 &> /dev/null; then
-        cd "$WORK_DIR"
-        export PEGASUS_PORT=$RANDOM_PORT
-        python3 server.py $RANDOM_PORT > "$WORK_DIR/http.log" 2>&1 &
-        HTTP_SERVER_PID=$!
-        print_status "HTTP Sunucusu başladı (PID: $HTTP_SERVER_PID)"
-        return 0
-    else
-        print_warning "Python3 bulunamadı, HTTP sunucusu başlamıyor"
-        return 1
-    fi
-}
-
-################################################################################
-# DETAYLI TARAMA (BASH)
-################################################################################
-
-detailed_scan() {
-    clear
-    show_header
-    echo -e "${CYAN}─── DETAYLI SİSTEM TARAMASı ───${NC}\n"
-    if [ -f /proc/cpuinfo ]; then
-        CORE_COUNT=$(grep -c "processor" /proc/cpuinfo)
-        echo -e "${CYAN}CPU Bilgileri:${NC}"
-        echo -e "  ${YELLOW}Çekirdek Sayısı:${NC} $CORE_COUNT"
-        echo -e "  ${YELLOW}Kullanım:${NC} $CPU_USAGE%"
-        echo ""
-    fi
-    if [ -f /proc/meminfo ]; then
-        TOTAL_MEM=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
-        FREE_MEM=$(awk '/MemFree/ {print $2}' /proc/meminfo)
-        USED_MEM=$((TOTAL_MEM - FREE_MEM))
-        echo -e "${MAGENTA}Bellek Bilgileri:${NC}"
-        echo -e "  ${YELLOW}Toplam:${NC} $((TOTAL_MEM / 1024)) MB"
-        echo -e "  ${YELLOW}Kullanılan:${NC} $((USED_MEM / 1024)) MB"
-        echo -e "  ${YELLOW}Boş:${NC} $((FREE_MEM / 1024)) MB"
-        echo -e "  ${YELLOW}Kullanım:${NC} $MEMORY_USAGE%"
-        echo ""
-    fi
-    echo -e "${GREEN}En Çok CPU Kullanan İşlemler:${NC}"
-    if command -v ps &> /dev/null; then
-        ps -eo pcpu,comm --sort=-pcpu 2>/dev/null | head -6 | tail -5 | awk '{printf "  %-30s CPU: %5.1f%%\n", substr($2,1,30), $1}'
-    else
-        echo "  [İşlem bilgisi kullanılamıyor]"
-    fi
-    echo ""
-    read -p "Enter tuşuna basınız..."
-}
-
-################################################################################
-# GÜVENLİK DENETİMİ (BASH)
-################################################################################
-
-security_audit() {
-    clear
-    show_header
-    echo -e "${CYAN}─── GÜVENLİK DENETİMİ ───${NC}\n"
-    echo -e "${RED}Listening Portları:${NC}"
-    if [ -f /proc/net/tcp ]; then
-        awk 'NR>1 && $4 == "0A" {
-            split($2, a, ":");
-            hex = a[2];
-            dec = 0;
-            for (i=1; i<=length(hex); i++) {
-                c = substr(hex, i, 1);
-                if (c ~ /[0-9]/) d = c;
-                else d = index("ABCDEF", c) + 9;
-                dec = dec * 16 + d;
-            }
-            if (dec > 0) printf "  Port %d (LISTEN)\n", dec;
-        }' /proc/net/tcp | sort -u | head -10
-    else
-        echo "  [Port scanning unavailable]"
-    fi
-    echo ""
-    echo -e "${YELLOW}Aktif Bağlantılar:${NC}"
-    if [ -f /proc/net/tcp ]; then
-        count=$(awk 'NR>1 && $4 == "01" {count++} END {print count+0}' /proc/net/tcp)
-        echo -e "  Toplam: $count"
-    fi
-    echo ""
-    echo -e "${GREEN}${CHAR_GOOD} Güvenlik denetimi tamamlandı${NC}"
-    echo ""
-    read -p "Enter tuşuna basınız..."
-}
-
-################################################################################
-# PERFORMANS BENCHMARK (BASH)
-################################################################################
-
-performance_benchmark() {
-    clear
-    show_header
-    echo -e "${CYAN}─── PERFORMANS BENCHMARK ───${NC}\n"
-    echo -e "${YELLOW}[1/3] CPU Benchmark...${NC}"
-    start_time=$(date +%s%N)
-    for i in {1..100000}; do
-        _=$(echo "scale=10; $i*$i" | bc 2>/dev/null || echo 1)
-    done
-    end_time=$(date +%s%N)
-    elapsed=$((($end_time - $start_time) / 1000000))
-    echo -e "${GREEN}${CHAR_GOOD} CPU Test Tamamlandı (${elapsed} ms)${NC}"
-    echo ""
-    echo -e "${YELLOW}[2/3] Bellek Benchmark...${NC}"
-    if command -v dd &> /dev/null; then
-        dd if=/dev/zero of=/dev/null bs=1M count=100 2>&1 | grep -i "bytes" | head -1
-    else
-        echo "  [Bellek testi için dd gerekli]"
-    fi
-    echo -e "${GREEN}${CHAR_GOOD} Bellek Test Tamamlandı${NC}"
-    echo ""
-    echo -e "${YELLOW}[3/3] Disk Benchmark...${NC}"
-    if command -v dd &> /dev/null; then
-        dd if=/dev/zero of="$WORK_DIR/testfile" bs=1M count=100 2>&1 | grep -i "bytes"
-        rm -f "$WORK_DIR/testfile"
-    else
-        echo "  [Disk testi için dd gerekli]"
-    fi
-    echo -e "${GREEN}${CHAR_GOOD} Disk Test Tamamlandı${NC}"
-    echo ""
-    echo -e "${CYAN}Benchmark sonuçları kaydedildi${NC}"
-    echo ""
-    read -p "Enter tuşuna basınız..."
-}
-
-################################################################################
-# VERI DIŞA AKTAR (BASH)
-################################################################################
-
-export_data() {
-    clear
-    show_header
-    echo -e "${CYAN}─── VERİ DIŞA AKTAR ───${NC}\n"
-    local cpu=$(get_cpu_info)
-    local mem=$(get_memory_info)
-    local stor=$(get_storage_info)
-    local conn=$(get_active_connections)
-    local proc=$(get_process_count)
-    local timestamp=$(date -Iseconds)
-    echo "Format seçiniz:"
-    echo "1) JSON"
-    echo "2) CSV"
-    echo "3) XML"
-    echo "0) Geri dön"
-    echo ""
-    read -p "Seçim (0-3): " format_choice
-    case $format_choice in
-        1)
-            local file="$WORK_DIR/pegasus_export_$(date +%Y%m%d_%H%M%S).json"
-            cat > "$file" << EOF
-{
-  "pegasus": {
-    "version": "$PEGASUS_VERSION",
-    "build": "$PEGASUS_BUILD",
-    "timestamp": "$timestamp",
-    "system": {
-      "cpu_usage": "$cpu%",
-      "memory_usage": "$mem%",
-      "storage_usage": "$stor%"
-    },
-    "network": {
-      "active_connections": "$conn",
-      "running_processes": "$proc"
-    }
-  }
-}
-EOF
-            print_status "JSON dosyası kaydedildi: $file"
-            ;;
-        2)
-            local file="$WORK_DIR/pegasus_export_$(date +%Y%m%d_%H%M%S).csv"
-            cat > "$file" << EOF
-Metric,Value,Unit,Timestamp
-CPU Usage,$cpu,%,$timestamp
-Memory Usage,$mem,%,$timestamp
-Storage Usage,$stor,%,$timestamp
-Active Connections,$conn,count,$timestamp
-Running Processes,$proc,count,$timestamp
-EOF
-            print_status "CSV dosyası kaydedildi: $file"
-            ;;
-        3)
-            local file="$WORK_DIR/pegasus_export_$(date +%Y%m%d_%H%M%S).xml"
-            cat > "$file" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<pegasus>
-    <version>$PEGASUS_VERSION</version>
-    <build>$PEGASUS_BUILD</build>
-    <timestamp>$timestamp</timestamp>
-    <system>
-        <cpu>$cpu</cpu>
-        <memory>$mem</memory>
-        <storage>$stor</storage>
-    </system>
-    <network>
-        <active_connections>$conn</active_connections>
-        <running_processes>$proc</running_processes>
-    </network>
-</pegasus>
-EOF
-            print_status "XML dosyası kaydedildi: $file"
-            ;;
-        0) return ;;
-        *) print_error "Geçersiz seçim"; sleep 1; return ;;
-    esac
-    echo ""
-    read -p "Enter tuşuna basınız..."
-}
-
-################################################################################
-# ANA MENU (BASH)
-################################################################################
-
-show_main_menu() {
-    while true; do
-        clear
-        show_header
-        echo ""
-        show_system_status
-        echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${YELLOW}1.${NC} Sistem İzleme    ${YELLOW}2.${NC} Ağ Analizi"
-        echo -e "${YELLOW}3.${NC} Detaylı Tarama   ${YELLOW}4.${NC} Güvenlik Denetimi"
-        echo -e "${YELLOW}5.${NC} Performans Test  ${YELLOW}6.${NC} Veri Dışa Aktar"
-        echo -e "${YELLOW}0.${NC} Çıkış\n"
-        read -p "Seçim yapınız (0-6): " choice
-        case $choice in
-            1)
-                clear; show_header; show_system_status; read -p "Enter tuşuna basınız..."
-                ;;
-            2)
-                clear; show_header; echo -e "${GREEN}─── AĞ ANALİZİ ───${NC}\n"
-                echo -e "Aktif Bağlantılar: $ACTIVE_CONNECTIONS"
-                echo -e "Çalışan İşlemler: $TOTAL_PROCESSES"
-                echo ""; read -p "Enter tuşuna basınız..."
-                ;;
-            3) detailed_scan ;;
-            4) security_audit ;;
-            5) performance_benchmark ;;
-            6) export_data ;;
-            0) log_event "Program kapatıldı"; return ;;
-            *) print_error "Geçersiz seçim"; sleep 1 ;;
-        esac
-    done
-}
-
-################################################################################
-# MAIN
-################################################################################
-
-main() {
-    mkdir -p "$WORK_DIR"
-    log_event "Pegasus Project v$PEGASUS_VERSION başlatıldı"
-    show_header
-    echo ""
-    print_info "Dosyalar hazırlanıyor..."
-    generate_index_html
-    generate_python_server
-    generate_guides
-    log_event "Dosyalar hazırlandı"
-    print_status "Dosyalar oluşturuldu"
-    echo ""
-    if ! start_http_server; then
-        print_warning "HTTP sunucusu başlanamadı, yalnızca terminal modunda çalışacak"
-    else
-        echo -e "${GREEN}${CHAR_GOOD} HTTP Sunucusu başarıyla başladı${NC}"
-        echo -e "${CYAN}WEB ARAYÜZÜ:${NC} ${YELLOW}http://localhost:$RANDOM_PORT${NC}"
-        echo -e "${CYAN}PID:${NC} ${YELLOW}$HTTP_SERVER_PID${NC}"
-        echo ""
-        if command -v xdg-open &> /dev/null; then
-            xdg-open "http://localhost:$RANDOM_PORT" 2>/dev/null &
-            print_info "Tarayıcı açılıyor..."
-        elif command -v open &> /dev/null; then
-            open "http://localhost:$RANDOM_PORT" 2>/dev/null &
-            print_info "Tarayıcı açılıyor..."
-        fi
-        sleep 2
-    fi
-    print_info "Terminal menüsü açılıyor..."
-    sleep 1
-    show_main_menu
-    echo ""
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC}           ${RED}PEGASUS PROJECT SHUTDOWN SEQUENCE${NC} ${CYAN}║${NC}"
-    echo -e "${CYAN}║${NC}        ${GREEN}${CHAR_GOOD} Tüm sistemler deaktive ediliyor...${NC} ${CYAN}║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    sleep 1
-}
-
-main "$@"
+# --- Bekle ---
+wait $SERVER_PID
+HTMLEOF
