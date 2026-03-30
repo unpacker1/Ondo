@@ -55,6 +55,7 @@ import base64
 import hashlib
 import shlex
 import concurrent.futures
+import ssl
 from urllib.parse import parse_qs, quote
 
 PORT = int(sys.argv[1])
@@ -222,7 +223,7 @@ def mod_document_search(email):
         ix = req(f"https://public.intelx.io/phonebook/search?term={email}",
                  headers={"x-key": API_KEYS["intx"]})
         if "id" in ix:
-            out["Intelligence X"] = {"Tarama başlatıldı", "ID": ix["id"]}
+            out["Intelligence X"] = {"Tarama başlatıldı": True, "ID": ix["id"]}
     # Pastebin scraping (simulated)
     # Not reliable, skip
     return out
