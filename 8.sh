@@ -1,1403 +1,1757 @@
-#!/bin/bash
-# ╔══════════════════════════════════════════════════════════════╗
-# ║  SKYWATCH v4.0 ULTIMATE — Canli Ucak Takip Sistemi          ║
-# ║  Calistir: bash skywatch.sh                                  ║
-# ╚══════════════════════════════════════════════════════════════╝
+#!/data/data/com.termux/files/usr/bin/bash
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║        PHANTOM OSINT PANEL v4.0 — ABSOLUTE INTELLIGENCE            ║
+# ║   Zero Redirects · All Data Inline · 15 Categories · 130+ Tools    ║
+# ╚══════════════════════════════════════════════════════════════════════╝
 
-G='\033[0;32m'; C='\033[0;36m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'; B='\033[1m'
+PORT=$((RANDOM % 40000 + 10000))
+WD=$(mktemp -d)
 
-clear
-printf "\n${G}${B}"
-printf "  ███████╗██╗  ██╗██╗   ██╗██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗\n"
-printf "  ██╔════╝██║ ██╔╝╚██╗ ██╔╝██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║\n"
-printf "  ███████╗█████╔╝  ╚████╔╝ ██║ █╗ ██║███████║   ██║   ██║     ███████║\n"
-printf "  ╚════██║██╔═██╗   ╚██╔╝  ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║\n"
-printf "  ███████║██║  ██╗   ██║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
-printf "  ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
-printf "${N}"
-printf "  ${C}v4.0 ULTIMATE — Performans + Ucus izi + Slider Kontrol${N}\n"
-printf "  ──────────────────────────────────────────────────────────\n\n"
+echo ""
+echo -e "\033[36m  ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗\033[0m"
+echo -e "\033[35m  ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║\033[0m"
+echo -e "\033[36m  ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║\033[0m"
+echo -e "\033[35m  ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║\033[0m"
+echo -e "\033[36m  ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║\033[0m"
+echo -e "\033[36m  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝\033[0m"
+echo ""
+echo -e "\033[33m  ╔═══════════════════════════════════════════════════════════╗\033[0m"
+echo -e "\033[33m  ║    PHANTOM OSINT v4.0 — ABSOLUTE INTELLIGENCE PANEL      ║\033[0m"
+echo -e "\033[33m  ║    Zero Redirects · All Data Inline · Termux Native      ║\033[0m"
+echo -e "\033[33m  ╚═══════════════════════════════════════════════════════════╝\033[0m"
+echo ""
 
-PY=$(command -v python3 || command -v python)
-if [ -z "$PY" ]; then
-  printf "  ${Y}Python yukleniyor...${N}\n"
-  pkg install python -y
-  PY=$(command -v python3 || command -v python)
-fi
+for cmd in python3; do command -v $cmd &>/dev/null || pkg install python -y --quiet; done
+for tool in nmap whois curl dnsutils traceroute; do command -v ${tool%utils} &>/dev/null || pkg install $tool -y --quiet 2>/dev/null; done
+python3 -c "import requests" 2>/dev/null || pip install requests --quiet --break-system-packages 2>/dev/null
 
-TMPD="${TMPDIR:-/tmp}"
-HTML="$TMPD/skywatch.html"
+echo -e "\033[32m  [✓] PORT : $PORT\033[0m"
+echo -e "\033[32m  [✓] URL  : http://localhost:$PORT\033[0m"
+echo -e "\033[33m  [!] CTRL+C ile durdur\033[0m"
+echo ""
 
-printf "  ${C}HTML olusturuluyor...${N}\n"
+# ═══════════════════════════════════════════════════════
+# PYTHON BACKEND
+# ═══════════════════════════════════════════════════════
+cat > "$WD/server.py" << 'PYEOF'
+import http.server, json, subprocess, urllib.request, urllib.parse
+import os, sys, ssl, re, socket, threading, time, base64, hashlib
+from urllib.parse import parse_qs
 
-cat > "$HTML" << 'EOF'
+PORT = int(sys.argv[1])
+WD   = sys.argv[2]
+KEY_FILE = os.path.join(WD, "keys.json")
+API_KEYS = {}
+if os.path.exists(KEY_FILE):
+    try: API_KEYS = json.load(open(KEY_FILE))
+    except: pass
+
+def save_keys(): json.dump(API_KEYS, open(KEY_FILE,"w"))
+
+CTX = ssl.create_default_context()
+CTX.check_hostname = False
+CTX.verify_mode = ssl.CERT_NONE
+
+def req(url, headers=None, method="GET", data=None, timeout=12):
+    try:
+        h = {"User-Agent": "Mozilla/5.0 (Linux; Android 10) PhantomOSINT/4.0"}
+        if headers: h.update(headers)
+        body = data.encode() if isinstance(data, str) else data
+        r = urllib.request.Request(url, data=body, headers=h, method=method)
+        with urllib.request.urlopen(r, context=CTX, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            try: return json.loads(raw)
+            except: return {"_raw": raw}
+    except Exception as e:
+        return {"_error": str(e)}
+
+def cmd(c, timeout=18):
+    try:
+        r = subprocess.run(c, shell=True, capture_output=True, text=True, timeout=timeout)
+        return (r.stdout + r.stderr).strip() or "(boş çıktı)"
+    except subprocess.TimeoutExpired: return "[!] Zaman aşımı"
+    except Exception as e: return f"[!] {e}"
+
+def is_ip(s):
+    try: socket.inet_aton(s); return True
+    except: return False
+
+# ───────────────────────────────────────────────
+# OSINT MODULES
+# ───────────────────────────────────────────────
+
+def mod_ip(t):
+    out = {}
+    # 1. IPinfo
+    d = req(f"https://ipinfo.io/{t}/json")
+    if "_error" not in d:
+        out["📍 Konum & ISP"] = {
+            "IP": d.get("ip",""),
+            "Hostname": d.get("hostname",""),
+            "Şehir": d.get("city",""),
+            "Bölge": d.get("region",""),
+            "Ülke": d.get("country",""),
+            "Koordinat": d.get("loc",""),
+            "Org / ISP": d.get("org",""),
+            "Timezone": d.get("timezone",""),
+            "Posta Kodu": d.get("postal",""),
+        }
+    # 2. GreyNoise Community
+    d2 = req(f"https://api.greynoise.io/v3/community/{t}")
+    if "_error" not in d2:
+        out["🔊 GreyNoise"] = {
+            "Gürültü": d2.get("noise",False),
+            "RIOT (iyi bilinen IP)": d2.get("riot",False),
+            "Sınıflandırma": d2.get("classification","bilinmiyor"),
+            "İsim": d2.get("name",""),
+            "Mesaj": d2.get("message",""),
+        }
+    # 3. AbuseIPDB
+    if API_KEYS.get("abuseipdb"):
+        d3 = req(f"https://api.abuseipdb.com/api/v2/check?ipAddress={t}&maxAgeInDays=90&verbose",
+                 headers={"Key": API_KEYS["abuseipdb"], "Accept":"application/json"})
+        if "data" in d3:
+            a = d3["data"]
+            out["⚠️ AbuseIPDB"] = {
+                "Abuse Skoru": f"{a.get('abuseConfidenceScore',0)}/100",
+                "Toplam Rapor": a.get("totalReports",0),
+                "ISP": a.get("isp",""),
+                "Domain": a.get("domain",""),
+                "Kullanım Tipi": a.get("usageType",""),
+                "TOR Çıkışı": a.get("isTor",False),
+                "Son Rapor": a.get("lastReportedAt",""),
+                "Ülke": a.get("countryCode",""),
+            }
+    # 4. Shodan
+    if API_KEYS.get("shodan"):
+        d4 = req(f"https://api.shodan.io/shodan/host/{t}?key={API_KEYS['shodan']}")
+        if "_error" not in d4 and "ip_str" in d4:
+            ports = d4.get("ports",[])
+            vulns = list(d4.get("vulns",{}).keys())
+            svcs = []
+            for item in d4.get("data",[])[:8]:
+                svc = f"Port {item.get('port','')} — {item.get('transport','').upper()} — {item.get('product','')} {item.get('version','')}".strip(" —")
+                if svc: svcs.append(svc)
+            out["🔭 Shodan"] = {
+                "Açık Portlar": ", ".join(map(str,ports)),
+                "Servisler": "\n".join(svcs),
+                "CVE / Zaafiyet": "\n".join(vulns) if vulns else "Bulunamadı",
+                "OS": d4.get("os",""),
+                "Org": d4.get("org",""),
+                "ISP": d4.get("isp",""),
+                "Hostnames": ", ".join(d4.get("hostnames",[])),
+                "Son Güncelleme": d4.get("last_update",""),
+            }
+    # 5. Nmap (native)
+    nmap_r = cmd(f"nmap -T4 --top-ports 50 --open -Pn -sV {t} 2>/dev/null | head -40")
+    out["🔍 Nmap Port Tarama"] = {"__terminal": nmap_r}
+    # 6. Ping + traceroute
+    ping_r = cmd(f"ping -c 4 -W 2 {t} 2>/dev/null")
+    out["📡 Ping"] = {"__terminal": ping_r}
+    tr_r = cmd(f"traceroute -m 12 -w 2 {t} 2>/dev/null || tracepath -m 12 {t} 2>/dev/null")
+    out["🛣️ Traceroute"] = {"__terminal": tr_r}
+    # 7. Reverse DNS
+    rdns = cmd(f"dig +short -x {t} 2>/dev/null | head -5")
+    out["🔄 Reverse DNS"] = {"Sonuç": rdns or "Bulunamadı"}
+    # 8. BGP / ASN
+    asn_d = req(f"https://api.bgpview.io/ip/{t}")
+    if "data" in asn_d:
+        prefixes = asn_d["data"].get("prefixes",[])
+        if prefixes:
+            p = prefixes[0]
+            asn_info = p.get("asn",{})
+            out["🌍 BGP / ASN"] = {
+                "ASN": asn_info.get("asn",""),
+                "ASN İsmi": asn_info.get("name",""),
+                "Prefix": p.get("prefix",""),
+                "Açıklama": asn_info.get("description",""),
+                "Ülke": asn_info.get("country_code",""),
+            }
+    return out
+
+def mod_domain(t):
+    out = {}
+    # 1. DNS kayıtları
+    for rtype in ["A","AAAA","MX","NS","TXT","SOA","CNAME","CAA"]:
+        r = cmd(f"dig +short {rtype} {t} 2>/dev/null | head -15")
+        if r and "command not found" not in r and len(r) > 2:
+            out[f"📋 DNS {rtype}"] = {"__list": [x.strip() for x in r.split("\n") if x.strip()]}
+    # 2. WHOIS
+    w = cmd(f"whois {t} 2>/dev/null | head -60")
+    if w: out["📜 WHOIS"] = {"__terminal": w}
+    # 3. crt.sh subdomainler
+    crt = req(f"https://crt.sh/?q=%.{t}&output=json", timeout=15)
+    if isinstance(crt, list):
+        subs = sorted(set([x.get("name_value","").lower() for x in crt if "name_value" in x]))
+        subs = [s for s in subs if "\n" not in s][:40]
+        out["🌿 Subdomain (crt.sh)"] = {
+            "__list": subs,
+            "_count": f"Toplam {len(crt)} sertifika, {len(subs)} unique subdomain"
+        }
+    # 4. URLScan
+    us = req(f"https://urlscan.io/api/v1/search/?q=domain:{t}&size=8")
+    if "results" in us:
+        rows = []
+        for r in us["results"]:
+            pg = r.get("page",{})
+            rows.append(f"{pg.get('url','')} | IP: {pg.get('ip','')} | {r.get('task',{}).get('time','')[:10]}")
+        out["🔍 URLScan Geçmişi"] = {"__list": rows}
+    # 5. VirusTotal
+    if API_KEYS.get("virustotal"):
+        vt = req(f"https://www.virustotal.com/api/v3/domains/{t}",
+                 headers={"x-apikey": API_KEYS["virustotal"]})
+        if "data" in vt:
+            a = vt["data"].get("attributes",{})
+            st = a.get("last_analysis_stats",{})
+            cats = list(a.get("categories",{}).values())
+            out["🦠 VirusTotal"] = {
+                "Zararlı": st.get("malicious",0),
+                "Şüpheli": st.get("suspicious",0),
+                "Temiz": st.get("harmless",0),
+                "İtibar Skoru": a.get("reputation",0),
+                "Kategoriler": ", ".join(cats[:5]),
+                "Son Analiz": a.get("last_analysis_date",""),
+                "__score": {"val": st.get("malicious",0)+st.get("suspicious",0), "max": 10, "label": "Tehdit Seviyesi"},
+            }
+    # 6. SecurityTrails
+    if API_KEYS.get("securitytrails"):
+        st = req(f"https://api.securitytrails.com/v1/domain/{t}",
+                 headers={"apikey": API_KEYS["securitytrails"]})
+        if "current_dns" in st:
+            cdns = st["current_dns"]
+            rows = []
+            for rtype, rdata in cdns.items():
+                for rec in rdata.get("values",[]):
+                    rows.append(f"{rtype.upper()}: {rec.get('ip',rec.get('hostname',rec.get('value','')))} (TTL {rec.get('ttl','')})")
+            out["🕵️ SecurityTrails DNS"] = {"__list": rows}
+    # 7. HTTP headers
+    h = cmd(f"curl -sI --max-time 10 --location 'https://{t}' 2>/dev/null | head -30")
+    if h: out["🌐 HTTP Başlıkları"] = {"__terminal": h}
+    # 8. SSL sertifika
+    ssl_info = cmd(f"echo | openssl s_client -connect {t}:443 -servername {t} 2>/dev/null | openssl x509 -noout -text 2>/dev/null | head -30")
+    if ssl_info and "CERTIFICATE" in ssl_info:
+        out["🔐 SSL Sertifika"] = {"__terminal": ssl_info}
+    # 9. Wayback
+    wb = req(f"https://archive.org/wayback/available?url={t}")
+    if "archived_snapshots" in wb and wb["archived_snapshots"].get("closest"):
+        snap = wb["archived_snapshots"]["closest"]
+        out["📦 Wayback Machine"] = {
+            "Mevcut": snap.get("available",False),
+            "Snapshot URL": snap.get("url",""),
+            "Zaman": snap.get("timestamp",""),
+        }
+    return out
+
+def mod_email(t):
+    out = {}
+    # 1. EmailRep
+    d = req(f"https://emailrep.io/{t}", headers={"User-Agent":"phantom-osint-v4"})
+    if "_error" not in d and "reputation" in d:
+        det = d.get("details",{})
+        out["📊 EmailRep Analiz"] = {
+            "İtibar": d.get("reputation",""),
+            "Şüpheli": d.get("suspicious",False),
+            "Referans Sayısı": d.get("references",0),
+            "Domain Var mı": det.get("domain_exists",False),
+            "Disposable": det.get("disposable",False),
+            "Ücretsiz Sağlayıcı": det.get("free_provider",False),
+            "Geçerli MX": det.get("valid_mx",False),
+            "SPF Strict": det.get("spf_strict",False),
+            "DMARC Uygulanıyor": det.get("dmarc_enforced",False),
+            "Profil Fotoğrafı": det.get("profile_photo",False),
+            "Son Göründüğü": det.get("last_seen_sending",""),
+            "Veri İhlali Geçmişi": det.get("data_breach",False),
+            "Profiller": ", ".join(det.get("profiles",[])),
+        }
+    # 2. Hunter doğrulama
+    if API_KEYS.get("hunter"):
+        h = req(f"https://api.hunter.io/v2/email-verifier?email={t}&api_key={API_KEYS['hunter']}")
+        if "data" in h:
+            hd = h["data"]
+            out["🎯 Hunter.io Doğrulama"] = {
+                "Durum": hd.get("status",""),
+                "Sonuç": hd.get("result",""),
+                "Puan": hd.get("score",0),
+                "Regex Geçerli": hd.get("regexp",False),
+                "Gibberish": hd.get("gibberish",False),
+                "Disposable": hd.get("disposable",False),
+                "Webmail": hd.get("webmail",False),
+                "MX Kayıtları": hd.get("mx_records",False),
+                "SMTP Sunucu": hd.get("smtp_server",False),
+                "SMTP Kontrol": hd.get("smtp_check",False),
+                "__score": {"val": hd.get("score",0), "max": 100, "label": "Doğrulama Puanı"},
+            }
+    # 3. HIBP
+    if API_KEYS.get("hibp"):
+        hib = req(f"https://haveibeenpwned.com/api/v3/breachedaccount/{urllib.parse.quote(t)}?truncateResponse=false",
+                  headers={"hibp-api-key": API_KEYS["hibp"], "User-Agent":"phantom-osint"})
+        if isinstance(hib, list):
+            rows = [f"{b['Name']} ({b.get('BreachDate','')}) — {b.get('PwnCount',0):,} hesap" for b in hib[:15]]
+            out["💀 HaveIBeenPwned"] = {
+                "_count": f"⚠️ {len(hib)} veri ihlali bulundu!",
+                "__list": rows
+            }
+        else:
+            out["💀 HaveIBeenPwned"] = {"Sonuç": "✓ Temiz — Hiçbir ihlalde bulunamadı"}
+    # 4. Domain DNS
+    domain = t.split("@")[1] if "@" in t else ""
+    if domain:
+        mx = cmd(f"dig +short MX {domain} 2>/dev/null | head -5")
+        spf = cmd(f"dig +short TXT {domain} 2>/dev/null | grep spf | head -3")
+        out["📮 Domain DNS Kontrolü"] = {
+            "Domain": domain,
+            "MX Kayıtları": mx or "Bulunamadı",
+            "SPF Kaydı": spf or "Bulunamadı",
+        }
+    # 5. Holehe-style site kontrolü
+    import concurrent.futures
+    sites = [
+        ("Google","https://accounts.google.com/signup/v2/webcontent?Email={e}&flowName=GlifWebSignIn"),
+        ("Twitter/X","https://api.twitter.com/i/users/email_available.json?email={e}"),
+        ("GitHub","https://github.com/join?email={e}"),
+    ]
+    found_sites = []
+    def chk_site(name, url_tpl):
+        try:
+            u = url_tpl.format(e=urllib.parse.quote(t))
+            r2 = req(u, timeout=6)
+            raw = str(r2)
+            if any(x in raw.lower() for x in ["taken","exists","already","false","unavailable"]):
+                return f"✓ {name} — Kayıtlı olabilir"
+        except: pass
+        return None
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+        fs = [ex.submit(chk_site, n, u) for n,u in sites]
+        for f in concurrent.futures.as_completed(fs):
+            r2 = f.result()
+            if r2: found_sites.append(r2)
+    if found_sites:
+        out["🌐 Site Kayıt Kontrolü"] = {"__list": found_sites}
+    return out
+
+def mod_phone(t):
+    out = {}
+    clean = re.sub(r"[^0-9+]","",t)
+    # 1. NumLookup
+    d = req(f"https://api.numlookupapi.com/v1/validate/{clean}")
+    if "_error" not in d and d:
+        out["📞 Numara Doğrulama"] = {
+            "Geçerli": d.get("valid",False),
+            "Ülke": d.get("country_name",""),
+            "Ülke Kodu": d.get("country_code",""),
+            "Bölge": d.get("location",""),
+            "Taşıyıcı": d.get("carrier",""),
+            "Hat Tipi": d.get("line_type",""),
+            "Uluslararası Format": d.get("international_format",""),
+            "Yerel Format": d.get("local_format",""),
+        }
+    # 2. Abstract API phone
+    d2 = req(f"https://phonevalidation.abstractapi.com/v1/?api_key=a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3&phone={clean}")
+    if "_error" not in d2 and d2 and "valid" in d2:
+        out["🔬 Abstract API"] = {
+            "Geçerli": d2.get("valid",False),
+            "Uluslararası": d2.get("format",{}).get("international",""),
+            "Yerel": d2.get("format",{}).get("local",""),
+            "Ülke": d2.get("country",{}).get("name",""),
+            "Taşıyıcı": d2.get("carrier",""),
+            "Hat Tipi": d2.get("type",""),
+        }
+    # 3. Whois XML Phone
+    out["🔎 Numara Analizi"] = {
+        "Ham Numara": t,
+        "Temizlenmiş": clean,
+        "Uzunluk": len(clean.replace("+","")),
+        "Uluslararası Alan Kodu": clean[:3] if clean.startswith("+") else "Belirtilmemiş",
+    }
+    # 4. Calleridservice
+    d3 = req(f"https://api.callerapi.com/api?api=demo&phone={clean}")
+    if "_error" not in d3 and "name" in d3:
+        out["👤 Caller ID"] = {
+            "İsim": d3.get("name",""),
+            "Taşıyıcı": d3.get("carrier",""),
+            "Tip": d3.get("type",""),
+        }
+    return out
+
+def mod_username(t):
+    out = {}
+    import concurrent.futures
+    # WhatsMyName data
+    wmn = req("https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json", timeout=20)
+    found, checked = [], 0
+    if "sites" in wmn:
+        sites = wmn["sites"]
+        checked = len(sites)
+        def chk(site):
+            try:
+                url = site.get("uri_check","").replace("{account}",t)
+                if not url: return None
+                r2 = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
+                with urllib.request.urlopen(r2, context=CTX, timeout=6) as resp:
+                    if resp.status == 200:
+                        body = resp.read().decode("utf-8","replace")
+                        em = site.get("e_string","")
+                        if em and em in body:
+                            return {"platform": site["name"], "url": url, "cat": site.get("category","")}
+            except: pass
+            return None
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+            fts = [ex.submit(chk,s) for s in sites]
+            for f in concurrent.futures.as_completed(fts, timeout=45):
+                try:
+                    r2 = f.result()
+                    if r2: found.append(r2)
+                except: pass
+        found.sort(key=lambda x: x["platform"])
+        rows = [f"✅ {f['platform']} | {f['url']}" for f in found]
+        out["🔍 Platform Tarama (WhatsMyName)"] = {
+            "_count": f"✅ {len(found)} platform bulundu / {checked} kontrol edildi",
+            "__list": rows if rows else ["Hiçbir platformda bulunamadı"]
+        }
+        by_cat = {}
+        for f in found:
+            c = f.get("cat","Other")
+            by_cat.setdefault(c,[]).append(f["platform"])
+        if by_cat:
+            out["📊 Kategori Dağılımı"] = {k: ", ".join(v) for k,v in sorted(by_cat.items())}
+    # Sherlock
+    sh = cmd(f"python3 -m sherlock '{t}' --timeout 8 --print-found 2>/dev/null | head -50")
+    if sh and "usage" not in sh.lower() and len(sh) > 10:
+        out["🕵️ Sherlock"] = {"__terminal": sh}
+    # Profil linkleri
+    profiles = {
+        "Twitter/X": f"https://twitter.com/{t}",
+        "Instagram": f"https://instagram.com/{t}",
+        "GitHub": f"https://github.com/{t}",
+        "Reddit": f"https://reddit.com/u/{t}",
+        "TikTok": f"https://tiktok.com/@{t}",
+        "Telegram": f"https://t.me/{t}",
+        "YouTube": f"https://youtube.com/@{t}",
+        "LinkedIn": f"https://linkedin.com/in/{t}",
+        "Pinterest": f"https://pinterest.com/{t}",
+        "Twitch": f"https://twitch.tv/{t}",
+        "Steam": f"https://steamcommunity.com/id/{t}",
+        "DeviantArt": f"https://deviantart.com/{t}",
+        "Flickr": f"https://flickr.com/people/{t}",
+        "Keybase": f"https://keybase.io/{t}",
+    }
+    out["🌐 Profil Linkleri (Inline Kontrol)"] = {"__profiles": profiles}
+    return out
+
+def mod_url(t):
+    out = {}
+    if not t.startswith("http"): t = "https://" + t
+    # 1. HTTP başlıklar + redirect zinciri
+    h = cmd(f"curl -sIL --max-time 12 '{t}' 2>/dev/null | head -50")
+    if h: out["🌐 HTTP Başlık & Redirect"] = {"__terminal": h}
+    # 2. VirusTotal URL
+    if API_KEYS.get("virustotal"):
+        uid = base64.urlsafe_b64encode(t.encode()).decode().strip("=")
+        vt = req(f"https://www.virustotal.com/api/v3/urls/{uid}",
+                 headers={"x-apikey": API_KEYS["virustotal"]})
+        if "data" in vt:
+            a = vt["data"].get("attributes",{})
+            st = a.get("last_analysis_stats",{})
+            out["🦠 VirusTotal URL"] = {
+                "Zararlı": st.get("malicious",0),
+                "Şüpheli": st.get("suspicious",0),
+                "Temiz": st.get("harmless",0),
+                "Son Analiz": a.get("last_analysis_date",""),
+                "__score": {"val": st.get("malicious",0)+st.get("suspicious",0), "max": 10, "label": "Tehdit Seviyesi"},
+            }
+    # 3. URLScan
+    if API_KEYS.get("urlscan"):
+        payload = json.dumps({"url":t,"visibility":"public"}).encode()
+        r2 = req("https://urlscan.io/api/v1/scan/", method="POST",
+                 headers={"API-Key":API_KEYS["urlscan"],"Content-Type":"application/json"},
+                 data=payload)
+        if "uuid" in r2:
+            out["🔭 URLScan.io"] = {
+                "UUID": r2.get("uuid",""),
+                "Sonuç URL": r2.get("result",""),
+                "API URL": r2.get("api",""),
+                "Görünürlük": r2.get("visibility",""),
+            }
+    # 4. Wayback
+    wb = req(f"https://archive.org/wayback/available?url={urllib.parse.quote(t)}")
+    if "archived_snapshots" in wb and wb["archived_snapshots"].get("closest"):
+        sn = wb["archived_snapshots"]["closest"]
+        out["📦 Wayback Machine"] = {
+            "Arşiv Mevcut": sn.get("available",False),
+            "Arşiv URL": sn.get("url",""),
+            "Zaman Damgası": sn.get("timestamp",""),
+        }
+    # 5. URL metadata
+    parsed = urllib.parse.urlparse(t)
+    out["🔗 URL Analizi"] = {
+        "Scheme": parsed.scheme,
+        "Domain": parsed.netloc,
+        "Path": parsed.path,
+        "Query": parsed.query,
+        "Fragment": parsed.fragment,
+    }
+    # 6. Website içerik başlık
+    content = cmd(f"curl -sL --max-time 12 '{t}' 2>/dev/null | python3 -c \"\nimport sys,re\nb=sys.stdin.read(8192)\nt=re.findall(r'<title[^>]*>(.*?)</title>',b,re.I|re.S)\nd=re.findall(r'<meta[^>]+name=[\\\"']description[\\\"'][^>]+content=[\\\"'](.*?)[\\\"']',b,re.I)\nprint('Başlık:',t[0][:150] if t else 'Bulunamadı')\nprint('Açıklama:',d[0][:200] if d else 'Bulunamadı')\n\"")
+    if content: out["📄 Sayfa Metadata"] = {"__terminal": content}
+    return out
+
+def mod_breach(t):
+    out = {}
+    # 1. Breach Directory
+    bd = req(f"https://breachdirectory.org/api?func=auto&term={urllib.parse.quote(t)}")
+    if "result" in bd and bd["result"]:
+        rows = []
+        for r2 in bd["result"][:20]:
+            if isinstance(r2, dict):
+                rows.append(f"{r2.get('sources','?')} | Şifre: {'✓' if r2.get('password') else '—'} | Hash: {r2.get('sha1','')[:20]}...")
+            else:
+                rows.append(str(r2))
+        out["💀 Breach Directory"] = {
+            "_count": f"⚠️ {bd.get('found',0)} kayıt bulundu",
+            "__list": rows
+        }
+    elif bd.get("found") == 0:
+        out["💀 Breach Directory"] = {"Sonuç": "✓ Temiz — İhlal bulunamadı"}
+    # 2. HIBP
+    if API_KEYS.get("hibp"):
+        hib = req(f"https://haveibeenpwned.com/api/v3/breachedaccount/{urllib.parse.quote(t)}?truncateResponse=false",
+                  headers={"hibp-api-key": API_KEYS["hibp"], "User-Agent":"phantom-osint"})
+        if isinstance(hib, list):
+            rows2 = [f"{b['Name']} | {b.get('BreachDate','')} | {b.get('PwnCount',0):,} hesap | {','.join(b.get('DataClasses',[])[:3])}" for b in hib[:15]]
+            out["🔑 HaveIBeenPwned"] = {
+                "_count": f"⚠️ {len(hib)} ihlal tespit edildi",
+                "__list": rows2
+            }
+        else:
+            out["🔑 HaveIBeenPwned"] = {"Sonuç": "✓ Temiz"}
+    # 3. LeakCheck
+    if API_KEYS.get("leakcheck"):
+        lc = req(f"https://leakcheck.io/api/public?key={API_KEYS['leakcheck']}&check={urllib.parse.quote(t)}")
+        if "result" in lc:
+            out["🔐 LeakCheck"] = {"Sonuç": json.dumps(lc.get("result",[]), ensure_ascii=False)[:500]}
+    # 4. Hash arama (SHA1/MD5)
+    if re.match(r'^[a-f0-9]{32}$',t,re.I) or re.match(r'^[a-f0-9]{40}$',t,re.I):
+        out["🔐 Hash Arama"] = {
+            "Tip": "MD5" if len(t)==32 else "SHA1",
+            "Hash": t,
+            "CrackStation": f"https://crackstation.net/ (hash: {t})",
+            "HashKiller": f"https://hashkiller.io/listmanager",
+        }
+    return out
+
+def mod_network(t):
+    out = {}
+    nmap_full = cmd(f"nmap -T4 -sV -sC --top-ports 200 -Pn {t} 2>/dev/null | head -80")
+    out["🔍 Nmap Tam Tarama"] = {"__terminal": nmap_full}
+    tr = cmd(f"traceroute -m 15 -w 2 {t} 2>/dev/null || tracepath -m 15 {t} 2>/dev/null")
+    out["🛣️ Traceroute"] = {"__terminal": tr}
+    # SSL
+    ssl_scan = cmd(f"echo | openssl s_client -connect {t}:443 2>/dev/null | head -20")
+    if ssl_scan: out["🔐 SSL/TLS"] = {"__terminal": ssl_scan}
+    # Banner grab
+    banner = cmd(f"nc -w 3 {t} 80 <<< 'HEAD / HTTP/1.0\r\n\r\n' 2>/dev/null | head -10")
+    if banner: out["📋 Banner Grab"] = {"__terminal": banner}
+    return out
+
+def mod_image(filepath):
+    out = {}
+    exif_r = cmd(f"exiftool '{filepath}' 2>/dev/null")
+    if exif_r and "not found" not in exif_r:
+        d = {}
+        for line in exif_r.split("\n"):
+            if ":" in line:
+                k,v = line.split(":",1)
+                d[k.strip()] = v.strip()
+        # GPS extraction
+        lat = d.get("GPS Latitude",""); lon = d.get("GPS Longitude","")
+        gps_lat = d.get("GPS Latitude Ref",""); gps_lon = d.get("GPS Longitude Ref","")
+        if lat and lon:
+            d["🗺️ Harita Linki"] = f"https://www.google.com/maps?q={lat}{gps_lat},{lon}{gps_lon}"
+        out["📷 EXIF Verisi"] = d
+    else:
+        py_exif = cmd(f"""python3 -c "
+try:
+    from PIL import Image
+    from PIL.ExifTags import TAGS
+    img=Image.open('{filepath}')
+    ex=img._getexif()
+    if ex:
+        for k,v in list(ex.items())[:30]:
+            print(f'{{TAGS.get(k,k)}}: {{str(v)[:100]}}')
+    else: print('EXIF bulunamadı')
+except Exception as e: print(f'Hata: {{e}}')
+" 2>/dev/null""")
+        out["📷 EXIF (Python)"] = {"__terminal": py_exif or "EXIF okunamadı"}
+    # File info
+    file_info = cmd(f"file '{filepath}' 2>/dev/null; ls -lh '{filepath}' 2>/dev/null")
+    out["📁 Dosya Bilgisi"] = {"__terminal": file_info}
+    return out
+
+def mod_github(t):
+    out = {}
+    # GitHub user
+    u = req(f"https://api.github.com/users/{t}", headers={"Accept":"application/vnd.github.v3+json"})
+    if "login" in u:
+        out["👤 GitHub Profil"] = {
+            "Login": u.get("login",""),
+            "İsim": u.get("name",""),
+            "Bio": u.get("bio",""),
+            "Şirket": u.get("company",""),
+            "Lokasyon": u.get("location",""),
+            "E-posta": u.get("email",""),
+            "Blog/Web": u.get("blog",""),
+            "Twitter": u.get("twitter_username",""),
+            "Public Repo": u.get("public_repos",0),
+            "Followers": u.get("followers",0),
+            "Following": u.get("following",0),
+            "Üyelik Tarihi": u.get("created_at",""),
+            "Son Aktivite": u.get("updated_at",""),
+        }
+        # Repos
+        repos = req(f"https://api.github.com/users/{t}/repos?sort=updated&per_page=10")
+        if isinstance(repos, list):
+            rows = [f"⭐{r.get('stargazers_count',0):4d} | {r.get('name','')} | {r.get('language','')} | {r.get('description','')[:60]}" for r in repos]
+            out["📦 Repolar"] = {"__list": rows}
+        # Events (recent activity)
+        evts = req(f"https://api.github.com/users/{t}/events/public?per_page=10")
+        if isinstance(evts, list):
+            erows = [f"{e.get('type','')} → {e.get('repo',{}).get('name','')} ({e.get('created_at','')[:10]})" for e in evts]
+            out["📅 Son Aktiviteler"] = {"__list": erows}
+    # Code search
+    search = req(f"https://api.github.com/search/code?q={urllib.parse.quote(t)}+in:file&per_page=8",
+                 headers={"Accept":"application/vnd.github.v3+json"})
+    if "items" in search:
+        srows = [f"{i.get('repository',{}).get('full_name','')} / {i.get('name','')} → {i.get('html_url','')}" for i in search["items"]]
+        out["🔍 Kod Araması"] = {"__list": srows}
+    return out
+
+def mod_crypto(t):
+    out = {}
+    clean = t.strip()
+    # Bitcoin address
+    if re.match(r'^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^bc1[a-z0-9]{39,59}$', clean):
+        d = req(f"https://blockchain.info/rawaddr/{clean}?limit=10")
+        if "address" in d:
+            out["₿ Bitcoin Adres"] = {
+                "Adres": d.get("address",""),
+                "Hash160": d.get("hash160",""),
+                "Toplam Alınan": f"{d.get('total_received',0)/1e8:.8f} BTC",
+                "Toplam Gönderilen": f"{d.get('total_sent',0)/1e8:.8f} BTC",
+                "Son Bakiye": f"{d.get('final_balance',0)/1e8:.8f} BTC",
+                "İşlem Sayısı": d.get("n_tx",0),
+            }
+            txs = d.get("txs",[])
+            if txs:
+                tx_rows = []
+                for tx in txs[:8]:
+                    val = sum([o.get("value",0) for o in tx.get("out",[])])/1e8
+                    tx_rows.append(f"Hash: {tx.get('hash','')[:20]}... | {val:.4f} BTC | {tx.get('time','')}")
+                out["💸 Son İşlemler"] = {"__list": tx_rows}
+    # Ethereum
+    if re.match(r'^0x[a-fA-F0-9]{40}$', clean):
+        if API_KEYS.get("etherscan"):
+            bal = req(f"https://api.etherscan.io/api?module=account&action=balance&address={clean}&tag=latest&apikey={API_KEYS['etherscan']}")
+            txcount = req(f"https://api.etherscan.io/api?module=proxy&action=eth_getTransactionCount&address={clean}&tag=latest&apikey={API_KEYS['etherscan']}")
+            txlist = req(f"https://api.etherscan.io/api?module=account&action=txlist&address={clean}&startblock=0&endblock=99999999&sort=desc&page=1&offset=10&apikey={API_KEYS['etherscan']}")
+            if bal.get("status")=="1":
+                out["⟠ Ethereum Adres"] = {
+                    "Adres": clean,
+                    "Bakiye (Wei)": bal.get("result",""),
+                    "Bakiye (ETH)": f"{int(bal.get('result',0))/1e18:.6f} ETH",
+                    "İşlem Sayısı": int(txcount.get("result","0x0"),16) if txcount.get("result") else 0,
+                }
+            if "result" in txlist and isinstance(txlist["result"], list):
+                erows = [f"{tx.get('hash','')[:18]}... | {int(tx.get('value',0))/1e18:.4f} ETH | {tx.get('from','')[:12]}→{tx.get('to','')[:12]}" for tx in txlist["result"][:8]]
+                out["💸 ETH İşlemler"] = {"__list": erows}
+        else:
+            out["⟠ Ethereum"] = {"Not": "Etherscan API key gerekli"}
+    # OFAC/sanctions check
+    out["⚖️ Sanction Kontrolü"] = {
+        "OFAC": f"Manuel kontrol: https://sanctionssearch.ofac.treas.gov/",
+        "Elliptic": "https://www.elliptic.co",
+        "Chainalysis": "https://www.chainalysis.com",
+        "Hedef": clean,
+    }
+    return out
+
+def mod_social(t):
+    out = {}
+    # Twitter/X hızlı kontrol
+    tw = cmd(f"curl -sA 'Mozilla/5.0' 'https://api.twitter.com/i/users/email_available.json?email={urllib.parse.quote(t)}' 2>/dev/null")
+    if tw: out["🐦 Twitter/X API"] = {"__terminal": tw}
+    # Instagram
+    if re.match(r'^[a-zA-Z0-9._]+$', t):
+        ig = cmd(f"curl -sA 'Mozilla/5.0' 'https://www.instagram.com/{t}/?__a=1&__d=dis' 2>/dev/null | python3 -c \"import sys,json,re; b=sys.stdin.read(); data=re.findall(r'window._sharedData\s*=\s*({{.*?}})\s*;',b); print(data[0][:500] if data else 'Veri bulunamadı')\" 2>/dev/null")
+        if ig and len(ig) > 5: out["📸 Instagram"] = {"__terminal": ig[:300]}
+    # LinkedIn
+    out["💼 LinkedIn Arama"] = {
+        "Profil Ara": f"https://linkedin.com/search/results/people/?keywords={urllib.parse.quote(t)}",
+        "Şirket Ara": f"https://linkedin.com/search/results/companies/?keywords={urllib.parse.quote(t)}",
+        "Not": "LinkedIn panel içinde doğrudan iframe ile gösterilir",
+    }
+    # Reddit
+    rdt = req(f"https://www.reddit.com/user/{t}/about.json", headers={"User-Agent":"phantom-osint/4.0"})
+    if "data" in rdt:
+        rd = rdt["data"]
+        out["🤖 Reddit Profil"] = {
+            "Kullanıcı Adı": rd.get("name",""),
+            "Karma (Post)": rd.get("link_karma",0),
+            "Karma (Yorum)": rd.get("comment_karma",0),
+            "Hesap Yaşı": rd.get("created_utc",0),
+            "Premium": rd.get("is_gold",False),
+            "Moderatör": rd.get("is_mod",False),
+            "NSFW": rd.get("over_18",False),
+        }
+        posts = req(f"https://www.reddit.com/user/{t}/submitted.json?limit=10", headers={"User-Agent":"phantom-osint/4.0"})
+        if "data" in posts:
+            prows = [f"r/{p.get('data',{}).get('subreddit','')} | {p.get('data',{}).get('title','')[:60]}" for p in posts["data"].get("children",[])]
+            if prows: out["📝 Reddit Paylaşımlar"] = {"__list": prows}
+    return out
+
+def mod_darkweb(t):
+    out = {}
+    # Ahmia arama (clear web proxy)
+    ahmia = req(f"https://ahmia.fi/search/?q={urllib.parse.quote(t)}")
+    if "_raw" in ahmia:
+        links = re.findall(r'href="(/redirect\?[^"]+)"', ahmia["_raw"])
+        onions = re.findall(r'([a-z2-7]{56}\.onion)', ahmia["_raw"])
+        out["🧅 Ahmia Tor Araması"] = {
+            "_count": f"{len(onions)} .onion adresi bulundu",
+            "__list": list(set(onions))[:20]
+        }
+    # IntelX (ücretsiz)
+    intelx = req(f"https://2.intelx.io/intelligent/search?k=test&selector={urllib.parse.quote(t)}&ps=5")
+    if "_error" not in intelx:
+        out["🔭 IntelX Selector"] = {"Ham": str(intelx)[:400]}
+    # Pastebin
+    paste = req(f"https://psbdmp.ws/api/v3/search/{urllib.parse.quote(t)}")
+    if "data" in paste and isinstance(paste["data"], list):
+        prows = [f"ID: {p.get('id','')} | {p.get('time','')} | {p.get('tags','')} | Text: {str(p.get('text',''))[:60]}" for p in paste["data"][:10]]
+        out["📋 Pastebin Arama"] = {"__list": prows if prows else ["Bulunamadı"]}
+    out["🌑 Dark Web Arama Kaynakları"] = {
+        "__list": [
+            "Ahmia: https://ahmia.fi (Tor indexer)",
+            "IntelX: https://intelx.io (leak DB)",
+            "OnionSearch: Termux'ta: python3 OnionSearch",
+            "Not: .onion sitelere erişmek için Termux'ta 'pkg install tor' gerekir",
+        ]
+    }
+    return out
+
+def mod_whois_adv(t):
+    out = {}
+    # Whois CLI
+    w = cmd(f"whois {t} 2>/dev/null | head -80")
+    out["📜 WHOIS Detay"] = {"__terminal": w}
+    # RDAP
+    rdap = req(f"https://rdap.verisign.com/com/v1/domain/{t}")
+    if "_error" not in rdap and "ldhName" in rdap:
+        status = [s for s in rdap.get("status",[])]
+        nservers = [n.get("ldhName","") for n in rdap.get("nameservers",[])]
+        events = {e.get("eventAction",""):e.get("eventDate","") for e in rdap.get("events",[])}
+        out["🌐 RDAP Kayıt Bilgisi"] = {
+            "Domain": rdap.get("ldhName",""),
+            "Durum": ", ".join(status),
+            "Name Servers": ", ".join(nservers),
+            "Kayıt Tarihi": events.get("registration",""),
+            "Son Güncelleme": events.get("last changed",""),
+            "Bitiş Tarihi": events.get("expiration",""),
+        }
+    # DomainTools free
+    dt = req(f"https://api.domainsdb.info/v1/domains/search?domain={t}&zone=com")
+    if "domains" in dt and dt["domains"]:
+        d = dt["domains"][0]
+        out["📊 Domain DB"] = {
+            "Domain": d.get("domain",""),
+            "Create Date": d.get("create_date",""),
+            "Update Date": d.get("update_date",""),
+            "Ülke": d.get("country",""),
+            "isDead": d.get("isDead",""),
+        }
+    return out
+
+def mod_news(t):
+    out = {}
+    # GDELT
+    gdelt = req(f"https://api.gdeltproject.org/api/v2/doc/doc?query={urllib.parse.quote(t)}&mode=artlist&maxrecords=10&format=json")
+    if "articles" in gdelt:
+        rows = [f"[{a.get('seendate','')[:8]}] {a.get('title','')} — {a.get('domain','')}" for a in gdelt["articles"][:10]]
+        out["📰 GDELT Haber Araması"] = {
+            "_count": f"{len(gdelt['articles'])} haber bulundu",
+            "__list": rows
+        }
+    # HackerNews
+    hn = req(f"https://hn.algolia.com/api/v1/search?query={urllib.parse.quote(t)}&tags=story&hitsPerPage=8")
+    if "hits" in hn:
+        hnrows = [f"[{h.get('points',0):4d}pts] {h.get('title','')} ({h.get('created_at','')[:10]})" for h in hn["hits"]]
+        out["🟠 HackerNews"] = {"__list": hnrows}
+    # Reddit search
+    rdt = req(f"https://www.reddit.com/search.json?q={urllib.parse.quote(t)}&sort=relevance&limit=8",
+              headers={"User-Agent":"phantom-osint/4.0"})
+    if "data" in rdt:
+        rrows = [f"r/{p['data'].get('subreddit','')} | {p['data'].get('title','')[:70]} ({p['data'].get('score',0)} puan)" for p in rdt["data"].get("children",[]) if "data" in p]
+        out["🤖 Reddit Araması"] = {"__list": rrows}
+    return out
+
+# ──────────────────────────────────────────────
+# HTTP SERVER
+# ──────────────────────────────────────────────
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self,*a): pass
+    def send_json(self, d, code=200):
+        b = json.dumps(d, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type","application/json; charset=utf-8")
+        self.send_header("Content-Length",len(b))
+        self.send_header("Access-Control-Allow-Origin","*")
+        self.end_headers(); self.wfile.write(b)
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin","*")
+        self.send_header("Access-Control-Allow-Methods","GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers","Content-Type")
+        self.end_headers()
+    def do_GET(self):
+        if self.path in ("/","/index.html"):
+            p = os.path.join(WD,"index.html")
+            b = open(p,"rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type","text/html; charset=utf-8")
+            self.send_header("Content-Length",len(b))
+            self.end_headers(); self.wfile.write(b)
+        elif self.path == "/api/status":
+            tools = {t: bool(cmd(f"which {t} 2>/dev/null").strip()) for t in ["nmap","whois","curl","dig","exiftool","traceroute","nc"]}
+            self.send_json({"ok":True,"port":PORT,"tools":tools,"keys":list(API_KEYS.keys())})
+        else:
+            self.send_response(404); self.end_headers()
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length",0))
+        body = json.loads(self.rfile.read(n).decode()) if n else {}
+        p = self.path; res = {"ok":False,"data":{},"error":""}
+        try:
+            if p=="/api/keys":
+                API_KEYS.update({k:v for k,v in body.items() if v})
+                save_keys(); res={"ok":True,"data":{"saved":list(body.keys())}}
+            elif p=="/api/scan/ip":      res={"ok":True,"data":mod_ip(body["target"])}
+            elif p=="/api/scan/domain":  res={"ok":True,"data":mod_domain(body["target"])}
+            elif p=="/api/scan/email":   res={"ok":True,"data":mod_email(body["target"])}
+            elif p=="/api/scan/phone":   res={"ok":True,"data":mod_phone(body["target"])}
+            elif p=="/api/scan/username":res={"ok":True,"data":mod_username(body["target"])}
+            elif p=="/api/scan/url":     res={"ok":True,"data":mod_url(body["target"])}
+            elif p=="/api/scan/breach":  res={"ok":True,"data":mod_breach(body["target"])}
+            elif p=="/api/scan/network": res={"ok":True,"data":mod_network(body["target"])}
+            elif p=="/api/scan/github":  res={"ok":True,"data":mod_github(body["target"])}
+            elif p=="/api/scan/crypto":  res={"ok":True,"data":mod_crypto(body["target"])}
+            elif p=="/api/scan/social":  res={"ok":True,"data":mod_social(body["target"])}
+            elif p=="/api/scan/darkweb": res={"ok":True,"data":mod_darkweb(body["target"])}
+            elif p=="/api/scan/whois":   res={"ok":True,"data":mod_whois_adv(body["target"])}
+            elif p=="/api/scan/news":    res={"ok":True,"data":mod_news(body["target"])}
+            elif p=="/api/image":
+                data = base64.b64decode(body["data"])
+                fp = os.path.join(WD,"img_upload")
+                open(fp,"wb").write(data)
+                res={"ok":True,"data":mod_image(fp)}
+            elif p=="/api/cmd":
+                out2 = cmd(body.get("cmd",""), 25)
+                res={"ok":True,"data":{"__terminal":out2}}
+        except Exception as e:
+            res={"ok":False,"error":str(e)}
+        self.send_json(res)
+
+srv = http.server.HTTPServer(("127.0.0.1",PORT), H)
+srv.serve_forever()
+PYEOF
+
+# ═══════════════════════════════════════════════════════
+# HTML FRONTEND
+# ═══════════════════════════════════════════════════════
+cat > "$WD/index.html" << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>SKYWATCH v4 — Canli Uçak Takip</title>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
-        /* CSS (tüm stiller) */
-        :root {
-            --g:#00ff88; --c:#00e5ff; --o:#ff6b35; --w:#ffcc00; --r:#ff4466;
-            --bg:#020810; --bg2:#030f1a; --bg3:#041220;
-            --panel:rgba(3,15,26,0.97); --panel2:rgba(4,18,32,0.99);
-            --border:rgba(0,255,136,0.18); --border2:rgba(0,229,255,0.2);
-            --text:#a8ffd4; --text2:rgba(168,255,212,0.5); --text3:rgba(168,255,212,0.3);
-        }
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;width:100vw;cursor:default}
-        #map{position:absolute;inset:0}
-        #modal{position:fixed;inset:0;background:rgba(2,8,16,0.98);z-index:10000;display:flex;align-items:center;justify-content:center}
-        #modal.gone{display:none!important}
-        .mbox{background:var(--bg3);border:1px solid rgba(0,255,136,0.28);padding:34px;width:480px;max-width:95vw;position:relative}
-        .mbox::before{content:'SKYWATCH v4.0';position:absolute;top:-11px;left:20px;background:var(--bg3);padding:0 12px;font-family:'Orbitron',sans-serif;font-size:9px;color:var(--g);letter-spacing:5px}
-        .mtitle{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--c);letter-spacing:3px;margin-bottom:4px}
-        .msub{font-size:10px;color:var(--text3);letter-spacing:2px;margin-bottom:18px}
-        .mdesc{font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:20px}
-        .mdesc a{color:var(--c);text-decoration:none}
-        .mdesc b{color:var(--text)}
-        .mlabel{font-size:9px;color:var(--text3);letter-spacing:2px;margin-bottom:5px;text-transform:uppercase}
-        .minput{width:100%;background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.22);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:12px;padding:11px 14px;outline:none;margin-bottom:8px}
-        .minput:focus{border-color:var(--c);box-shadow:0 0 16px rgba(0,229,255,0.12)}
-        .merr{font-size:10px;color:var(--r);min-height:18px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-        .mbtns{display:flex;gap:10px}
-        .mbtn-start{flex:1;background:rgba(0,255,136,0.1);border:1px solid var(--g);color:var(--g);font-size:12px;padding:12px;cursor:pointer;text-transform:uppercase}
-        .mbtn-start:hover{background:rgba(0,255,136,0.2)}
-        .mbtn-start:disabled{opacity:0.4;cursor:not-allowed}
-        .mbtn-demo{background:rgba(0,229,255,0.07);border:1px solid rgba(0,229,255,0.28);color:var(--c);font-size:12px;padding:12px 20px;cursor:pointer}
-        .mbtn-demo:hover{background:rgba(0,229,255,0.16)}
-        .mbtn-demo:disabled{opacity:0.4;cursor:not-allowed}
-        .msaved{display:none;align-items:center;gap:8px;font-size:10px;color:var(--g);padding:7px 12px;border:1px solid rgba(0,255,136,0.18);background:rgba(0,255,136,0.04);margin-bottom:10px}
-        .msaved.show{display:flex}
-        .mhint{font-size:9px;color:var(--text3);margin-top:12px;text-align:center}
-        #loading{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}
-        #loading.on{display:flex}
-        .ldlogo{font-family:'Orbitron',sans-serif;font-size:34px;font-weight:900;color:var(--g);letter-spacing:8px;animation:lglow 2.5s ease-in-out infinite}
-        .ldsub{font-size:10px;color:var(--text3);letter-spacing:5px;margin-top:-10px}
-        @keyframes lglow{0%,100%{text-shadow:0 0 20px rgba(0,255,136,.3),0 0 40px rgba(0,255,136,.1)}50%{text-shadow:0 0 50px rgba(0,255,136,.9),0 0 90px rgba(0,255,136,.4)}}
-        .ldbarwrap{width:280px;height:2px;background:rgba(0,255,136,.1);overflow:hidden}
-        .ldbar{height:100%;background:linear-gradient(90deg,var(--g),var(--c));width:0%;transition:width .35s ease}
-        .ldstatus{font-size:10px;color:var(--text3);letter-spacing:3px;text-transform:uppercase}
-        .topbar{position:fixed;top:0;left:0;right:0;height:52px;background:rgba(3,15,26,0.97);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:12px;z-index:500;backdrop-filter:blur(16px)}
-        .tlogo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:16px;color:var(--g);letter-spacing:5px;display:flex;align-items:center;gap:8px;white-space:nowrap}
-        .tlogo svg{flex-shrink:0;animation:planepulse 4s ease-in-out infinite}
-        @keyframes planepulse{0%,100%{filter:drop-shadow(0 0 3px var(--g))}50%{filter:drop-shadow(0 0 10px var(--g)) drop-shadow(0 0 20px rgba(0,255,136,.5))}}
-        .tvbar{width:1px;height:22px;background:var(--border)}
-        .tstats{display:flex;gap:14px;flex:1;overflow:hidden;align-items:center}
-        .tsc{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text2);white-space:nowrap}
-        .tval{color:var(--c);font-family:'Orbitron',sans-serif;font-size:11px}
-        .statusdot{width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 8px var(--g);animation:blink 1.5s infinite}
-        .statusdot.loading{background:var(--o)}
-        .statusdot.error{background:var(--r)}
-        .statusdot.demo{background:var(--w)}
-        @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
-        .tright{display:flex;align-items:center;gap:6px;margin-left:auto}
-        .tclock{font-size:13px;color:var(--c);font-family:'Orbitron',sans-serif;min-width:72px}
-        .tbtn{background:transparent;border:1px solid var(--border);color:var(--g);font-size:10px;padding:5px 9px;cursor:pointer;letter-spacing:1px;transition:all .2s}
-        .tbtn:hover{background:rgba(0,255,136,0.1);border-color:var(--g)}
-        .searchbar{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:501;display:flex;width:360px;opacity:0;pointer-events:none;transition:opacity .25s}
-        .searchbar.open{opacity:1;pointer-events:all}
-        .sinput{flex:1;background:var(--panel2);border:1px solid var(--border2);border-right:none;color:var(--c);font-size:12px;padding:9px 14px;outline:none}
-        .sinput:focus{border-color:var(--c)}
-        .scloseBtn{background:rgba(0,229,255,.08);border:1px solid var(--border2);color:var(--c);font-size:16px;padding:9px 13px;cursor:pointer}
-        .scloseBtn:hover{background:rgba(255,68,102,.15);color:var(--r)}
-        .sresults{position:absolute;top:100%;left:0;right:0;background:var(--panel2);border:1px solid var(--border2);border-top:none;max-height:240px;overflow-y:auto;display:none}
-        .sresults.open{display:block}
-        .sres-item{padding:9px 14px;font-size:11px;cursor:pointer;border-bottom:1px solid rgba(0,255,136,.05);display:flex;align-items:center;gap:8px}
-        .sres-item:hover{background:rgba(0,255,136,.07);color:var(--g)}
-        .sres-call{font-family:'Orbitron',sans-serif;font-size:11px;color:var(--c)}
-        .lpanel{position:fixed;top:52px;left:0;bottom:0;width:272px;background:var(--panel);border-right:1px solid var(--border);z-index:200;display:flex;flex-direction:column;transition:transform .32s cubic-bezier(.4,0,.2,1)}
-        .lpanel.closed{transform:translateX(-272px)}
-        .ptoggle{position:fixed;top:66px;left:272px;width:16px;height:42px;background:var(--panel);border:1px solid var(--border);border-left:none;z-index:201;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--g);cursor:pointer;transition:left .32s}
-        .ptoggle:hover{background:rgba(0,255,136,0.1)}
-        .ptoggle.closed{left:0}
-        .tabs{display:flex;border-bottom:1px solid var(--border)}
-        .tabbtn{flex:1;padding:9px 0;font-size:9px;letter-spacing:2px;color:var(--text2);background:transparent;border:none;cursor:pointer;border-bottom:2px solid transparent;text-transform:uppercase}
-        .tabbtn.on{color:var(--g);border-bottom-color:var(--g);background:rgba(0,255,136,.04)}
-        .tabpanel{display:none;flex:1;overflow-y:auto;flex-direction:column}
-        .tabpanel.on{display:flex}
-        .slider-section{padding:10px 12px;border-bottom:1px solid rgba(0,255,136,.07);background:rgba(0,255,136,.02)}
-        .slider-row{display:flex;justify-content:space-between;margin-bottom:6px}
-        .slider-label{font-size:9px;color:var(--text3);text-transform:uppercase}
-        .slider-val{font-family:'Orbitron',sans-serif;font-size:12px;color:var(--g)}
-        .slider{width:100%;height:3px;background:rgba(0,255,136,.12);-webkit-appearance:none;appearance:none}
-        .slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--g);cursor:pointer;box-shadow:0 0 8px var(--g)}
-        .perf-row{display:flex;gap:5px;margin-top:6px}
-        .perf-btn{flex:1;font-size:9px;padding:4px;border:1px solid rgba(0,255,136,.18);color:var(--text2);background:transparent;cursor:pointer;text-align:center}
-        .perf-btn.on{color:var(--g);border-color:var(--g);background:rgba(0,255,136,.07)}
-        .fbar{padding:7px 10px;border-bottom:1px solid rgba(0,255,136,.06);display:flex;gap:5px;flex-wrap:wrap}
-        .fchip{font-size:9px;padding:3px 8px;border:1px solid rgba(0,255,136,.18);color:var(--text2);background:transparent;cursor:pointer}
-        .fchip.on{background:rgba(0,229,255,.1);border-color:var(--c);color:var(--c)}
-        .fchip.red.on{background:rgba(255,68,102,.1);border-color:var(--r);color:var(--r)}
-        .fcountbar{padding:3px 10px 5px;font-size:9px;color:var(--text3);display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,255,136,.04)}
-        .fitem{padding:9px 12px;border-bottom:1px solid rgba(0,255,136,.05);cursor:pointer;position:relative}
-        .fitem:hover{background:rgba(0,255,136,.05)}
-        .fitem.sel{background:rgba(0,229,255,.05)}
-        .fitem.emerg{background:rgba(255,68,102,.04)}
-        .fcall{font-family:'Orbitron',sans-serif;font-size:11px;color:var(--c);display:flex;align-items:center;gap:5px}
-        .fflag{font-size:13px}
-        .fbadge{font-size:8px;padding:1px 5px;border:1px solid}
-        .fbadge.emerg{border-color:var(--r);color:var(--r)}
-        .fdetail{font-size:9px;color:var(--text2);display:flex;gap:8px;margin-top:3px;flex-wrap:wrap}
-        .fdv{color:var(--text)}
-        .faltbar{height:2px;background:rgba(0,255,136,.07);margin-top:5px;overflow:hidden}
-        .faltfill{height:100%}
-        .stblock{padding:12px;border-bottom:1px solid rgba(0,255,136,.06)}
-        .sthead{font-size:8px;color:var(--text3);letter-spacing:3px;text-transform:uppercase;margin-bottom:9px;display:flex;justify-content:space-between}
-        .bigstat{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
-        .bsi{background:rgba(0,255,136,.04);border:1px solid rgba(0,255,136,.1);padding:9px 10px}
-        .bsv{font-family:'Orbitron',sans-serif;font-size:19px;color:var(--c);line-height:1}
-        .bsl{font-size:8px;color:var(--text3);margin-top:3px;text-transform:uppercase}
-        .strow{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-        .stlabel{font-size:10px;color:var(--text2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .sttrack{flex:0 0 70px;height:3px;background:rgba(0,255,136,.08)}
-        .stfill{height:100%}
-        .stval{font-size:10px;width:26px;text-align:right;color:var(--g)}
-        .alert-item{padding:9px 12px;border-bottom:1px solid rgba(255,68,102,.08);display:flex;gap:8px}
-        .apip{width:7px;height:7px;border-radius:50%;margin-top:4px}
-        .apip.high{background:var(--r);animation:blink .7s infinite}
-        .apip.med{background:var(--w)}
-        .apip.low{background:var(--c)}
-        .amsg{font-size:10px;color:var(--text);line-height:1.5}
-        .atime{font-size:9px;color:var(--text3);margin-top:2px}
-        .no-alerts{padding:24px 12px;text-align:center;font-size:10px;color:var(--text3)}
-        .settrow{padding:10px 12px;border-bottom:1px solid rgba(0,255,136,.05);display:flex;justify-content:space-between;align-items:center}
-        .settlabel{font-size:10px;color:var(--text2)}
-        .settval{font-size:10px;color:var(--g);font-family:'Orbitron',sans-serif}
-        .toggle-sw{width:32px;height:16px;background:rgba(0,255,136,.12);border:1px solid rgba(0,255,136,.3);position:relative;cursor:pointer}
-        .toggle-sw.on{background:rgba(0,255,136,.25);border-color:var(--g)}
-        .toggle-sw::after{content:'';position:absolute;width:10px;height:10px;background:rgba(168,255,212,.5);top:2px;left:2px;transition:left .2s}
-        .toggle-sw.on::after{left:18px;background:var(--g)}
-        .expbtn{font-size:9px;padding:4px 10px;border:1px solid rgba(0,255,136,.2);color:var(--text2);background:transparent;cursor:pointer}
-        .expbtn:hover{color:var(--g);border-color:var(--g)}
-        .sett-section{padding:8px 12px 2px;font-size:8px;color:var(--text3);letter-spacing:3px;text-transform:uppercase;border-bottom:1px solid rgba(0,255,136,.04)}
-        .infopanel{position:fixed;bottom:16px;right:16px;width:300px;background:var(--panel2);border:1px solid var(--border2);z-index:200;display:none}
-        .infopanel.vis{display:block;animation:slidein .2s ease}
-        @keyframes slidein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        .infohead{padding:10px 13px;background:rgba(0,229,255,.05);border-bottom:1px solid var(--border2);font-family:'Orbitron',sans-serif;font-size:12px;color:var(--c);display:flex;justify-content:space-between;align-items:center}
-        .infohead-acts{display:flex;gap:8px;align-items:center}
-        .itrailbtn{font-size:9px;padding:2px 7px;border:1px solid rgba(0,229,255,.25);color:rgba(0,229,255,.6);background:transparent;cursor:pointer}
-        .itrailbtn.on{background:rgba(0,229,255,.12);border-color:var(--c);color:var(--c)}
-        .closex{color:var(--text3);font-size:18px;cursor:pointer}
-        .closex:hover{color:var(--r)}
-        .infogrid{padding:10px 13px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
-        .ifield{display:flex;flex-direction:column;gap:2px}
-        .ilabel{font-size:8px;color:var(--text3);text-transform:uppercase}
-        .ival{font-size:12px;color:var(--g);font-family:'Orbitron',sans-serif}
-        .ival.blue{color:var(--c)}
-        .ival.yellow{color:var(--w)}
-        .ival.red{color:var(--r)}
-        .spdwrap{padding:0 13px 8px;display:flex;align-items:center;gap:8px}
-        .spdtrack{flex:1;height:3px;background:rgba(0,255,136,.08);overflow:hidden}
-        .spdfill{height:100%;background:linear-gradient(90deg,var(--g),var(--c),var(--w),var(--r))}
-        .spdlabel{font-size:9px;color:var(--text3)}
-        .spdhist{padding:0 13px 8px}
-        .spdhist-label{font-size:8px;color:var(--text3);letter-spacing:2px;margin-bottom:4px;text-transform:uppercase}
-        .spdhist canvas{display:block;width:100%;height:36px}
-        .infobtns{padding:0 13px 10px;display:flex;gap:5px}
-        .iabtn{flex:1;font-size:9px;padding:5px 3px;border:1px solid var(--border);color:var(--text2);background:transparent;cursor:pointer;text-align:center}
-        .iabtn:hover{color:var(--g);border-color:var(--g)}
-        .radarwrap{position:fixed;bottom:16px;left:16px;z-index:200;background:var(--panel2);border:1px solid var(--border);padding:8px}
-        .radarhead{font-size:8px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;display:flex;justify-content:space-between}
-        .radarcnt{color:var(--g);font-family:'Orbitron',sans-serif;font-size:10px}
-        .hud{position:fixed;top:50%;right:16px;transform:translateY(-50%);z-index:200;display:flex;flex-direction:column;gap:6px;opacity:0;pointer-events:none;transition:opacity .3s}
-        .hud.vis{opacity:1}
-        .hud-m{background:var(--panel2);border:1px solid var(--border2);padding:8px 10px;width:76px;position:relative;overflow:hidden}
-        .hud-m::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--c),transparent);animation:hudscan 2.5s linear infinite}
-        @keyframes hudscan{0%{top:0%}100%{top:100%}}
-        .hud-label{font-size:7px;color:var(--text3);text-transform:uppercase;margin-bottom:3px}
-        .hud-val{font-family:'Orbitron',sans-serif;font-size:15px;color:var(--c)}
-        .hud-unit{font-size:7px;color:var(--text3);margin-top:2px}
-        .layerpanel{position:fixed;top:52px;right:0;z-index:200;display:flex;flex-direction:column;gap:3px;padding:6px}
-        .lbtn{background:var(--panel2);border:1px solid var(--border);color:var(--text2);font-size:9px;padding:6px 9px;cursor:pointer;width:78px;text-align:center}
-        .lbtn.on{color:var(--g);border-color:var(--g);background:rgba(0,255,136,.06)}
-        .compass{position:fixed;top:62px;right:90px;z-index:200}
-        .notif{position:fixed;top:62px;left:50%;transform:translateX(-50%) translateY(-90px);background:var(--panel2);border:1px solid var(--border);padding:9px 18px;font-size:10px;color:var(--c);z-index:5000;transition:transform .3s;display:flex;align-items:center;gap:10px;white-space:nowrap;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,.5);pointer-events:none}
-        .notif.show{transform:translateX(-50%) translateY(0);pointer-events:all}
-        .notif.err{color:var(--r);border-color:rgba(255,68,102,.35)}
-        .notif.warn{color:var(--w);border-color:rgba(255,204,0,.35)}
-        .notif.ok{color:var(--g);border-color:rgba(0,255,136,.3)}
-        .notif-icon{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;background:rgba(0,229,255,.15)}
-        .kbhelp{position:fixed;inset:0;background:rgba(2,8,16,.97);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
-        .kbhelp.vis{display:flex}
-        .kbbox{background:var(--bg3);border:1px solid var(--border);padding:30px;width:500px;max-width:95vw}
-        .kbtitle{font-family:'Orbitron',sans-serif;font-size:14px;color:var(--g);letter-spacing:4px;margin-bottom:20px;display:flex;justify-content:space-between}
-        .kbgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-        .kbrow{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(0,255,136,.05)}
-        .kbkey{background:rgba(0,255,136,.07);border:1px solid rgba(0,255,136,.2);padding:2px 8px;font-size:9px;color:var(--g);font-family:'Orbitron',sans-serif;min-width:34px;text-align:center}
-        .kbdesc{font-size:10px;color:var(--text2)}
-        .trail-legend{position:fixed;bottom:120px;left:16px;z-index:200;background:var(--panel2);border:1px solid var(--border);padding:8px 12px;display:none}
-        .trail-legend.vis{display:block}
-        .tl-title{font-size:8px;color:var(--text3);text-transform:uppercase;margin-bottom:6px}
-        .tl-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:9px;color:var(--text2)}
-        .tl-dot{width:10px;height:4px}
-        .refbar{position:fixed;bottom:0;left:0;right:0;height:2px;background:rgba(0,255,136,.05);z-index:999}
-        .refprog{height:100%;background:linear-gradient(90deg,var(--g),var(--c));width:100%;transition:width 0.3s linear}
-        .mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right{display:none!important}
-        .mapboxgl-popup-content{background:var(--panel2)!important;border:1px solid var(--border)!important;color:var(--text)!important;font-family:'Share Tech Mono',monospace!important;font-size:10px!important;padding:10px 13px!important;border-radius:0!important}
-        .mapboxgl-popup-tip{display:none!important}
-        .mapboxgl-ctrl-top-right{top:52px!important;right:90px!important}
-        @media(max-width:620px){.tstats .tsc:nth-child(n+4){display:none}.layerpanel{display:none}.hud{display:none}.radarwrap{display:none}}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>PHANTOM OSINT v4</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+<style>
+/* ──────────── VARIABLES ──────────── */
+:root {
+  --c1:#00fff7; --c2:#ff00aa; --c3:#00ff88; --c4:#ff3355;
+  --gold:#ffd700; --blue:#00aaff; --orange:#ff8c00;
+  --bg:#020c12; --bg2:rgba(0,255,247,.04); --bg3:rgba(0,10,18,.85);
+  --br:rgba(0,255,247,.11); --br2:rgba(0,255,247,.22);
+  --tx:#8fd8e6; --dim:rgba(0,255,247,.42); --font:'Share Tech Mono',monospace;
+}
+/* ──────────── RESET ──────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:var(--font);color:var(--tx)}
+button,select,input{font-family:var(--font)}
+
+/* ──────────── SCANLINES ──────────── */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;
+  background:repeating-linear-gradient(0deg,transparent 0px,transparent 3px,rgba(0,0,0,.05) 3px,rgba(0,0,0,.05) 4px);
+  animation:scanA 15s linear infinite}
+@keyframes scanA{from{background-position:0 0}to{background-position:0 400px}}
+/* ──────────── HEX GRID BACKGROUND ──────────── */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,255,247,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,247,.018) 1px,transparent 1px),
+    linear-gradient(rgba(0,255,247,.008) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,247,.008) 1px,transparent 1px);
+  background-size:60px 60px,60px 60px,12px 12px,12px 12px}
+
+/* ──────────── SCROLLBAR ──────────── */
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(0,255,247,.2);border-radius:2px}
+
+/* ══════════════ LOGIN ══════════════ */
+#LS{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 35%,rgba(0,30,50,.98) 0%,#020c12 65%);
+  transition:opacity .7s,visibility .7s}
+#LS.gone{opacity:0;visibility:hidden;pointer-events:none}
+
+.lw{width:min(460px,95vw);position:relative}
+/* corner decorators */
+.lw::before,.lw::after,.lcorn1,.lcorn2{content:'';position:absolute;width:24px;height:24px;pointer-events:none}
+.lw::before{top:0;left:0;border-top:1px solid var(--c2);border-left:1px solid var(--c2)}
+.lw::after{bottom:0;right:0;border-bottom:1px solid var(--c2);border-right:1px solid var(--c2)}
+.lcorn1{top:0;right:0;border-top:1px solid var(--c1);border-right:1px solid var(--c1)}
+.lcorn2{bottom:0;left:0;border-bottom:1px solid var(--c1);border-left:1px solid var(--c1)}
+
+.lbox{border:1px solid rgba(0,255,247,.18);background:rgba(1,8,15,.97);padding:44px 40px 36px;
+  box-shadow:0 0 80px rgba(0,255,247,.07),inset 0 0 60px rgba(0,0,0,.5)}
+.lhead{text-align:center;margin-bottom:32px}
+.leye{display:block;font-size:52px;margin-bottom:12px;
+  filter:drop-shadow(0 0 10px var(--c1)) drop-shadow(0 0 25px var(--c2));
+  animation:eyeP 4s ease-in-out infinite}
+@keyframes eyeP{0%,100%{filter:drop-shadow(0 0 8px var(--c1))}50%{filter:drop-shadow(0 0 30px var(--c1)) drop-shadow(0 0 60px var(--c2)) drop-shadow(0 0 90px rgba(0,255,247,.3))}}
+.ltit{font-family:'Orbitron',sans-serif;font-size:30px;font-weight:900;letter-spacing:8px;
+  color:var(--c1);text-shadow:0 0 20px var(--c1),0 0 40px rgba(0,255,247,.3);display:block;margin-bottom:6px}
+.lver{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:5px;color:var(--c2);
+  text-shadow:0 0 8px var(--c2)}
+.ltag{font-size:10px;letter-spacing:2px;color:var(--dim);margin-top:8px;display:block}
+/* divider */
+.ldiv{height:1px;background:linear-gradient(90deg,transparent,var(--br2),transparent);margin:26px 0}
+.llbl{display:block;font-size:9px;letter-spacing:4px;color:var(--dim);margin-bottom:8px;text-transform:uppercase}
+.linp{width:100%;padding:12px 16px;background:rgba(0,255,247,.03);border:1px solid var(--br);
+  color:var(--c1);font-size:13px;outline:none;transition:all .3s;letter-spacing:2px;margin-bottom:16px}
+.linp:focus{border-color:var(--c1);background:rgba(0,255,247,.06);box-shadow:0 0 20px rgba(0,255,247,.1)}
+.linp::placeholder{color:rgba(0,255,247,.18)}
+.lbtn{width:100%;padding:14px;background:transparent;border:1px solid var(--c1);
+  color:var(--c1);font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:5px;
+  cursor:pointer;overflow:hidden;position:relative;transition:all .3s;margin-top:6px}
+.lbtn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 40%,rgba(0,255,247,.08) 50%,transparent 60%);
+  transform:translateX(-100%);transition:transform .5s}
+.lbtn:hover::before{transform:translateX(100%)}
+.lbtn:hover{box-shadow:0 0 30px rgba(0,255,247,.2);text-shadow:0 0 10px var(--c1)}
+.lstat{min-height:20px;margin-top:14px;text-align:center;font-size:10px;letter-spacing:2px}
+.lstat.e{color:var(--c4)}.lstat.ok{color:var(--c3)}
+.lhint{margin-top:22px;border-top:1px solid var(--br);padding-top:16px;font-size:10px;
+  color:rgba(0,255,247,.22);letter-spacing:1px;line-height:2}
+.lhint b{color:var(--gold)}
+
+/* ══════════════ MAIN LAYOUT ══════════════ */
+#MP{display:none;flex-direction:column;height:100vh;z-index:1;position:relative}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;gap:12px;padding:9px 20px;
+  border-bottom:1px solid var(--br);background:rgba(1,6,14,.93);
+  backdrop-filter:blur(12px);flex-shrink:0;z-index:100}
+.tb-logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:14px;
+  color:var(--c1);letter-spacing:4px;text-shadow:0 0 12px rgba(0,255,247,.5);white-space:nowrap}
+.tb-logo em{color:var(--c2);font-style:normal}
+.tb-logo sup{color:var(--gold);font-size:9px;letter-spacing:1px}
+.tb-sep{width:1px;height:18px;background:var(--br);flex-shrink:0}
+.tb-stat{display:flex;align-items:center;gap:6px;font-size:10px}
+.td{width:7px;height:7px;border-radius:50%;background:var(--c3);
+  box-shadow:0 0 8px var(--c3);animation:bk 2.5s infinite}
+@keyframes bk{0%,100%{opacity:1}50%{opacity:.2}}
+.tb-space{flex:1}
+.tb-clock{font-family:'Orbitron',sans-serif;font-size:11px;color:var(--gold);letter-spacing:2px}
+.tb-user{font-size:10px;color:var(--c2);letter-spacing:2px}
+.tbtn{padding:5px 14px;background:transparent;border:1px solid var(--br);color:var(--dim);
+  font-size:10px;letter-spacing:1px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.tbtn:hover{border-color:var(--c1);color:var(--c1);box-shadow:0 0 10px rgba(0,255,247,.1)}
+.tbtn.danger:hover{border-color:var(--c4);color:var(--c4)}
+
+/* ── BODY ── */
+.body{display:flex;flex:1;overflow:hidden}
+
+/* ══════════════ SIDEBAR ══════════════ */
+.sidebar{width:215px;flex-shrink:0;border-right:1px solid var(--br);
+  background:rgba(1,5,12,.88);display:flex;flex-direction:column;overflow:hidden}
+.sb-top{padding:12px 14px 6px;flex-shrink:0}
+.sb-search{width:100%;padding:7px 10px;background:rgba(0,255,247,.03);border:1px solid var(--br);
+  color:var(--c1);font-size:11px;outline:none;letter-spacing:1px}
+.sb-search::placeholder{color:rgba(0,255,247,.18)}
+.sb-search:focus{border-color:var(--c1)}
+.sb-scroll{flex:1;overflow-y:auto;padding-bottom:10px}
+.sbg{font-size:8.5px;letter-spacing:3px;color:var(--c2);padding:12px 14px 5px;
+  display:flex;align-items:center;gap:8px;opacity:.7}
+.sbg::after{content:'';flex:1;height:1px;background:var(--br)}
+.sbi{display:flex;align-items:center;gap:9px;padding:8px 14px 8px 18px;cursor:pointer;
+  font-size:11px;color:var(--tx);transition:all .18s;position:relative;
+  border-left:2px solid transparent;user-select:none}
+.sbi:hover{background:rgba(0,255,247,.04);color:var(--c1)}
+.sbi.act{background:rgba(0,255,247,.07);color:var(--c1);border-left-color:var(--c1)}
+.sbi.act::before{content:'';position:absolute;right:0;top:0;bottom:0;width:1px;
+  background:rgba(0,255,247,.2)}
+.sbi-ic{font-size:13px;flex-shrink:0;width:17px;text-align:center}
+.sbi-tx{flex:1;letter-spacing:.3px}
+.sbi-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-left:2px}
+.sbi-dot.live{background:var(--c3);box-shadow:0 0 5px var(--c3)}
+.sbi-dot.ref{background:rgba(0,255,247,.2)}
+/* scan count badge */
+.sbc{font-size:8px;padding:1px 5px;background:rgba(0,255,247,.08);
+  color:var(--dim);border:1px solid var(--br);letter-spacing:1px}
+
+/* ══════════════ CONTENT ══════════════ */
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── INPUT ZONE ── */
+.inputzone{padding:13px 18px;border-bottom:1px solid var(--br);
+  background:rgba(1,6,12,.8);flex-shrink:0}
+.iz-title{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:3px;
+  color:var(--c1);margin-bottom:10px;display:flex;align-items:center;gap:10px;opacity:.9}
+.iz-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--br),transparent)}
+.iz-row{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.iz-inp{flex:1;min-width:180px;padding:10px 15px;background:rgba(0,255,247,.035);
+  border:1px solid var(--br);color:var(--c1);font-size:13px;outline:none;
+  transition:all .3s;letter-spacing:1px}
+.iz-inp:focus{border-color:var(--c1);background:rgba(0,255,247,.06);box-shadow:0 0 15px rgba(0,255,247,.08)}
+.iz-inp::placeholder{color:rgba(0,255,247,.2)}
+.iz-sel{padding:10px 12px;background:rgba(0,255,247,.03);border:1px solid var(--br);
+  color:var(--tx);font-size:11px;outline:none;cursor:pointer;letter-spacing:.5px}
+.iz-sel option{background:#020c12}
+.scan-btn{padding:10px 22px;background:rgba(0,255,247,.07);border:1px solid var(--c1);
+  color:var(--c1);font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:3px;
+  cursor:pointer;white-space:nowrap;position:relative;overflow:hidden;transition:all .25s}
+.scan-btn::after{content:'';position:absolute;inset:0;background:rgba(0,255,247,.06);
+  transform:scaleX(0);transform-origin:left;transition:transform .3s}
+.scan-btn.go::after{transform:scaleX(1);animation:progA 1.8s ease infinite}
+@keyframes progA{0%,100%{opacity:.5}50%{opacity:1}}
+.scan-btn:hover{box-shadow:0 0 22px rgba(0,255,247,.18)}
+.img-btn,.clr-btn{padding:10px 13px;background:transparent;border:1px solid var(--br);
+  color:var(--dim);font-size:11px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.img-btn:hover{border-color:var(--gold);color:var(--gold)}
+.clr-btn:hover{border-color:var(--c4);color:var(--c4)}
+#fi{display:none}
+
+/* ── RESULTS ── */
+.results{flex:1;overflow-y:auto;padding:16px 18px 20px;display:flex;flex-direction:column;gap:10px}
+
+/* ── EMPTY STATE ── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:16px;opacity:.5;pointer-events:none}
+.em-eye{font-size:64px;filter:drop-shadow(0 0 20px var(--c1));animation:eyeP 5s infinite}
+.em-t1{font-family:'Orbitron',sans-serif;font-size:13px;letter-spacing:4px;color:var(--c1)}
+.em-t2{font-size:10px;letter-spacing:3px;color:var(--dim)}
+.em-cats{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:500px;margin-top:8px}
+.em-cat{font-size:9px;padding:3px 10px;border:1px solid var(--br);color:rgba(0,255,247,.3);letter-spacing:1px}
+
+/* ── RESULT BLOCK ── */
+.rblock{border:1px solid var(--br);background:rgba(0,8,15,.7);
+  animation:blockIn .35s ease both;overflow:hidden}
+@keyframes blockIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.rbh{display:flex;align-items:center;gap:10px;padding:11px 16px;
+  border-bottom:1px solid var(--br);cursor:pointer;user-select:none;background:rgba(0,255,247,.02)}
+.rbh:hover{background:rgba(0,255,247,.04)}
+.rbi{font-size:16px}
+.rbt{font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;
+  color:#e4f9ff;letter-spacing:.8px;flex:1}
+.rbt em{color:var(--c1);font-style:normal}
+.rb-ms{font-size:9px;color:var(--dim);letter-spacing:2px;padding:2px 8px;border:1px solid var(--br)}
+.rb-arr{color:var(--dim);font-size:12px;transition:transform .2s}
+.rb-arr.open{transform:rotate(180deg)}
+/* modules grid */
+.rb-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;padding:12px}
+.rb-body.hide{display:none}
+
+/* ── MODULE CARD ── */
+.mc{border:1px solid rgba(0,255,247,.07);background:rgba(0,5,10,.6);padding:12px 14px;
+  transition:border-color .2s}
+.mc:hover{border-color:rgba(0,255,247,.18)}
+.mc.full{grid-column:1/-1}
+.mc-key{font-size:8.5px;letter-spacing:3px;color:var(--c2);margin-bottom:8px;
+  display:flex;align-items:center;gap:8px}
+.mc-key::after{content:'';flex:1;height:1px;background:rgba(255,0,170,.1)}
+.mc-cnt{font-size:12px;color:#d0f0fa;line-height:1.65}
+/* KV fields */
+.kv{display:flex;flex-direction:column;gap:4px}
+.kv-row{display:flex;gap:8px;align-items:baseline;padding:3px 0;
+  border-bottom:1px solid rgba(0,255,247,.04)}
+.kv-row:last-child{border-bottom:none}
+.kv-k{font-size:9px;letter-spacing:2px;color:var(--dim);flex-shrink:0;min-width:120px;text-transform:uppercase}
+.kv-v{font-size:12px;color:#cef5fa;word-break:break-all;flex:1}
+.kv-v.good{color:var(--c3)} .kv-v.bad{color:var(--c4)} .kv-v.warn{color:var(--gold)}
+/* terminal output */
+.term{font-size:10.5px;color:rgba(0,255,136,.85);background:rgba(0,0,0,.4);
+  padding:10px;white-space:pre-wrap;overflow-y:auto;max-height:220px;line-height:1.55;
+  border:1px solid rgba(0,255,136,.08)}
+/* list */
+.lst{list-style:none;display:flex;flex-direction:column;gap:2px}
+.lst li{font-size:11px;color:#b8ebf5;padding:3px 0;border-bottom:1px solid rgba(0,255,247,.04);
+  word-break:break-all;display:flex;gap:6px;align-items:flex-start}
+.lst li::before{content:'◈';color:var(--c2);font-size:8px;flex-shrink:0;margin-top:3px}
+/* score bar */
+.sbar{height:5px;background:rgba(0,255,247,.08);margin-top:6px}
+.sbar-f{height:100%;transition:width 1s ease}
+/* count badge */
+.cnt-badge{display:inline-block;padding:2px 8px;font-size:9px;letter-spacing:2px;
+  border-radius:1px;margin-bottom:8px}
+.cnt-badge.warn{background:rgba(255,51,85,.1);border:1px solid var(--c4);color:var(--c4)}
+.cnt-badge.good{background:rgba(0,255,136,.08);border:1px solid var(--c3);color:var(--c3)}
+/* profiles */
+.prof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-top:4px}
+.prof-item{padding:6px 10px;border:1px solid var(--br);background:rgba(0,255,247,.03);
+  display:flex;flex-direction:column;gap:3px;cursor:pointer;transition:all .2s;position:relative}
+.prof-item:hover{border-color:rgba(0,255,247,.3);background:rgba(0,255,247,.07)}
+.prof-item .pname{font-size:10px;letter-spacing:1px;color:var(--c1)}
+.prof-item .pcheck{font-size:9px;color:var(--dim)}
+.prof-item .pok{color:var(--c3)}
+
+/* ── STATUS BAR ── */
+.stbar{padding:7px 18px;border-top:1px solid var(--br);background:rgba(1,4,10,.95);
+  display:flex;gap:20px;align-items:center;flex-shrink:0;font-size:10px;letter-spacing:1px}
+.sv{color:var(--c1);font-weight:bold;font-size:12px}
+.sl{color:rgba(0,255,247,.3)}
+.stbar-r{margin-left:auto;display:flex;gap:10px}
+.tool-ind{display:flex;align-items:center;gap:4px}
+.ti-d{width:5px;height:5px;border-radius:50%}
+.ti-d.on{background:var(--c3);box-shadow:0 0 4px var(--c3)}
+.ti-d.off{background:var(--c4);opacity:.4}
+
+/* ── API MODAL ── */
+.mov{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.9);
+  display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:all .3s}
+.mov.open{opacity:1;visibility:visible}
+.mbox{width:min(560px,97vw);max-height:90vh;overflow-y:auto;border:1px solid var(--c1);
+  background:rgba(1,8,15,.99);padding:28px;position:relative;
+  box-shadow:0 0 60px rgba(0,255,247,.1)}
+.mbox h3{font-family:'Orbitron',sans-serif;font-size:13px;color:var(--c1);
+  letter-spacing:3px;margin-bottom:18px}
+.arow{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.albl{font-size:9px;letter-spacing:2px;color:var(--dim);width:140px;flex-shrink:0}
+.ainp{flex:1;padding:8px 12px;background:rgba(0,255,247,.03);border:1px solid var(--br);
+  color:var(--c1);font-size:12px;outline:none;letter-spacing:1px}
+.ainp:focus{border-color:var(--c1)}
+.mc-{position:absolute;top:14px;right:14px;background:none;border:none;
+  color:var(--dim);font-size:18px;cursor:pointer;transition:color .2s}
+.mc-:hover{color:var(--c4)}
+.msave{padding:10px 22px;border:1px solid var(--c1);background:rgba(0,255,247,.06);
+  color:var(--c1);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;
+  cursor:pointer;margin-top:14px;transition:all .2s}
+.msave:hover{background:rgba(0,255,247,.14)}
+.anote{margin-top:14px;padding-top:14px;border-top:1px solid var(--br);
+  font-size:10px;color:rgba(0,255,247,.25);line-height:1.9}
+.anote a{color:var(--c1)}
+/* key status chips */
+.kchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.kchip{font-size:9px;padding:3px 10px;letter-spacing:2px;border-radius:1px}
+.kchip.set{border:1px solid var(--c3);color:var(--c3)}
+.kchip.unset{border:1px solid var(--br);color:var(--dim)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:52px;left:50%;transform:translateX(-50%);
+  padding:10px 22px;font-size:11px;letter-spacing:2px;z-index:3000;
+  border:1px solid;font-family:var(--font);transition:opacity .3s;
+  box-shadow:0 4px 30px rgba(0,0,0,.5)}
+.toast.ok{background:rgba(0,10,5,.97);border-color:var(--c3);color:var(--c3)}
+.toast.err{background:rgba(15,0,5,.97);border-color:var(--c4);color:var(--c4)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  .sidebar{display:none}
+  .rb-body{grid-template-columns:1fr}
+  .iz-row{flex-direction:column}
+  .iz-sel,.img-btn,.clr-btn{width:100%}
+}
+</style>
 </head>
 <body>
-    <!-- MODAL -->
-    <div id="modal">
-        <div class="mbox">
-            <div class="mtitle">MAPBOX API TOKEN</div>
-            <div class="msub">UYDU HARİTA ERİŞİMİ</div>
-            <p class="mdesc">
-                <a href="https://account.mapbox.com" target="_blank">account.mapbox.com</a>
-                adresinden <b>ücretsiz</b> hesap oluşturun.<br>
-                <b>Access Tokens</b> sayfasından <b>pk.</b> ile başlayan token alın.<br><br>
-                Token olmadan <b>Demo Mod</b> ile devam edebilirsiniz.<br>
-                <span style="color:rgba(168,255,212,0.35)">Demo modda harita arka plan olmaz, tüm diğer özellikler aktiftir.</span>
-            </p>
-            <div class="msaved" id="msaved"><span>✓</span><span id="msaved-txt">Kayıtlı token</span></div>
-            <div class="mlabel">TOKEN</div>
-            <input id="tokeninput" class="minput" type="text" placeholder="pk.eyJ1IjoiuserIiwiYSI6ImtleUlkIn0.XXXX" autocomplete="off" spellcheck="false">
-            <div class="merr" id="merr"></div>
-            <div class="mbtns">
-                <button class="mbtn-start" id="mbtnstart">▶ BAŞLAT</button>
-                <button class="mbtn-demo" id="mbtndemo">DEMO MOD</button>
-            </div>
-            <div class="mhint">ENTER = Başlat &nbsp;|&nbsp; TAB = Demo Mod &nbsp;|&nbsp; Token kayda alınır</div>
-        </div>
+
+<!-- ══════════════ LOGIN ══════════════ -->
+<div id="LS">
+<div class="lw">
+  <div class="lcorn1"></div><div class="lcorn2"></div>
+  <div class="lbox">
+    <div class="lhead">
+      <span class="leye">👁</span>
+      <span class="ltit">PHANTOM</span>
+      <span class="lver">OSINT INTELLIGENCE PANEL</span>
+      <span class="ltag">v4.0 — ZERO REDIRECTS · ALL DATA INLINE · TERMUX NATIVE</span>
+    </div>
+    <div class="ldiv"></div>
+    <label class="llbl">Operator Kimliği</label>
+    <input class="linp" id="lu" type="text" placeholder="operator_id" autocomplete="off" spellcheck="false">
+    <label class="llbl">Şifre Anahtarı</label>
+    <input class="linp" id="lp" type="password" placeholder="••••••••" autocomplete="off">
+    <button class="lbtn" id="lbtn" onclick="doLogin()">◉ KİMLİK DOĞRULA &amp; BAĞLAN</button>
+    <div class="lstat" id="lst"></div>
+    <div class="lhint">
+      Varsayılan Giriş: <b>phantom</b> / <b>osint2024</b><br>
+      Misafir: <b>guest</b> / <b>guest</b> &nbsp;|&nbsp; Admin: <b>admin</b> / <b>phantom123</b><br>
+      <span style="color:var(--c1)">⚙ API Keys menüsünden ücretsiz key ekleyerek daha fazla veri görün</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<div id="MP">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="tb-logo">PH<em>ANT</em>OM <em style="color:var(--gold);font-size:9px;letter-spacing:2px"> OSINT</em><sup>v4</sup></div>
+    <div class="tb-sep"></div>
+    <div class="tb-stat"><div class="td"></div><span style="color:var(--c3);font-size:10px;letter-spacing:2px">ONLINE</span></div>
+    <div class="tb-space"></div>
+    <div class="tb-clock" id="clk">00:00:00</div>
+    <div class="tb-sep"></div>
+    <div class="tb-user" id="tbu">◈ OPERATOR</div>
+    <button class="tbtn" onclick="openApiM()">⚙ API KEYS</button>
+    <button class="tbtn danger" onclick="clearAll()">⌫ TEMİZLE</button>
+  </div>
+
+  <div class="body">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sb-top">
+        <input class="sb-search" id="sbsearch" placeholder="🔍 Modül ara..." oninput="filterSidebar(this.value)">
+      </div>
+      <div class="sb-scroll" id="SB"></div>
     </div>
 
-    <!-- LOADING -->
-    <div id="loading">
-        <div class="ldlogo">SKYWATCH</div>
-        <div class="ldsub">CANLI UÇAK TAKİP SİSTEMİ v4.0</div>
-        <div class="ldbarwrap"><div class="ldbar" id="ldbar"></div></div>
-        <div class="ldstatus" id="ldstatus">HAZIRLANIYOR...</div>
+    <!-- CONTENT -->
+    <div class="content">
+      <!-- INPUT ZONE -->
+      <div class="inputzone">
+        <div class="iz-title" id="iz-title">◈ HEDEF ANALİZİ</div>
+        <div class="iz-row">
+          <input class="iz-inp" id="tinp" placeholder="IP, domain, e-posta, telefon, kullanıcı adı..." autocomplete="off" spellcheck="false">
+          <select class="iz-sel" id="tmod">
+            <option value="ip">🌐 IP Analizi</option>
+            <option value="domain">🔗 Domain &amp; DNS</option>
+            <option value="email">✉️ E-Posta OSINT</option>
+            <option value="phone">📞 Telefon OSINT</option>
+            <option value="username">👤 Kullanıcı Adı</option>
+            <option value="url">🔍 URL Tarama</option>
+            <option value="breach">💀 İhlal Araması</option>
+            <option value="network">⚡ Ağ Tarama</option>
+            <option value="github">🐙 GitHub OSINT</option>
+            <option value="crypto">₿ Kripto OSINT</option>
+            <option value="social">📱 Sosyal Medya</option>
+            <option value="darkweb">🌑 Dark Web</option>
+            <option value="whois">📜 WHOIS Detay</option>
+            <option value="news">📰 Haber &amp; Medya</option>
+          </select>
+          <button class="scan-btn" id="sbtn" onclick="runScan()">⚡ TARA</button>
+          <button class="img-btn" onclick="document.getElementById('fi').click()">📸 EXIF</button>
+          <button class="clr-btn" onclick="clearAll()">✕</button>
+          <input type="file" id="fi" accept="image/*" onchange="handleImg(this)">
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div class="results" id="RES">
+        <div class="empty" id="empt">
+          <div class="em-eye">👁</div>
+          <div class="em-t1">PHANTOM OSINT v4.0</div>
+          <div class="em-t2">HEDEF GİRİN · MOD SEÇİN · TARAMAYI BAŞLATIN</div>
+          <div class="em-cats" id="em-cats"></div>
+        </div>
+      </div>
+
+      <!-- STATUSBAR -->
+      <div class="stbar">
+        <span class="sv" id="st-sc">0</span><span class="sl">TARAMA</span>
+        <span class="sv" id="st-hi">0</span><span class="sl">HIT</span>
+        <span class="sv" id="st-ms">—</span><span class="sl">SÜRE</span>
+        <span class="sv" id="st-mo">—</span><span class="sl">MODÜL</span>
+        <div class="stbar-r" id="stbar-r"></div>
+      </div>
     </div>
+  </div>
+</div>
 
-    <!-- KEYBOARD HELP -->
-    <div class="kbhelp" id="kbhelp">
-        <div class="kbbox">
-            <div class="kbtitle">KLAVYE KISAYOLLARI <span onclick="toggleHelp()" style="cursor:pointer;color:var(--o);font-size:20px">×</span></div>
-            <div class="kbgrid">
-                <div class="kbrow"><div class="kbkey">F</div><div class="kbdesc">Arama aç/kapat</div></div>
-                <div class="kbrow"><div class="kbkey">R</div><div class="kbdesc">Veriyi yenile</div></div>
-                <div class="kbrow"><div class="kbkey">L</div><div class="kbdesc">Sol paneli aç/kapat</div></div>
-                <div class="kbrow"><div class="kbkey">S</div><div class="kbdesc">Uydu katmanı</div></div>
-                <div class="kbrow"><div class="kbkey">D</div><div class="kbdesc">Karanlık katmanı</div></div>
-                <div class="kbrow"><div class="kbkey">T</div><div class="kbdesc">Sokak katmanı</div></div>
-                <div class="kbrow"><div class="kbkey">H</div><div class="kbdesc">Hava durumu</div></div>
-                <div class="kbrow"><div class="kbkey">N</div><div class="kbdesc">Gece/gündüz</div></div>
-                <div class="kbrow"><div class="kbkey">I</div><div class="kbdesc">Uçak izleri (tümü)</div></div>
-                <div class="kbrow"><div class="kbkey">C</div><div class="kbdesc">Konumumu bul</div></div>
-                <div class="kbrow"><div class="kbkey">X</div><div class="kbdesc">Seçimi kaldır</div></div>
-                <div class="kbrow"><div class="kbkey">ESC</div><div class="kbdesc">Kapat / Geri</div></div>
-                <div class="kbrow"><div class="kbkey">?</div><div class="kbdesc">Bu yardım ekranı</div></div>
-                <div class="kbrow"><div class="kbkey">F11</div><div class="kbdesc">Tam ekran</div></div>
-            </div>
-        </div>
-    </div>
+<!-- API MODAL -->
+<div class="mov" id="apiM" onclick="closeApiM(event)">
+<div class="mbox">
+  <button class="mc-" onclick="closeApiM()">✕</button>
+  <h3>⚙ API KEY YÖNETİMİ</h3>
+  <div class="kchips" id="kchips"></div>
+  <div class="arow"><span class="albl">SHODAN</span><input class="ainp" id="k-shodan" placeholder="Shodan API key..."></div>
+  <div class="arow"><span class="albl">VIRUSTOTAL</span><input class="ainp" id="k-virustotal" placeholder="VirusTotal API key..."></div>
+  <div class="arow"><span class="albl">ABUSEIPDB</span><input class="ainp" id="k-abuseipdb" placeholder="AbuseIPDB API key..."></div>
+  <div class="arow"><span class="albl">HUNTER.IO</span><input class="ainp" id="k-hunter" placeholder="Hunter.io API key..."></div>
+  <div class="arow"><span class="albl">HAVEIBEENPWNED</span><input class="ainp" id="k-hibp" placeholder="HIBP API key..."></div>
+  <div class="arow"><span class="albl">URLSCAN.IO</span><input class="ainp" id="k-urlscan" placeholder="URLScan.io API key..."></div>
+  <div class="arow"><span class="albl">SECURITYTRAILS</span><input class="ainp" id="k-securitytrails" placeholder="SecurityTrails API key..."></div>
+  <div class="arow"><span class="albl">LEAKCHECK</span><input class="ainp" id="k-leakcheck" placeholder="LeakCheck API key..."></div>
+  <div class="arow"><span class="albl">ETHERSCAN</span><input class="ainp" id="k-etherscan" placeholder="Etherscan API key..."></div>
+  <button class="msave" onclick="saveKeys()">💾 KAYDET</button>
+  <div class="anote">
+    API key'ler sadece Termux içinde yerel olarak saklanır — asla dışarı gönderilmez.<br>
+    Ücretsiz key kaynakları:<br>
+    → <a href="https://account.shodan.io/" target="_blank">shodan.io</a> &nbsp;
+    → <a href="https://virustotal.com/" target="_blank">virustotal.com</a> &nbsp;
+    → <a href="https://www.abuseipdb.com/api" target="_blank">abuseipdb.com</a><br>
+    → <a href="https://hunter.io/api-keys" target="_blank">hunter.io</a> &nbsp;
+    → <a href="https://haveibeenpwned.com/API/Key" target="_blank">haveibeenpwned.com</a> &nbsp;
+    → <a href="https://urlscan.io/api/" target="_blank">urlscan.io</a>
+  </div>
+</div>
+</div>
 
-    <!-- TOPBAR -->
-    <div class="topbar">
-        <div class="tlogo">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill="#00ff88"/><circle cx="12" cy="12" r="11" stroke="rgba(0,255,136,0.2)" stroke-width="1"/></svg>
-            SKYWATCH
-        </div>
-        <div class="tvbar"></div>
-        <div class="tstats">
-            <div class="tsc"><div class="statusdot loading" id="sdot"></div><span id="sstatus">BAĞLANIYOR</span></div>
-            <div class="tsc">✈ <span class="tval" id="scount">0</span></div>
-            <div class="tsc">GÖR.:<span class="tval" id="svis">0</span></div>
-            <div class="tsc">ÜLKE:<span class="tval" id="scountry">0</span></div>
-            <div class="tsc">MAX:<span class="tval" id="smaxalt">0</span>m</div>
-            <div class="tsc">⟳<span class="tval" id="slastupd">--:--</span></div>
-        </div>
-        <div class="tright">
-            <div class="tclock" id="tclock">00:00:00</div>
-            <button class="tbtn" onclick="toggleSearch()" title="Arama [F]">🔍</button>
-            <button class="tbtn" onclick="doRefresh()" title="Yenile [R]">⟳</button>
-            <button class="tbtn" onclick="gotoMe()" title="Konum [C]">📍</button>
-            <button class="tbtn" id="wxbtn" onclick="toggleWeather()" title="Hava [H]">☁️</button>
-            <button class="tbtn" id="trmbn" onclick="toggleTerminator()" title="Gece/Gündüz [N]">☀️</button>
-            <button class="tbtn" id="alltrailbtn" onclick="toggleAllTrails()" title="Tüm izler [I]">➡️</button>
-            <button class="tbtn" onclick="toggleHelp()" title="Yardım [?]">?</button>
-            <button class="tbtn" onclick="doFullscreen()">⛶</button>
-        </div>
-    </div>
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const CREDS={phantom:"osint2024",admin:"phantom123",guest:"guest"};
+let scanCount=0,hitCount=0,activeUser="OPERATOR";
+const modeIcons={ip:"🌐",domain:"🔗",email:"✉️",phone:"📞",username:"👤",url:"🔍",
+  breach:"💀",network:"⚡",github:"🐙",crypto:"₿",social:"📱",darkweb:"🌑",whois:"📜",news:"📰",image:"📷"};
+const modeTitles={ip:"IP & AĞ ANALİZİ",domain:"DOMAIN & DNS KEŞFİ",email:"E-POSTA OSINT",
+  phone:"TELEFON OSINT",username:"KULLANICI ADI OSINT",url:"URL & SİTE TARAMA",
+  breach:"VERİ İHLALİ ARAMASI",network:"AĞ & PORT TARAMA",github:"GITHUB OSINT",
+  crypto:"KRİPTO & BLOCKCHAIN OSINT",social:"SOSYAL MEDYA OSINT",darkweb:"DARK WEB & LEAK",
+  whois:"WHOIS & DOMAIN KAYIT",news:"HABER & MEDYA OSINT",image:"GÖRSEL & EXIF ANALİZİ"};
 
-    <!-- SEARCH -->
-    <div class="searchbar" id="searchbar">
-        <div style="position:relative;flex:1">
-            <input class="sinput" id="sinput" placeholder="Callsign, ülke, ICAO24..." oninput="doSearch(this.value)" onkeydown="searchKeydown(event)">
-            <div class="sresults" id="sresults"></div>
-        </div>
-        <button class="scloseBtn" onclick="toggleSearch()">×</button>
-    </div>
+// ═══════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════
+async function doLogin(){
+  const u=document.getElementById("lu").value.trim();
+  const p=document.getElementById("lp").value;
+  const s=document.getElementById("lst");
+  const btn=document.getElementById("lbtn");
+  s.className="lstat"; s.textContent="[ BACKEND BAĞLANTI KONTROL EDİLİYOR... ]";
+  btn.disabled=true;
+  await sleep(400);
+  if(!CREDS[u]||CREDS[u]!==p){
+    s.className="lstat e"; s.textContent="[ ERİŞİM REDDEDİLDİ — GEÇERSİZ KİMLİK DOĞRULAMA ]";
+    document.getElementById("lp").value="";
+    btn.disabled=false; return;
+  }
+  try{
+    const r=await fetch("/api/status");
+    const d=await r.json();
+    if(d.ok){
+      s.className="lstat ok"; s.textContent="[ ERİŞİM ONAYLANDI — BACKEND HAZIR ]";
+      activeUser=u.toUpperCase();
+      await sleep(600);
+      document.getElementById("LS").classList.add("gone");
+      document.getElementById("MP").style.display="flex";
+      initPanel(d.tools||{},d.keys||[]);
+    }
+  }catch(e){
+    s.className="lstat e"; s.textContent="[ BACKEND HATASI: "+e.message+" ]";
+    btn.disabled=false;
+  }
+}
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&!document.getElementById("LS").classList.contains("gone"))doLogin();
+});
 
-    <!-- PANEL TOGGLE -->
-    <div class="ptoggle" id="ptoggle" onclick="togglePanel()">◀</div>
-
-    <!-- LEFT PANEL -->
-    <div class="lpanel" id="lpanel">
-        <div class="tabs">
-            <button class="tabbtn on" id="tab0" onclick="switchTab(0)">UÇUŞLAR</button>
-            <button class="tabbtn" id="tab1" onclick="switchTab(1)">İSTAT</button>
-            <button class="tabbtn" id="tab2" onclick="switchTab(2)">ALARM</button>
-            <button class="tabbtn" id="tab3" onclick="switchTab(3)">AYAR</button>
-        </div>
-        <div class="tabpanel on" id="tp0">
-            <div class="slider-section">
-                <div class="slider-row"><span class="slider-label">HARİTA UÇAK LİMİTİ</span><span class="slider-val" id="sliderval">150</span></div>
-                <input type="range" class="slider" id="limitslider" min="10" max="500" value="150" step="10" oninput="onSlider(this.value)">
-                <div class="perf-row">
-                    <button class="perf-btn" onclick="setPerf('eco')" id="perf-eco">ECO</button>
-                    <button class="perf-btn on" onclick="setPerf('normal')" id="perf-normal">NORMAL</button>
-                    <button class="perf-btn" onclick="setPerf('ultra')" id="perf-ultra">ULTRA</button>
-                </div>
-            </div>
-            <div class="fbar">
-                <button class="fchip on" id="fc-all" onclick="setFilter('all')">TÜMÜ</button>
-                <button class="fchip" id="fc-high" onclick="setFilter('high')">Y.ALT</button>
-                <button class="fchip" id="fc-fast" onclick="setFilter('fast')">HIZ</button>
-                <button class="fchip" id="fc-tr" onclick="setFilter('tr')">TR</button>
-                <button class="fchip red" id="fc-emg" onclick="setFilter('emg')">ACİL</button>
-            </div>
-            <div class="fcountbar"><span><span id="fcount">0</span> UÇAK LISTEDE</span><span id="ftotal" style="color:var(--text3)"></span></div>
-            <div id="flist" style="flex:1;overflow-y:auto">
-                <div style="padding:22px;text-align:center;color:var(--text3);font-size:11px">VERİ YÜKLENİYOR...</div>
-            </div>
-        </div>
-        <div class="tabpanel" id="tp1">
-            <div class="stblock"><div class="sthead">GENEL ÖZET</div><div class="bigstat"><div class="bsi"><div class="bsv" id="st-total">0</div><div class="bsl">TOPLAM UÇAK</div></div><div class="bsi"><div class="bsv" id="st-country">0</div><div class="bsl">ÜLKE</div></div><div class="bsi"><div class="bsv" id="st-avgalt">0</div><div class="bsl">ORT YÜK (m)</div></div><div class="bsi"><div class="bsv" id="st-avgspd">0</div><div class="bsl">ORT HIZ</div></div><div class="bsi"><div class="bsv" id="st-maxspd">0</div><div class="bsl">MAX HIZ</div></div><div class="bsi"><div class="bsv" id="st-maxalt">0</div><div class="bsl">MAX YÜK (m)</div></div></div></div>
-            <div class="stblock"><div class="sthead">ÜLKE SIRASI</div><div id="st-countries"></div></div>
-            <div class="stblock"><div class="sthead">HIZ DAĞILIMI (km/s)</div><div id="st-speeds"></div></div>
-            <div class="stblock"><div class="sthead">YÜKSEKLİK (m)</div><div id="st-alts"></div></div>
-            <div class="stblock"><div class="sthead">AIRLINE SIRASI</div><div id="st-airlines"></div></div>
-        </div>
-        <div class="tabpanel" id="tp2">
-            <div style="padding:7px 12px;border-bottom:1px solid rgba(0,255,136,.06);font-size:9px;color:var(--text3);display:flex;justify-content:space-between;align-items:center"><span id="alertheader">ALARMLAR</span><button class="fchip" onclick="clearAlerts()" style="font-size:8px;padding:2px 7px">TEMİZLE</button></div>
-            <div id="alertlist"><div class="no-alerts">ALARM YOK</div></div>
-        </div>
-        <div class="tabpanel" id="tp3">
-            <div class="sett-section">HARİTA</div>
-            <div class="settrow"><span class="settlabel">Uçuş izleri göster</span><div class="toggle-sw" id="sw-trail" onclick="toggleSetting('trail')"></div></div>
-            <div class="settrow"><span class="settlabel">Yer üzerindeki uçaklar</span><div class="toggle-sw" id="sw-ground" onclick="toggleSetting('ground')"></div></div>
-            <div class="settrow"><span class="settlabel">Havaalanı katmanı</span><div class="toggle-sw on" id="sw-airports" onclick="toggleSetting('airports')"></div></div>
-            <div class="settrow"><span class="settlabel">Animasyonlu uçak</span><div class="toggle-sw on" id="sw-anim" onclick="toggleSetting('anim')"></div></div>
-            <div class="sett-section">PERFORMANS</div>
-            <div class="settrow"><span class="settlabel">Yenileme süresi</span><span class="settval" id="rf-val">30s</span></div>
-            <div style="padding:6px 12px"><input type="range" class="slider" id="rfslider" min="15" max="120" value="30" step="5" oninput="onRfSlider(this.value)"></div>
-            <div class="sett-section">DIŞA AKTAR</div>
-            <div class="settrow"><span class="settlabel">JSON aktar</span><button class="expbtn" onclick="exportJSON()">⬇ JSON</button></div>
-            <div class="settrow"><span class="settlabel">CSV aktar</span><button class="expbtn" onclick="exportCSV()">⬇ CSV</button></div>
-            <div class="sett-section">TOKEN</div>
-            <div class="settrow"><span class="settlabel">Kayıtlı token</span><button class="expbtn" onclick="clearToken()" style="color:var(--r);border-color:rgba(255,68,102,.3)">SİL</button></div>
-        </div>
-    </div>
-
-    <!-- MAP -->
-    <div id="map"></div>
-
-    <!-- TRAIL LEGEND -->
-    <div class="trail-legend" id="trail-legend">
-        <div class="tl-title">İZ RENK KODLARI</div>
-        <div class="tl-row"><div class="tl-dot" style="background:#00ff88"></div><span>Alçak (&lt;3km)</span></div>
-        <div class="tl-row"><div class="tl-dot" style="background:#00e5ff"></div><span>Orta (3-6km)</span></div>
-        <div class="tl-row"><div class="tl-dot" style="background:#ffcc00"></div><span>Yüksek (6-9km)</span></div>
-        <div class="tl-row"><div class="tl-dot" style="background:#ff4466"></div><span>Çok yüksek (&gt;9km)</span></div>
-    </div>
-
-    <!-- LAYER PANEL -->
-    <div class="layerpanel">
-        <button class="lbtn on" id="lbsat" onclick="setLayer('satellite')">🛰 UYDU</button>
-        <button class="lbtn" id="lbdrk" onclick="setLayer('dark')">🌙 KARANLIK</button>
-        <button class="lbtn" id="lbstr" onclick="setLayer('street')">🗺 SOKAK</button>
-    </div>
-
-    <!-- COMPASS -->
-    <div class="compass"><canvas id="compass" width="46" height="46"></canvas></div>
-
-    <!-- INFO PANEL -->
-    <div class="infopanel" id="infopanel">
-        <div class="infohead"><span id="info-call">---</span><div class="infohead-acts"><button class="itrailbtn" id="trailbtn" onclick="toggleSelTrail()">İZ</button><span class="closex" onclick="closeInfo()">×</span></div></div>
-        <div class="infogrid">
-            <div class="ifield"><div class="ilabel">ÜLKE</div><div class="ival blue" id="inf-co">---</div></div>
-            <div class="ifield"><div class="ilabel">YÜKSEKLİK</div><div class="ival" id="inf-alt">---</div></div>
-            <div class="ifield"><div class="ilabel">HIZ (km/s)</div><div class="ival" id="inf-spd">---</div></div>
-            <div class="ifield"><div class="ilabel">ROTA</div><div class="ival" id="inf-hdg">---</div></div>
-            <div class="ifield"><div class="ilabel">ENLEM</div><div class="ival" id="inf-lat">---</div></div>
-            <div class="ifield"><div class="ilabel">BOYLAM</div><div class="ival" id="inf-lon">---</div></div>
-            <div class="ifield"><div class="ilabel">SQUAWK</div><div class="ival" id="inf-sqk">---</div></div>
-            <div class="ifield"><div class="ilabel">DURUM</div><div class="ival" id="inf-grnd">---</div></div>
-            <div class="ifield"><div class="ilabel">DİKEY HIZ</div><div class="ival" id="inf-vs">---</div></div>
-            <div class="ifield"><div class="ilabel">ICAO24</div><div class="ival" style="font-size:10px" id="inf-icao">---</div></div>
-        </div>
-        <div class="spdwrap"><div class="spdlabel">0</div><div class="spdtrack"><div class="spdfill" id="spdgauge"></div></div><div class="spdlabel">1200+</div></div>
-        <div class="spdhist"><div class="spdhist-label">HIZ GEÇMİŞİ</div><canvas id="spdhist-canvas" width="274" height="36"></canvas></div>
-        <div class="infobtns"><button class="iabtn" onclick="flyToSel()">✈ GİT</button><button class="iabtn" onclick="copyCoords()">📋 KOORD</button><button class="iabtn" onclick="openFA()">FA↗</button><button class="iabtn" onclick="openFR24()">FR24↗</button></div>
-    </div>
-
-    <!-- RADAR -->
-    <div class="radarwrap"><div class="radarhead">RADAR <span class="radarcnt" id="radarcnt">0</span></div><canvas id="radarc" width="100" height="100"></canvas></div>
-
-    <!-- HUD -->
-    <div class="hud" id="hud">
-        <div class="hud-m"><div class="hud-label">YÜKSEKLİK</div><div class="hud-val" id="hud-alt">---</div><div class="hud-unit">m</div></div>
-        <div class="hud-m"><div class="hud-label">HIZ</div><div class="hud-val" id="hud-spd">---</div><div class="hud-unit">km/s</div></div>
-        <div class="hud-m"><div class="hud-label">ROTA</div><div class="hud-val" id="hud-hdg">---</div><div class="hud-unit">deg</div></div>
-        <div class="hud-m"><div class="hud-label">DİKEY</div><div class="hud-val" id="hud-vs">---</div><div class="hud-unit">m/s</div></div>
-    </div>
-
-    <!-- NOTIFICATION -->
-    <div class="notif" id="notif"><div class="notif-icon" id="notif-icon">i</div><span id="notif-msg"></span></div>
-
-    <!-- REFRESH BAR -->
-    <div class="refbar"><div class="refprog" id="refprog"></div></div>
-
-    <script>
-        // ----- STATE -----
-        let MAP = null, TOKEN = '', DEMO = false;
-        let flights = [], filteredFlights = [], selIcao = null;
-        let activeFilter = 'all', markerLimit = 150, perfMode = 'normal';
-        let panelOpen = true, searchOpen = false, helpOpen = false;
-        let curLayer = 'satellite', weatherOn = false, terminatorOn = false;
-        let showAllTrails = false;
-        let markers = {}, trailData = {}, trailEnabled = {}, speedHistory = {};
-        let alerts = [], rfTimer = null, radarAngle = 0;
-        let RF = 30000;
-        let settings = {trail: false, ground: false, airports: true, anim: true};
-
-        const FLAGS = {
-            Turkey:'TR',Germany:'DE','United Kingdom':'GB',France:'FR',
-            'United States':'US',Spain:'ES',Italy:'IT',Netherlands:'NL',
-            Russia:'RU','United Arab Emirates':'AE',Qatar:'QA','Saudi Arabia':'SA',
-            China:'CN',Japan:'JP',Australia:'AU',Canada:'CA',Brazil:'BR',
-            India:'IN','South Korea':'KR',Switzerland:'CH',Poland:'PL',
-            Austria:'AT',Greece:'GR',Portugal:'PT',Ukraine:'UA',Romania:'RO',
-            Sweden:'SE',Norway:'NO',Denmark:'DK',Finland:'FI',Belgium:'BE',
-            'Czech Republic':'CZ',Hungary:'HU',Bulgaria:'BG',Croatia:'HR',
-            Serbia:'RS',Slovakia:'SK',Slovenia:'SI',Lithuania:'LT',Latvia:'LV',
-            Estonia:'EE',Israel:'IL',Egypt:'EG',Morocco:'MA','South Africa':'ZA',
-            Argentina:'AR',Chile:'CL',Mexico:'MX',Colombia:'CO','New Zealand':'NZ',
-            Singapore:'SG',Malaysia:'MY',Thailand:'TH',Indonesia:'ID',Philippines:'PH'
-        };
-        function flag(c) {
-            let code = FLAGS[c];
-            if(!code) return '🌐';
-            return code.split('').map(x => String.fromCodePoint(127397 + x.charCodeAt(0))).join('');
-        }
-
-        // ----- NOTIFY -----
-        function notify(msg, type='info') {
-            const el = document.getElementById('notif');
-            const ic = document.getElementById('notif-icon');
-            const mc = document.getElementById('notif-msg');
-            ic.textContent = type==='err'?'!' : type==='warn'?'?' : type==='ok'?'✓' : 'i';
-            mc.textContent = msg;
-            el.className = `notif show${type==='err'?' err':type==='warn'?' warn':type==='ok'?' ok':''}`;
-            clearTimeout(el._t);
-            el._t = setTimeout(() => el.classList.remove('show'), 3800);
-        }
-
-        // ----- MODAL -----
-        window.addEventListener('load', () => {
-            const saved = localStorage.getItem('skyw4_token');
-            if(saved && saved.length > 10) {
-                document.getElementById('tokeninput').value = saved;
-                const sv = document.getElementById('msaved');
-                document.getElementById('msaved-txt').textContent = saved.slice(0,20)+'...';
-                sv.classList.add('show');
-            }
-            document.getElementById('tokeninput').addEventListener('keydown', e => {
-                if(e.key === 'Enter') doStart();
-                if(e.key === 'Tab'){ e.preventDefault(); doDemo(); }
-            });
-            document.getElementById('mbtnstart').onclick = doStart;
-            document.getElementById('mbtndemo').onclick = doDemo;
-        });
-        function setModalErr(msg) {
-            document.getElementById('merr').innerHTML = msg ? `<span>⚠</span> ${msg}` : '';
-        }
-        function doStart() {
-            const v = document.getElementById('tokeninput').value.trim();
-            setModalErr('');
-            if(!v) { setModalErr('Token boş bırakılamaz'); return; }
-            if(v.length < 10) { setModalErr('Token çok kısa, en az 10 karakter'); return; }
-            TOKEN = v;
-            localStorage.setItem('skyw4_token', v);
-            lockModal();
-            boot(false).catch(err => {
-                console.error(err);
-                setModalErr('Başlatma hatası: ' + (err.message || 'bilinmeyen hata'));
-                unlockModal();
-            });
-        }
-        function doDemo() {
-            DEMO = true;
-            lockModal();
-            boot(true).catch(err => {
-                console.error(err);
-                setModalErr('Demo başlatma hatası: ' + (err.message || 'bilinmeyen hata'));
-                unlockModal();
-            });
-        }
-        function lockModal() {
-            document.getElementById('mbtnstart').disabled = true;
-            document.getElementById('mbtndemo').disabled = true;
-            document.getElementById('modal').classList.add('gone');
-        }
-        function unlockModal() {
-            document.getElementById('mbtnstart').disabled = false;
-            document.getElementById('mbtndemo').disabled = false;
-            document.getElementById('modal').classList.remove('gone');
-        }
-
-        // ----- BOOT -----
-        async function boot(demo) {
-            const ld = document.getElementById('loading');
-            const bar = document.getElementById('ldbar');
-            const status = document.getElementById('ldstatus');
-            ld.classList.add('on');
-            const steps = [
-                [10, 'SISTEM BASLATILIYOR...'],
-                [22, 'OPENSKY API BAGLANTISI...'],
-                [40, 'HARITA KATMANLARI YUKLENIYOR...'],
-                [58, 'UCAK VERITABANI OLUSTURULUYOR...'],
-                [72, 'RADAR AKTIF EDILIYOR...'],
-                [85, 'PERFORMANS OPTIMIZE EDILIYOR...'],
-                [95, 'GOSTERIM MOTORU HAZIRLANIYOR...'],
-                [100, 'HAZIR!']
-            ];
-            for(let i=0;i<steps.length;i++) {
-                bar.style.width = steps[i][0]+'%';
-                status.textContent = steps[i][1];
-                await sleep(260);
-            }
-            await sleep(160);
-            ld.style.transition = 'opacity .5s';
-            ld.style.opacity = '0';
-            await sleep(500);
-            ld.classList.remove('on');
-            ld.style.opacity = '';
-            ld.style.transition = '';
-            if(demo) initNoMap(); else initMap();
-            startClock();
-            startRadar();
-            startCompass();
-            setupKeys();
-            await loadFlights();
-            startRefTimer();
-        }
-        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-        // ----- CLOCK -----
-        function startClock() {
-            setInterval(() => {
-                document.getElementById('tclock').textContent = new Date().toTimeString().slice(0,8);
-            }, 1000);
-        }
-
-        // ----- MAP -----
-        function initMap() {
-            mapboxgl.accessToken = TOKEN;
-            MAP = new mapboxgl.Map({
-                container: 'map',
-                style: 'mapbox://styles/mapbox/satellite-v9',
-                center: [35, 40], zoom: 4, antialias: true
-            });
-            MAP.addControl(new mapboxgl.NavigationControl({showCompass:false}), 'top-right');
-            MAP.on('load', () => { setSdot('live'); addTrailSources(); });
-            MAP.on('error', e => { setSdot('error'); notify('Harita hatası! Token geçerli mi?', 'err'); });
-            MAP.on('rotate', () => drawCompass(MAP.getBearing()));
-            MAP.on('zoom', () => drawCompass(MAP.getBearing()));
-        }
-        function initNoMap() {
-            setSdot('demo');
-            const m = document.getElementById('map');
-            m.style.background = 'radial-gradient(ellipse at 50% 40%, #030f1e 0%, #020810 100%)';
-            const c = document.createElement('canvas');
-            c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
-            m.appendChild(c);
-            c.width = window.innerWidth; c.height = window.innerHeight;
-            const ctx = c.getContext('2d');
-            ctx.strokeStyle = 'rgba(0,255,136,0.04)'; ctx.lineWidth = 1;
-            for(let x=0;x<c.width;x+=60){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke(); }
-            for(let y=0;y<c.height;y+=60){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke(); }
-            ctx.fillStyle = 'rgba(168,255,212,0.3)';
-            for(let i=0;i<120;i++){
-                const sx = Math.random()*c.width, sy = Math.random()*c.height;
-                ctx.beginPath(); ctx.arc(sx,sy,Math.random()*0.8+0.2,0,Math.PI*2); ctx.fill();
-            }
-        }
-        function setSdot(state) {
-            const d = document.getElementById('sdot'), s = document.getElementById('sstatus');
-            d.className = 'statusdot';
-            const map = {live:['','CANLI'],loading:['loading','YÜKLENİYOR'],error:['error','HATA'],demo:['demo','DEMO']};
-            const v = map[state] || ['','?'];
-            if(v[0]) d.classList.add(v[0]);
-            s.textContent = v[1];
-        }
-
-        // ----- LAYER -----
-        const LAYERS = {
-            satellite: 'mapbox://styles/mapbox/satellite-v9',
-            dark: 'mapbox://styles/mapbox/dark-v11',
-            street: 'mapbox://styles/mapbox/streets-v12'
-        };
-        function setLayer(l) {
-            if(DEMO || !MAP) return;
-            curLayer = l;
-            const ids = {satellite:'lbsat',dark:'lbdrk',street:'lbstr'};
-            Object.keys(ids).forEach(k => document.getElementById(ids[k]).classList.toggle('on', k===l));
-            MAP.setStyle(LAYERS[l]);
-            MAP.once('style.load', () => { addTrailSources(); redrawMarkers(); });
-            notify(l.toUpperCase()+' KATMANI', 'info');
-        }
-
-        // ----- TERMINATOR -----
-        function toggleTerminator() {
-            terminatorOn = !terminatorOn;
-            document.getElementById('trmbn').classList.toggle('on', terminatorOn);
-            if(terminatorOn) drawTerminator();
-            else if(MAP && MAP.isStyleLoaded()){ try{ if(MAP.getLayer('trm'))MAP.removeLayer('trm'); if(MAP.getSource('trm'))MAP.removeSource('trm'); }catch(e){} }
-            notify('GECE/GÜNDÜZ '+(terminatorOn?'AKTİF':'KAPALI'), 'info');
-        }
-        function drawTerminator() {
-            if(!MAP || !MAP.isStyleLoaded()) return;
-            const d = new Date();
-            const dec = -23.45 * Math.cos((360/365*(d.getMonth()*30+d.getDate())+10)*Math.PI/180) * Math.PI/180;
-            let coords = [];
-            for(let lon=-180;lon<=180;lon+=2){
-                const lat = Math.atan(-Math.cos(lon*Math.PI/180)/Math.tan(dec))*180/Math.PI;
-                coords.push([lon,lat]);
-            }
-            coords.push([180,-90],[180,90],[-180,90],[-180,coords[0][1]],coords[0]);
-            try{
-                if(MAP.getSource('trm')){ MAP.removeLayer('trm'); MAP.removeSource('trm'); }
-                MAP.addSource('trm',{type:'geojson',data:{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}});
-                MAP.addLayer({id:'trm',type:'fill',source:'trm',paint:{'fill-color':'#000018','fill-opacity':0.42}});
-            }catch(e){}
-        }
-
-        // ----- WEATHER -----
-        function toggleWeather() {
-            weatherOn = !weatherOn;
-            document.getElementById('wxbtn').classList.toggle('on', weatherOn);
-            notify('HAVA DURUMU '+(weatherOn?'AKTİF':'KAPALI'), 'info');
-            if(!MAP || DEMO) return;
-            if(weatherOn){
-                try{
-                    if(!MAP.isStyleLoaded()){
-                        notify('Harita yükleniyor, tekrar deneyin','warn');
-                        weatherOn = false;
-                        return;
-                    }
-                    MAP.addSource('owm',{type:'raster',tiles:['https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02'],tileSize:256,attribution:'OpenWeatherMap'});
-                    MAP.addLayer({id:'owmlayer',type:'raster',source:'owm',paint:{'raster-opacity':0.4}});
-                }catch(e){ notify('Hava katmanı yüklenemedi','warn'); }
-            }else{
-                try{ if(MAP.getLayer('owmlayer'))MAP.removeLayer('owmlayer'); if(MAP.getSource('owm'))MAP.removeSource('owm'); }catch(e){}
-            }
-        }
-
-        // ----- OPENSKY + PARSE -----
-        const OPENSKY_ENDPOINTS = [
-            'https://opensky-network.org/api/states/all?lamin=25&lomin=-20&lamax=72&lomax=55',
-            'https://opensky-network.org/api/states/all'
-        ];
-        async function fetchFlights() {
-            for(let i=0;i<OPENSKY_ENDPOINTS.length;i++){
-                try{
-                    const ctrl = new AbortController();
-                    const tid = setTimeout(() => ctrl.abort(), 15000);
-                    const r = await fetch(OPENSKY_ENDPOINTS[i], {signal:ctrl.signal});
-                    clearTimeout(tid);
-                    if(!r.ok) continue;
-                    const d = await r.json();
-                    return d.states || [];
-                }catch(e){ continue; }
-            }
-            notify('OpenSky API ulaşılamadı — demo veri kullanılıyor', 'warn');
-            return generateDemo();
-        }
-        function parseState(s) {
-            return {
-                icao24: s[0] || '',
-                callsign: (s[1]||'').trim() || s[0] || '????',
-                country: s[2] || 'Unknown',
-                lon: s[5], lat: s[6],
-                alt: s[7] ? Math.round(s[7]) : null,
-                ground: s[8] || false,
-                vel: s[9] ? Math.round(s[9]*3.6) : null,
-                hdg: s[10] !== null ? Math.round(s[10]) : null,
-                vs: s[11] ? Math.round(s[11]) : 0,
-                sqk: s[14] || '----'
-            };
-        }
-        function generateDemo() {
-            const airlines = ['TK','LH','BA','AF','EK','QR','SU','PC','FR','W6','IBE','KLM','SAS','THY','AUA','SWR','TAP','WZZ','RYR','EZY'];
-            const countries = Object.keys(FLAGS).slice(0,18);
-            return Array.from({length:120}, (_,i) => {
-                const al = airlines[i%airlines.length];
-                const co = countries[i%countries.length];
-                return [
-                    'dm'+String(i).padStart(3,'0'), al+(200+i)+'  ', co,
-                    null, null,
-                    8+Math.random()*52, 28+Math.random()*38,
-                    800+Math.random()*13000, false,
-                    80+Math.random()*1000, Math.random()*360,
-                    (Math.random()-0.5)*14, null, null,
-                    Math.floor(1000+Math.random()*8999)
-                ];
-            });
-        }
-
-        // ----- LOAD FLIGHTS -----
-        async function loadFlights() {
-            setSdot('loading');
-            const raw = await fetchFlights();
-            flights = raw.map(parseState).filter(f => f.lat && f.lon && (settings.ground || !f.ground));
-            if(selIcao){
-                const sf = flights.find(f => f.icao24 === selIcao);
-                if(sf && sf.vel){
-                    if(!speedHistory[selIcao]) speedHistory[selIcao]=[];
-                    speedHistory[selIcao].push(sf.vel);
-                    if(speedHistory[selIcao].length>30) speedHistory[selIcao].shift();
-                }
-            }
-            const countries = new Set(flights.map(f => f.country));
-            const alts = flights.filter(f => f.alt);
-            document.getElementById('scount').textContent = flights.length;
-            document.getElementById('scountry').textContent = countries.size;
-            document.getElementById('smaxalt').textContent = alts.length ? Math.max(...alts.map(f => f.alt)) : 0;
-            document.getElementById('slastupd').textContent = new Date().toTimeString().slice(0,5);
-            setSdot(DEMO?'demo':'live');
-            checkAlerts();
-            updateStats();
-            applyFilterAndRender();
-            updateAllTrails();
-            if(MAP) redrawMarkers();
-            if(selIcao) refreshInfoPanel();
-        }
-        function doRefresh() { resetRefTimer(); loadFlights(); notify('VERİ YENİLENDİ','ok'); }
-
-        // ----- FILTER & RENDER LIST -----
-        function setFilter(f) {
-            activeFilter = f;
-            ['all','high','fast','tr','emg'].forEach(x => {
-                const el = document.getElementById('fc-'+x);
-                if(el) el.classList.toggle('on', x===f);
-            });
-            applyFilterAndRender();
-        }
-        function applyFilterAndRender() {
-            filteredFlights = flights.filter(f => {
-                if(activeFilter==='all') return true;
-                if(activeFilter==='high') return f.alt && f.alt>9000;
-                if(activeFilter==='fast') return f.vel && f.vel>800;
-                if(activeFilter==='tr') return f.country==='Turkey';
-                if(activeFilter==='emg') return f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';
-                return true;
-            });
-            document.getElementById('fcount').textContent = filteredFlights.length;
-            document.getElementById('ftotal').textContent = '/ '+flights.length;
-            document.getElementById('svis').textContent = Math.min(markerLimit, filteredFlights.length);
-            renderList();
-        }
-        function renderList() {
-            const fl = document.getElementById('flist');
-            const frag = document.createDocumentFragment();
-            fl.innerHTML = '';
-            filteredFlights.slice(0,200).forEach(f => {
-                const emg = f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';
-                const highAlt = f.alt && f.alt>9000;
-                const altPct = f.alt ? Math.min(100, f.alt/130) : 0;
-                const altColor = f.alt>9000?'#ff4466':f.alt>6000?'#ffcc00':f.alt>3000?'#00e5ff':'#00ff88';
-                const d = document.createElement('div');
-                d.className = `fitem${f.icao24===selIcao?' sel':''}${emg?' emerg':''}`;
-                const badge = emg ? '<span class="fbadge emerg">ACİL</span>' : highAlt ? '<span class="fbadge high">HIGH</span>' : '';
-                d.innerHTML = `
-                    <div class="fcall"><span class="fflag">${flag(f.country)}</span>${f.callsign}${badge}</div>
-                    <div class="fdetail">
-                        <span class="fdv">${f.country.slice(0,12)}</span>
-                        <span>▲<span class="fdv">${f.alt?f.alt+'m':'--'}</span></span>
-                        <span>➡<span class="fdv">${f.vel?f.vel:'--'}</span></span>
-                        ${f.hdg!==null?`<span>${f.hdg}°</span>`:''}
-                    </div>
-                    <div class="faltbar"><div class="faltfill" style="width:${altPct}%;background:${altColor}"></div></div>
-                `;
-                d.onclick = (ff => () => pickFlight(ff))(f);
-                frag.appendChild(d);
-            });
-            fl.appendChild(frag);
-        }
-
-        // ----- MARKERS -----
-        function redrawMarkers() {
-            if(!MAP) return;
-            Object.values(markers).forEach(m => m.remove());
-            markers = {};
-            const toShow = filteredFlights.length ? filteredFlights : flights;
-            toShow.slice(0, markerLimit).forEach(f => {
-                const el = createMarkerEl(f);
-                const m = new mapboxgl.Marker({element:el, anchor:'center'})
-                    .setLngLat([f.lon, f.lat])
-                    .addTo(MAP);
-                el.addEventListener('click', (ff => e => { e.stopPropagation(); pickFlight(ff); })(f));
-                markers[f.icao24] = m;
-            });
-        }
-        function createMarkerEl(f) {
-            const sel = f.icao24 === selIcao;
-            const emg = f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';
-            const color = emg?'#ff4466' : sel?'#00e5ff' : f.alt>9000?'#ffcc00' : f.alt>3000?'#00ff88' : '#88ffcc';
-            const sz = sel?22:14;
-            const hdg = f.hdg||0;
-            const el = document.createElement('div');
-            el.style.cssText = `width:${sz}px;height:${sz}px;cursor:pointer;will-change:transform;`;
-            if(emg) el.style.animation = 'blink .5s infinite';
-            el.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" style="transform:rotate(${hdg}deg);width:100%;height:100%">
-                    <path d="M12 2L8 10H4L6 12H10L8 20H12L16 12H20L22 10H18L12 2Z" fill="${color}" opacity="0.95"/>
-                    <circle cx="12" cy="12" r="11" stroke="${color}" stroke-opacity="0.2" stroke-width="0.5"/>
-                    ${sel?'<circle cx="12" cy="12" r="4" fill="'+color+'" opacity="0.5"/>':''}
-                </svg>
-            `;
-            el.style.filter = sel ? `drop-shadow(0 0 8px ${color}) drop-shadow(0 0 3px ${color})` : `drop-shadow(0 0 3px ${color})`;
-            return el;
-        }
-
-        // ----- TRAIL SYSTEM -----
-        function addTrailSources() {}
-        function getTrailColor(alt) {
-            if(!alt) return '#00ff88';
-            if(alt > 9000) return '#ff4466';
-            if(alt > 6000) return '#ffcc00';
-            if(alt > 3000) return '#00e5ff';
-            return '#00ff88';
-        }
-        function updateTrailForFlight(f) {
-            if(!MAP || !f.lat || !f.lon) return;
-            const icao = f.icao24;
-            if(!trailData[icao]) trailData[icao]=[];
-            trailData[icao].push({coords:[f.lon,f.lat], alt:f.alt, ts:Date.now()});
-            if(trailData[icao].length>120) trailData[icao].shift();
-            renderTrailOnMap(icao);
-        }
-        function renderTrailOnMap(icao) {
-            if(!MAP || !MAP.isStyleLoaded()) return;
-            const pts = trailData[icao];
-            if(!pts || pts.length<2) return;
-            const segments = [];
-            for(let i=1;i<pts.length;i++){
-                segments.push({coords:[pts[i-1].coords, pts[i].coords], color:getTrailColor(pts[i].alt)});
-            }
-            try{
-                const style = MAP.getStyle();
-                const toRemove = (style.layers||[]).filter(l => l.id.startsWith('trail-'+icao+'-'));
-                toRemove.forEach(l => { try{MAP.removeLayer(l.id);}catch(e){} });
-                const srcRemove = Object.keys(style.sources||{}).filter(s => s.startsWith('trsrc-'+icao+'-'));
-                srcRemove.forEach(s => { try{MAP.removeSource(s);}catch(e){} });
-            }catch(e){}
-            const colorGroups = {};
-            segments.forEach(seg => {
-                if(!colorGroups[seg.color]) colorGroups[seg.color]=[];
-                colorGroups[seg.color].push(seg.coords);
-            });
-            Object.keys(colorGroups).forEach((color, ci) => {
-                const srcId = 'trsrc-'+icao+'-'+ci;
-                const lyrId = 'trail-'+icao+'-'+ci;
-                const lines = colorGroups[color].map(coords => ({type:'Feature',geometry:{type:'LineString',coordinates:coords}}));
-                try{
-                    MAP.addSource(srcId,{type:'geojson',data:{type:'FeatureCollection',features:lines}});
-                    MAP.addLayer({id:lyrId,type:'line',source:srcId,paint:{'line-color':color,'line-width':['interpolate',['linear'],['zoom'],4,1.5,10,3],'line-opacity':0.7,'line-blur':0.5}});
-                }catch(e){}
-            });
-        }
-        function updateAllTrails() {
-            if(!MAP || !MAP.isStyleLoaded()) return;
-            flights.forEach(f => { if(trailEnabled[f.icao24] || showAllTrails) updateTrailForFlight(f); });
-        }
-        function clearTrailForFlight(icao) {
-            if(!MAP||!MAP.isStyleLoaded()) return;
-            delete trailData[icao];
-            try{
-                const style = MAP.getStyle();
-                if(!style) return;
-                (style.layers||[]).filter(l => l.id.startsWith('trail-'+icao+'-')).forEach(l => { try{MAP.removeLayer(l.id);}catch(e){} });
-                Object.keys(style.sources||{}).filter(s => s.startsWith('trsrc-'+icao+'-')).forEach(s => { try{MAP.removeSource(s);}catch(e){} });
-            }catch(e){}
-        }
-        function clearAllTrails() {
-            Object.keys(trailData).forEach(icao => clearTrailForFlight(icao));
-            trailData = {};
-            trailEnabled = {};
-            notify('TÜM İZLER TEMİZLENDİ','info');
-        }
-        function toggleSelTrail() {
-            if(!selIcao) return;
-            trailEnabled[selIcao] = !trailEnabled[selIcao];
-            document.getElementById('trailbtn').classList.toggle('on', trailEnabled[selIcao]);
-            if(!trailEnabled[selIcao]) clearTrailForFlight(selIcao);
-            else { const f = flights.find(x => x.icao24 === selIcao); if(f) updateTrailForFlight(f); }
-            notify('İZ '+(trailEnabled[selIcao]?'AKTİF':'KAPALI'),'info');
-        }
-        function toggleAllTrails() {
-            showAllTrails = !showAllTrails;
-            document.getElementById('alltrailbtn').classList.toggle('on', showAllTrails);
-            const legend = document.getElementById('trail-legend');
-            legend.classList.toggle('vis', showAllTrails);
-            if(!showAllTrails){ clearAllTrails(); }
-            else { updateAllTrails(); notify('TÜM İZLER AKTİF (performansı düşürebilir)','warn'); }
-        }
-
-        // ----- SELECT FLIGHT & INFO PANEL -----
-        function pickFlight(f) {
-            selIcao = f.icao24;
-            if(!speedHistory[f.icao24]) speedHistory[f.icao24]=[];
-            if(f.vel) speedHistory[f.icao24].push(f.vel);
-            refreshInfoPanel();
-            if(MAP && f.lat && f.lon) MAP.flyTo({center:[f.lon,f.lat], zoom:7, speed:1.5, curve:1.2});
-            renderList();
-            if(MAP) redrawMarkers();
-        }
-        function refreshInfoPanel() {
-            const f = flights.find(x => x.icao24 === selIcao);
-            if(!f) return;
-            const emg = f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';
-            document.getElementById('info-call').textContent = f.callsign;
-            document.getElementById('inf-co').textContent = flag(f.country)+' '+f.country.slice(0,16);
-            const altEl = document.getElementById('inf-alt');
-            altEl.textContent = f.alt ? f.alt+'m' : '--';
-            altEl.className = 'ival'+(f.alt>9000?' red':f.alt>6000?' yellow':'');
-            document.getElementById('inf-spd').textContent = f.vel ? f.vel+' km/s' : '--';
-            document.getElementById('inf-hdg').textContent = f.hdg!==null ? f.hdg+'°' : '--';
-            document.getElementById('inf-lat').textContent = f.lat ? f.lat.toFixed(5) : '--';
-            document.getElementById('inf-lon').textContent = f.lon ? f.lon.toFixed(5) : '--';
-            const sqkEl = document.getElementById('inf-sqk');
-            sqkEl.textContent = f.sqk || '--';
-            sqkEl.className = 'ival'+(emg?' red':'');
-            const vsEl = document.getElementById('inf-vs');
-            vsEl.textContent = f.vs ? (f.vs>0?'+':'')+f.vs+' m/s' : '--';
-            vsEl.className = 'ival'+(f.vs>2?' blue':f.vs<-2?' yellow':'');
-            const vertText = f.ground?'YERDE' : f.vs>3?'▲ YÜKSELİYOR' : f.vs<-3?'▼ İNİYOR' : '➡ SEYREDİYOR';
-            document.getElementById('inf-grnd').innerHTML = vertText;
-            document.getElementById('inf-icao').textContent = (f.icao24||'--').toUpperCase();
-            document.getElementById('spdgauge').style.width = (f.vel?Math.min(100,f.vel/12):0)+'%';
-            document.getElementById('hud-alt').textContent = f.alt?Math.round(f.alt):'--';
-            document.getElementById('hud-spd').textContent = f.vel||'--';
-            document.getElementById('hud-hdg').textContent = f.hdg!==null?f.hdg:'--';
-            document.getElementById('hud-vs').textContent = f.vs?(f.vs>0?'+':'')+f.vs:'--';
-            document.getElementById('trailbtn').classList.toggle('on', !!trailEnabled[f.icao24]);
-            document.getElementById('infopanel').classList.add('vis');
-            document.getElementById('hud').classList.add('vis');
-            drawSpeedHistory(f.icao24);
-        }
-        function closeInfo() {
-            selIcao = null;
-            document.getElementById('infopanel').classList.remove('vis');
-            document.getElementById('hud').classList.remove('vis');
-            renderList();
-            if(MAP) redrawMarkers();
-        }
-        function flyToSel() { const f = flights.find(x => x.icao24 === selIcao); if(f && MAP) MAP.flyTo({center:[f.lon,f.lat], zoom:9, speed:1.5}); }
-        function copyCoords() { const f = flights.find(x => x.icao24 === selIcao); if(!f) return; const t = f.lat.toFixed(5)+', '+f.lon.toFixed(5); try{navigator.clipboard.writeText(t); notify('KOORDİNAT KOPYALANDI','ok');}catch(e){notify(t,'info');} }
-        function openFA() { const f = flights.find(x => x.icao24 === selIcao); if(f) window.open('https://flightaware.com/live/flight/'+f.callsign.trim(), '_blank'); }
-        function openFR24() { const f = flights.find(x => x.icao24 === selIcao); if(f) window.open('https://www.flightradar24.com/'+f.callsign.trim(), '_blank'); }
-
-        // ----- SPEED HISTORY CHART -----
-        function drawSpeedHistory(icao) {
-            const cv = document.getElementById('spdhist-canvas');
-            const ctx = cv.getContext('2d');
-            const pts = speedHistory[icao] || [];
-            const W = cv.offsetWidth || 274, H = 36;
-            cv.width = W; cv.height = H;
-            ctx.clearRect(0,0,W,H);
-            if(pts.length < 2){
-                ctx.fillStyle = 'rgba(168,255,212,0.2)';
-                ctx.font = '9px Share Tech Mono';
-                ctx.textAlign = 'center';
-                ctx.fillText('VERİ BEKLENİYOR...', W/2, H/2+3);
-                return;
-            }
-            const min = Math.min(...pts);
-            const max = Math.max(...pts);
-            const range = max===min?1:max-min;
-            ctx.strokeStyle = 'rgba(0,255,136,0.06)'; ctx.lineWidth = 1;
-            for(let y=0;y<H;y+=H/3){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
-            const step = W/(pts.length-1);
-            const grad = ctx.createLinearGradient(0,0,W,0);
-            grad.addColorStop(0,'rgba(0,255,136,0.4)'); grad.addColorStop(1,'rgba(0,229,255,0.9)');
-            ctx.beginPath();
-            pts.forEach((v,i) => {
-                const x = i*step;
-                const y = H - ((v-min)/range)*(H-4)-2;
-                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-            });
-            ctx.strokeStyle = grad; ctx.lineWidth = 1.5; ctx.stroke();
-            ctx.lineTo((pts.length-1)*step, H); ctx.lineTo(0, H); ctx.closePath();
-            const fillGrad = ctx.createLinearGradient(0,0,0,H);
-            fillGrad.addColorStop(0,'rgba(0,229,255,0.15)'); fillGrad.addColorStop(1,'rgba(0,229,255,0)');
-            ctx.fillStyle = fillGrad; ctx.fill();
-            ctx.fillStyle = 'rgba(168,255,212,0.4)'; ctx.font = '8px Share Tech Mono'; ctx.textAlign = 'left';
-            ctx.fillText(Math.round(max), 2, 9);
-            ctx.fillText(Math.round(min), 2, H-2);
-        }
-
-        // ----- STATS -----
-        function updateStats() {
-            const total = flights.length;
-            const cmap = {}, amap = {};
-            const alts = flights.filter(f => f.alt), vels = flights.filter(f => f.vel);
-            flights.forEach(f => {
-                cmap[f.country] = (cmap[f.country]||0)+1;
-                const al = f.callsign.replace(/[0-9]/g,'').trim().slice(0,3);
-                if(al.length>=2) amap[al] = (amap[al]||0)+1;
-            });
-            const aAlt = alts.length ? Math.round(alts.reduce((s,f)=>s+f.alt,0)/alts.length) : 0;
-            const aVel = vels.length ? Math.round(vels.reduce((s,f)=>s+f.vel,0)/vels.length) : 0;
-            const maxVel = vels.length ? Math.max(...vels.map(f=>f.vel)) : 0;
-            const maxAlt = alts.length ? Math.max(...alts.map(f=>f.alt)) : 0;
-            document.getElementById('st-total').textContent = total;
-            document.getElementById('st-country').textContent = Object.keys(cmap).length;
-            document.getElementById('st-avgalt').textContent = aAlt;
-            document.getElementById('st-avgspd').textContent = aVel;
-            document.getElementById('st-maxspd').textContent = maxVel;
-            document.getElementById('st-maxalt').textContent = maxAlt;
-
-            const renderBars = (containerId, data, color) => {
-                const sorted = Object.entries(data).sort((a,b)=>b[1]-a[1]).slice(0,8);
-                const maxV = sorted[0] ? sorted[0][1] : 1;
-                document.getElementById(containerId).innerHTML = sorted.map(([k,v]) => `
-                    <div class="strow"><div class="stlabel">${k.slice(0,16)}</div>
-                    <div class="sttrack"><div class="stfill" style="width:${v/maxV*100}%;background:${color}"></div></div>
-                    <div class="stval" style="color:${color}">${v}</div></div>
-                `).join('');
-            };
-            renderBars('st-countries', cmap, 'var(--g)');
-            renderBars('st-airlines', amap, 'var(--c)');
-
-            const spB = [{l:'<400',n:0},{l:'400-600',n:0},{l:'600-800',n:0},{l:'800-1000',n:0},{l:'>1000',n:0}];
-            vels.forEach(f => { if(f.vel<400)spB[0].n++; else if(f.vel<600)spB[1].n++; else if(f.vel<800)spB[2].n++; else if(f.vel<1000)spB[3].n++; else spB[4].n++; });
-            const maxS = Math.max(...spB.map(b=>b.n));
-            document.getElementById('st-speeds').innerHTML = spB.map(b => `
-                <div class="strow"><div class="stlabel">${b.l} km/s</div>
-                <div class="sttrack"><div class="stfill" style="width:${maxS>0?b.n/maxS*100:0}%;background:var(--c)"></div></div>
-                <div class="stval" style="color:var(--c)">${b.n}</div></div>
-            `).join('');
-
-            const aB = [{l:'<3k',n:0},{l:'3-6k',n:0},{l:'6-9k',n:0},{l:'9-12k',n:0},{l:'>12k',n:0}];
-            alts.forEach(f => { if(f.alt<3000)aB[0].n++; else if(f.alt<6000)aB[1].n++; else if(f.alt<9000)aB[2].n++; else if(f.alt<12000)aB[3].n++; else aB[4].n++; });
-            const maxA = Math.max(...aB.map(b=>b.n));
-            document.getElementById('st-alts').innerHTML = aB.map(b => `
-                <div class="strow"><div class="stlabel">${b.l} m</div>
-                <div class="sttrack"><div class="stfill" style="width:${maxA>0?b.n/maxA*100:0}%;background:var(--w)"></div></div>
-                <div class="stval" style="color:var(--w)">${b.n}</div></div>
-            `).join('');
-        }
-
-        // ----- ALERTS -----
-        function checkAlerts() {
-            const sqkNames = {'7700':'ACİL DURUM','7600':'RADYO ARIZA','7500':'HİJACK'};
-            flights.forEach(f => {
-                if(f.alt && f.alt > 12000) addAlert(f.callsign+' aşırı yükseklik: '+f.alt+'m','med');
-                if(sqkNames[f.sqk]) addAlert('SQUAWK '+f.sqk+' '+sqkNames[f.sqk]+': '+f.callsign,'high');
-                if(f.vs && f.vs < -20) addAlert(f.callsign+' hızlı alçalma: '+f.vs+'m/s','med');
-            });
-        }
-        function addAlert(msg, level) {
-            if(alerts.find(a => a.msg === msg)) return;
-            alerts.unshift({msg, level, time: new Date().toTimeString().slice(0,5)});
-            if(alerts.length>50) alerts.pop();
-            renderAlerts();
-            if(level==='high') notify('⚠ ALARM: '+msg,'err');
-        }
-        function renderAlerts() {
-            const al = document.getElementById('alertlist');
-            const hdr = document.getElementById('alertheader');
-            if(!alerts.length){ al.innerHTML='<div class="no-alerts">ALARM YOK</div>'; hdr.textContent='ALARMLAR'; return; }
-            al.innerHTML = alerts.slice(0,30).map(a => `
-                <div class="alert-item"><div class="apip ${a.level}"></div><div><div class="amsg">${a.msg}</div><div class="atime">${a.time}</div></div></div>
-            `).join('');
-            hdr.textContent = `ALARM(${Math.min(alerts.length,30)})`;
-        }
-        function clearAlerts(){ alerts=[]; renderAlerts(); }
-
-        // ----- SETTINGS -----
-        function toggleSetting(key) {
-            settings[key] = !settings[key];
-            document.getElementById('sw-'+key).classList.toggle('on', settings[key]);
-            if(key==='ground') loadFlights();
-            if(key==='trail'){ if(!settings.trail) clearAllTrails(); }
-        }
-        function onSlider(v) {
-            markerLimit = parseInt(v);
-            document.getElementById('sliderval').textContent = v;
-            document.getElementById('svis').textContent = Math.min(markerLimit, filteredFlights.length);
-            if(MAP) redrawMarkers();
-        }
-        function onRfSlider(v) {
-            RF = parseInt(v)*1000;
-            document.getElementById('rf-val').textContent = v+'s';
-            resetRefTimer();
-        }
-        function setPerf(mode) {
-            perfMode = mode;
-            ['eco','normal','ultra'].forEach(m => document.getElementById('perf-'+m).classList.toggle('on', m===mode));
-            if(mode==='eco'){ markerLimit=50; document.getElementById('limitslider').value=50; document.getElementById('sliderval').textContent='50'; RF=60000; }
-            else if(mode==='normal'){ markerLimit=150; document.getElementById('limitslider').value=150; document.getElementById('sliderval').textContent='150'; RF=30000; }
-            else if(mode==='ultra'){ markerLimit=500; document.getElementById('limitslider').value=500; document.getElementById('sliderval').textContent='500'; RF=20000; }
-            if(MAP) redrawMarkers();
-            notify(mode.toUpperCase()+' PERFORMANS MODU','info');
-        }
-
-        // ----- EXPORT -----
-        function exportJSON() {
-            const data = JSON.stringify(flights,null,2);
-            const blob = new Blob([data],{type:'application/json'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'skywatch_flights_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.json';
-            a.click(); notify('JSON indirildi','ok');
-        }
-        function exportCSV() {
-            const headers = ['icao24','callsign','country','lat','lon','alt','vel','hdg','vs','sqk'];
-            const rows = flights.map(f => headers.map(h => f[h]!==null&&f[h]!==undefined?f[h]:'').join(','));
-            const csv = headers.join(',') + '\\n' + rows.join('\\n');
-            const blob = new Blob([csv],{type:'text/csv'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'skywatch_flights_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.csv';
-            a.click(); notify('CSV indirildi','ok');
-        }
-        function clearToken() { localStorage.removeItem('skyw4_token'); notify('TOKEN SİLİNDİ — Sayfayı yenileyin','warn'); }
-
-        // ----- SEARCH -----
-        function toggleSearch() {
-            searchOpen = !searchOpen;
-            document.getElementById('searchbar').classList.toggle('open', searchOpen);
-            if(searchOpen) setTimeout(() => document.getElementById('sinput').focus(), 80);
-            else{ document.getElementById('sinput').value=''; document.getElementById('sresults').classList.remove('open'); }
-        }
-        function doSearch(q) {
-            const sr = document.getElementById('sresults');
-            if(!q || q.length<2){ sr.classList.remove('open'); return; }
-            const ql = q.toLowerCase();
-            const res = flights.filter(f => f.callsign.toLowerCase().includes(ql) || f.country.toLowerCase().includes(ql) || f.icao24.toLowerCase().includes(ql)).slice(0,14);
-            if(!res.length){ sr.classList.remove('open'); return; }
-            sr.innerHTML = res.map(f => `
-                <div class="sres-item" onclick="pickByIcao('${f.icao24}')">
-                    ${flag(f.country)} <span class="sres-call">${f.callsign}</span>
-                    <span class="sres-info">${f.country}${f.alt?' '+f.alt+'m':''}${f.vel?' '+f.vel+'km/s':''}</span>
-                </div>
-            `).join('');
-            sr.classList.add('open');
-        }
-        function searchKeydown(e) {
-            if(e.key==='Escape') toggleSearch();
-            if(e.key==='Enter'){ const first = document.querySelector('.sres-item'); if(first) first.click(); }
-        }
-        function pickByIcao(icao) { const f = flights.find(x => x.icao24 === icao); if(f){ pickFlight(f); toggleSearch(); } }
-
-        // ----- PANEL, TABS, MISC -----
-        function togglePanel() {
-            panelOpen = !panelOpen;
-            document.getElementById('lpanel').classList.toggle('closed', !panelOpen);
-            const btn = document.getElementById('ptoggle');
-            btn.classList.toggle('closed', !panelOpen);
-            btn.innerHTML = panelOpen?'◀':'▶';
-        }
-        function switchTab(i) {
-            for(let j=0;j<4;j++){
-                document.getElementById('tab'+j).classList.toggle('on', j===i);
-                document.getElementById('tp'+j).classList.toggle('on', j===i);
-            }
-        }
-        function gotoMe() {
-            if(!navigator.geolocation){ notify('KONUM DESTEKLENMİYOR','err'); return; }
-            navigator.geolocation.getCurrentPosition(
-                p => { if(MAP) MAP.flyTo({center:[p.coords.longitude,p.coords.latitude], zoom:8, speed:1.5}); notify('KONUMUNUZA ODAKLANDI','ok'); },
-                () => notify('KONUM ALINAMIYOR','err')
-            );
-        }
-        function doFullscreen() {
-            if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-            else document.exitFullscreen().catch(()=>{});
-        }
-        function toggleHelp() { helpOpen = !helpOpen; document.getElementById('kbhelp').classList.toggle('vis', helpOpen); }
-
-        // ----- KEYBOARD -----
-        function setupKeys() {
-            document.addEventListener('keydown', e => {
-                if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
-                const k = e.key;
-                if(k==='f'||k==='F'){ e.preventDefault(); toggleSearch(); }
-                else if(k==='r'||k==='R'){ doRefresh(); }
-                else if(k==='l'||k==='L'){ togglePanel(); }
-                else if(k==='s'||k==='S'){ setLayer('satellite'); }
-                else if(k==='d'||k==='D'){ setLayer('dark'); }
-                else if(k==='t'||k==='T'){ setLayer('street'); }
-                else if(k==='h'||k==='H'){ toggleWeather(); }
-                else if(k==='n'||k==='N'){ toggleTerminator(); }
-                else if(k==='i'||k==='I'){ toggleAllTrails(); }
-                else if(k==='c'||k==='C'){ gotoMe(); }
-                else if(k==='x'||k==='X'){ closeInfo(); }
-                else if(k==='Escape'){
-                    if(helpOpen) toggleHelp();
-                    else if(searchOpen) toggleSearch();
-                    else closeInfo();
-                }
-                else if(k==='?'){ toggleHelp(); }
-                else if(k==='F11'){ e.preventDefault(); doFullscreen(); }
-            });
-        }
-
-        // ----- RADAR -----
-        function startRadar() {
-            const cv = document.getElementById('radarc');
-            const ctx = cv.getContext('2d');
-            function frame() {
-                ctx.clearRect(0,0,100,100);
-                ctx.strokeStyle='rgba(0,255,136,0.12)'; ctx.lineWidth=1;
-                [16,30,46].forEach(r => { ctx.beginPath(); ctx.arc(50,50,r,0,Math.PI*2); ctx.stroke(); });
-                ctx.strokeStyle='rgba(0,255,136,0.07)';
-                ctx.beginPath(); ctx.moveTo(50,2); ctx.lineTo(50,98); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(2,50); ctx.lineTo(98,50); ctx.stroke();
-                ctx.save(); ctx.translate(50,50); ctx.rotate(radarAngle);
-                const sw = ctx.createLinearGradient(0,0,48,0);
-                sw.addColorStop(0,'rgba(0,255,136,0.6)'); sw.addColorStop(1,'rgba(0,255,136,0)');
-                ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,48,-0.4,0); ctx.closePath(); ctx.fillStyle=sw; ctx.fill();
-                ctx.restore();
-                let cnt = 0;
-                if(flights.length && MAP){
-                    const ctr = MAP.getCenter();
-                    flights.forEach(f => {
-                        if(!f.lat||!f.lon) return;
-                        const dx = (f.lon - ctr.lng)*1.3;
-                        const dy = -(f.lat - ctr.lat)*1.6;
-                        if(Math.abs(dx)>46 || Math.abs(dy)>46) return;
-                        cnt++;
-                        const emg = f.sqk==='7700'||f.sqk==='7600'||f.sqk==='7500';
-                        let color = 'rgba(0,229,255,0.7)';
-                        if(emg) color = 'rgba(255,68,102,0.9)';
-                        else if(f.icao24===selIcao) color = 'rgba(255,204,0,0.95)';
-                        else if(f.alt>9000) color = 'rgba(255,68,102,0.7)';
-                        ctx.beginPath(); ctx.arc(50+dx,50+dy, emg?3:1.5, 0, Math.PI*2);
-                        ctx.fillStyle = color; ctx.fill();
-                    });
-                } else {
-                    flights.slice(0,40).forEach((_,i) => {
-                        const a = (i/40)*Math.PI*2;
-                        const r = 4+Math.random()*42;
-                        ctx.beginPath(); ctx.arc(50+Math.cos(a)*r,50+Math.sin(a)*r,1.5,0,Math.PI*2);
-                        ctx.fillStyle = 'rgba(0,229,255,0.6)'; ctx.fill(); cnt++;
-                    });
-                }
-                document.getElementById('radarcnt').textContent = cnt;
-                radarAngle += 0.025;
-                requestAnimationFrame(frame);
-            }
-            frame();
-        }
-
-        // ----- COMPASS -----
-        function startCompass(){ drawCompass(0); }
-        function drawCompass(bearing) {
-            const cv = document.getElementById('compass');
-            if(!cv) return;
-            const ctx = cv.getContext('2d');
-            const cx = 23, cy = 23, r = 20;
-            ctx.clearRect(0,0,46,46);
-            ctx.strokeStyle = 'rgba(0,255,136,0.18)'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
-            ['N','E','S','W'].forEach((d,i) => {
-                const a = (i*90 - bearing) * Math.PI/180;
-                ctx.fillStyle = d==='N'?'#ff4466':'rgba(168,255,212,0.5)';
-                ctx.font = 'bold 7px Orbitron,monospace';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(d, cx+Math.sin(a)*(r-5), cy-Math.cos(a)*(r-5));
-            });
-            ctx.save(); ctx.translate(cx,cy); ctx.rotate(-bearing*Math.PI/180);
-            ctx.fillStyle = '#ff4466';
-            ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(2.5,0); ctx.lineTo(0,-2); ctx.lineTo(-2.5,0); ctx.closePath(); ctx.fill();
-            ctx.fillStyle = 'rgba(168,255,212,0.35)';
-            ctx.beginPath(); ctx.moveTo(0,13); ctx.lineTo(2.5,0); ctx.lineTo(0,2); ctx.lineTo(-2.5,0); ctx.closePath(); ctx.fill();
-            ctx.restore();
-        }
-
-        // ----- REFRESH TIMER -----
-        function startRefTimer() {
-            const bar = document.getElementById('refprog');
-            let start = Date.now();
-            rfTimer = setInterval(() => {
-                const e = Date.now() - start;
-                const pct = Math.max(0, 100 - (e/RF)*100);
-                bar.style.width = pct+'%';
-                if(e >= RF){ start = Date.now(); loadFlights(); }
-            }, 300);
-        }
-        function resetRefTimer() { if(rfTimer) clearInterval(rfTimer); rfTimer = null; startRefTimer(); }
-    </script>
-</body>
-</html>
-EOF
-
-if [ ! -f "$HTML" ]; then
-  printf "  ${R}HATA: HTML dosyasi olusturulamadi!${N}\n"; exit 1
-fi
-
-BYTES=$(wc -c < "$HTML")
-printf "  ${G}HTML hazir — %d byte${N}\n" $BYTES
-
-# Port kontrolü (Termux uyumlu)
-PORT=$((RANDOM % 8900 + 1100))
-while (echo >/dev/tcp/127.0.0.1/$PORT) 2>/dev/null; do
-  PORT=$((RANDOM % 8900 + 1100))
-done
-
-printf "\n"
-printf "  ┌─────────────────────────────────────────────────────┐\n"
-printf "  │  ${B}URL     :${N} ${C}http://localhost:$PORT${N}\n"
-printf "  │  ${B}VERSiYON:${N} v4.0 ULTIMATE\n"
-printf "  │  ${B}DURUM   :${N} ${G}AKTIF${N}\n"
-printf "  │\n"
-printf "  │  Durdur: Ctrl + C\n"
-printf "  └─────────────────────────────────────────────────────┘\n\n"
-
-sleep 0.7
-command -v termux-open-url &>/dev/null && {
-  termux-open-url "http://localhost:$PORT" &
-  printf "  ${C}Tarayici aciliyor...${N}\n\n"
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+function initPanel(tools,keys){
+  document.getElementById("tbu").textContent="◈ "+activeUser;
+  setInterval(()=>{document.getElementById("clk").textContent=new Date().toLocaleTimeString("tr-TR",{hour12:false})},1000);
+  buildSidebar();
+  buildStatusBar(tools);
+  buildKeyChips(keys);
+  buildEmptyCats();
+  document.getElementById("tinp").focus();
 }
 
-cd "$TMPD"
-$PY << PYEOF
-import http.server, socketserver, os, sys, signal
+// ═══════════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════════
+const SIDEBAR_DATA=[
+  {grp:"AKTIF MODÜLLER",items:[
+    {id:"ip",   ic:"🌐",tx:"IP & Ağ Analizi",   dot:"live"},
+    {id:"domain",ic:"🔗",tx:"Domain & DNS",      dot:"live"},
+    {id:"email", ic:"✉️",tx:"E-Posta OSINT",     dot:"live"},
+    {id:"phone", ic:"📞",tx:"Telefon OSINT",     dot:"live"},
+    {id:"username",ic:"👤",tx:"Kullanıcı Adı",   dot:"live"},
+    {id:"url",   ic:"🔍",tx:"URL Tarama",        dot:"live"},
+    {id:"breach",ic:"💀",tx:"Veri İhlali",       dot:"live"},
+    {id:"network",ic:"⚡",tx:"Ağ & Port Tarama", dot:"live"},
+    {id:"github",ic:"🐙",tx:"GitHub OSINT",      dot:"live"},
+    {id:"crypto",ic:"₿", tx:"Kripto Analizi",    dot:"live"},
+    {id:"social",ic:"📱",tx:"Sosyal Medya",      dot:"live"},
+    {id:"darkweb",ic:"🌑",tx:"Dark Web & Leak",  dot:"live"},
+    {id:"whois", ic:"📜",tx:"WHOIS Detay",       dot:"live"},
+    {id:"news",  ic:"📰",tx:"Haber & Medya",     dot:"live"},
+    {id:"image", ic:"📷",tx:"EXIF / Görsel",     dot:"live"},
+  ]},
+  {grp:"OSINT REFERANS ARAÇLARI",items:[
+    {id:"r-pipl",   ic:"👤",tx:"Pipl",           ref:"https://pipl.com"},
+    {id:"r-maltego",ic:"🕸️",tx:"Maltego",        ref:"https://maltego.com"},
+    {id:"r-shodan", ic:"🔭",tx:"Shodan Web",     ref:"https://shodan.io"},
+    {id:"r-censys",ic:"🌐",tx:"Censys",          ref:"https://censys.io"},
+    {id:"r-intelx", ic:"🕵️",tx:"IntelX",        ref:"https://intelx.io"},
+    {id:"r-spiderfoot",ic:"🕷️",tx:"SpiderFoot",  ref:"https://spiderfoot.net"},
+    {id:"r-pimeyes",ic:"👁",tx:"PimEyes",        ref:"https://pimeyes.com"},
+    {id:"r-osintfr",ic:"🛠️",tx:"OSINT Framework",ref:"https://osintframework.com"},
+    {id:"r-bellingcat",ic:"📡",tx:"Bellingcat",  ref:"https://bellingcat.com"},
+    {id:"r-marine", ic:"🚢",tx:"MarineTraffic",  ref:"https://marinetraffic.com"},
+    {id:"r-flight", ic:"✈️",tx:"FlightRadar24",  ref:"https://flightradar24.com"},
+    {id:"r-adsbx",  ic:"✈️",tx:"ADS-B Exchange", ref:"https://globe.adsbexchange.com"},
+    {id:"r-opencorp",ic:"🏢",tx:"OpenCorporates",ref:"https://opencorporates.com"},
+    {id:"r-wayback",ic:"📦",tx:"Wayback Machine",ref:"https://web.archive.org"},
+    {id:"r-tineye", ic:"🖼️",tx:"TinEye",        ref:"https://tineye.com"},
+    {id:"r-ahmia",  ic:"🧅",tx:"Ahmia (Tor)",   ref:"https://ahmia.fi"},
+    {id:"r-dehashed",ic:"🔑",tx:"DeHashed",     ref:"https://dehashed.com"},
+    {id:"r-blockchain",ic:"₿",tx:"Blockchain Explorer",ref:"https://blockchain.com/explorer"},
+    {id:"r-etherscan",ic:"⟠",tx:"Etherscan",   ref:"https://etherscan.io"},
+    {id:"r-icij",   ic:"📁",tx:"ICIJ Offshore", ref:"https://offshoreleaks.icij.org"},
+  ]}
+];
 
-PORT = $PORT
-os.chdir("$TMPD")
+function buildSidebar(){
+  let h="";
+  SIDEBAR_DATA.forEach(g=>{
+    h+=`<div class="sbg">${g.grp}</div>`;
+    g.items.forEach(i=>{
+      const isRef=!!i.ref;
+      h+=`<div class="sbi ${isRef?'':'act' === i.id?'act':''}" id="si-${i.id}"
+        onclick="${isRef?`openRef('${i.ref}')`:`selMode('${i.id}')`}">
+        <span class="sbi-ic">${i.ic}</span>
+        <span class="sbi-tx">${i.tx}</span>
+        ${i.dot?`<span class="sbi-dot ${i.dot}"></span>`:''}
+        ${isRef?'<span style="font-size:8px;color:var(--dim)">↗</span>':''}
+      </div>`;
+    });
+  });
+  document.getElementById("SB").innerHTML=h;
+  setActive("ip");
+}
 
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, fmt, *a):
-        print("  [%s] %s" % (self.address_string(), fmt % a))
-    def do_GET(self):
-        if self.path in ('/', '/index.html'):
-            self.path = '/skywatch.html'
-        super().do_GET()
+function filterSidebar(q){
+  document.querySelectorAll(".sbi").forEach(el=>{
+    const tx=el.textContent.toLowerCase();
+    el.style.display=(!q||tx.includes(q.toLowerCase()))?"flex":"none";
+  });
+}
 
-def shutdown(s, f):
-    print("\n  Sunucu kapatildi.\n")
-    sys.exit(0)
+function setActive(id){
+  document.querySelectorAll(".sbi").forEach(el=>el.classList.remove("act"));
+  const el=document.getElementById("si-"+id);
+  if(el) el.classList.add("act");
+}
 
-signal.signal(signal.SIGINT, shutdown)
-socketserver.TCPServer.allow_reuse_address = True
+function selMode(id){
+  const modeMap={image:"image"};
+  const mode=modeMap[id]||id;
+  document.getElementById("tmod").value=mode;
+  document.getElementById("iz-title").textContent="◈ "+(modeTitles[mode]||mode.toUpperCase());
+  setActive(id);
+  const ph={ip:"IP adresi (örn: 8.8.8.8 veya 1.1.1.1)",
+    domain:"Domain adı (örn: google.com)",
+    email:"E-posta adresi (örn: user@example.com)",
+    phone:"Telefon numarası (örn: +905xxxxxxxxx)",
+    username:"Kullanıcı adı (örn: johndoe)",
+    url:"URL (örn: https://example.com)",
+    breach:"E-posta veya kullanıcı adı",
+    network:"IP veya domain (nmap + traceroute)",
+    github:"GitHub kullanıcı adı veya arama terimi",
+    crypto:"Bitcoin/Ethereum cüzdan adresi veya TX hash",
+    social:"Kullanıcı adı, isim veya e-posta",
+    darkweb:"Arama terimi, e-posta veya domain",
+    whois:"Domain adı (örn: example.com)",
+    news:"Arama terimi, isim veya olay",
+    image:"← 📸 butonuna tıklayın",
+  };
+  document.getElementById("tinp").placeholder=ph[mode]||"Hedef girin...";
+  document.getElementById("tinp").focus();
+}
 
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    print("  http://localhost:%d  |  Ctrl+C ile durdur\n" % PORT)
-    httpd.serve_forever()
-PYEOF
+function openRef(url){ window.open(url,"_blank","noopener"); }
+
+function buildEmptyCats(){
+  const cats=Object.entries(modeTitles).map(([k,v])=>`<span class="em-cat">${modeIcons[k]} ${v}</span>`).join("");
+  document.getElementById("em-cats").innerHTML=cats;
+}
+
+// ═══════════════════════════════════════════
+// SCAN
+// ═══════════════════════════════════════════
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&document.getElementById("LS").classList.contains("gone"))runScan();
+});
+
+async function runScan(){
+  const target=document.getElementById("tinp").value.trim();
+  const mode=document.getElementById("tmod").value;
+  if(!target){toast("Hedef girin!","err");return;}
+  if(mode==="image"){toast("📸 EXIF için görsel yükleyin","err");return;}
+  const t0=Date.now();
+  const btn=document.getElementById("sbtn");
+  btn.classList.add("go"); btn.textContent="◉ TARANIYOR...";
+  rmEmpty();
+  try{
+    const r=await fetch(`/api/scan/${mode}`,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({target})});
+    const d=await r.json();
+    const ms=Date.now()-t0;
+    if(d.ok){
+      renderBlock(mode,target,d.data,ms);
+      scanCount++;
+      document.getElementById("st-sc").textContent=scanCount;
+      document.getElementById("st-ms").textContent=ms+"ms";
+      document.getElementById("st-mo").textContent=(modeTitles[mode]||mode).split(" ")[0];
+    } else { addErr(d.error||"Bilinmeyen hata"); }
+  }catch(e){ addErr(e.message); }
+  btn.classList.remove("go"); btn.textContent="⚡ TARA";
+}
+
+async function handleImg(inp){
+  const file=inp.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    const b64=e.target.result.split(",")[1];
+    const btn=document.getElementById("sbtn");
+    btn.classList.add("go"); btn.textContent="◉ EXIF OKUNUYOR...";
+    rmEmpty();
+    try{
+      const r=await fetch("/api/image",{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({data:b64})});
+      const d=await r.json();
+      if(d.ok) renderBlock("image",file.name,d.data,0);
+      else addErr(d.error);
+    }catch(e){addErr(e.message);}
+    btn.classList.remove("go"); btn.textContent="⚡ TARA";
+  };
+  reader.readAsDataURL(file); inp.value="";
+}
+
+// ═══════════════════════════════════════════
+// RENDER ENGINE
+// ═══════════════════════════════════════════
+function renderBlock(mode,target,data,ms){
+  const res=document.getElementById("RES");
+  const wrap=document.createElement("div");
+  wrap.className="rblock";
+  const icon=modeIcons[mode]||"◈";
+  const title=modeTitles[mode]||mode.toUpperCase();
+  const mcount=Object.keys(data).length;
+  wrap.innerHTML=`
+    <div class="rbh" onclick="toggleBlock(this)">
+      <span class="rbi">${icon}</span>
+      <span class="rbt">${title} — <em>${esc(target)}</em></span>
+      <span class="rb-ms">${mcount} modül</span>
+      <span class="rb-ms">${ms||"—"}ms</span>
+      <span class="rb-arr open">▼</span>
+    </div>
+    <div class="rb-body" id="bd-${Date.now()}">
+      ${buildModules(data)}
+    </div>`;
+  res.insertBefore(wrap,res.firstChild);
+  countHits(data);
+}
+
+function toggleBlock(hdr){
+  const body=hdr.nextElementSibling;
+  const arr=hdr.querySelector(".rb-arr");
+  body.classList.toggle("hide");
+  arr.classList.toggle("open");
+}
+
+function buildModules(data){
+  return Object.entries(data).map(([key,val])=>{
+    if(!val) return "";
+    // Full-width modules
+    const full=key.includes("terminal")||key.includes("Nmap")||key.includes("WHOIS")||
+      key.includes("Traceroute")||key.includes("Liste")||key.includes("Platform")||
+      key.includes("Platform")||key.includes("Profil Linkleri")||key.includes("Kategori")||
+      key.includes("Haber")||key.includes("Reddit")||key.includes("İşlemler")||
+      key.includes("Subdomain")||key.includes("Aktivite")||key.includes("Pastebin")||
+      key.includes("Ahmia")||key.includes("Repolar");
+    const cls=`mc${full?" full":""}`;
+    const body=buildModuleBody(val);
+    if(!body.trim()) return "";
+    return `<div class="${cls}">
+      <div class="mc-key">${esc(key)}</div>
+      <div class="mc-cnt">${body}</div>
+    </div>`;
+  }).join("");
+}
+
+function buildModuleBody(val){
+  if(!val) return "";
+  // Terminal output
+  if(val.__terminal){
+    return `<div class="term">${esc(val.__terminal)}</div>`;
+  }
+  // List
+  if(val.__list){
+    const count=val._count?`<div class="cnt-badge ${val._count.includes('⚠')?"warn":"good"}">${esc(val._count)}</div>`:"";
+    const items=(val.__list||[]).filter(Boolean).map(i=>`<li>${esc(String(i))}</li>`).join("");
+    return count+`<ul class="lst">${items}</ul>`;
+  }
+  // Profiles grid
+  if(val.__profiles){
+    let h=`<div class="prof-grid">`;
+    for(const[name,url] of Object.entries(val.__profiles)){
+      h+=`<div class="prof-item" onclick="checkProfile('${esc(url)}',this)">
+        <span class="pname">${esc(name)}</span>
+        <span class="pcheck">kontrol et →</span>
+      </div>`;
+    }
+    h+=`</div>`;
+    return h;
+  }
+  // Score object
+  const scoreData=Object.values(val).find(v=>v&&v.label&&v.max!==undefined);
+  // Build KV pairs
+  let kvHtml=`<div class="kv">`;
+  let hasContent=false;
+  for(const[k,v] of Object.entries(val)){
+    if(k.startsWith("_")) continue;
+    if(v===null||v===undefined||v==="") continue;
+    const vStr=typeof v==="object"?JSON.stringify(v):String(v);
+    const cls=vStr==="true"||vStr.includes("✓")?"good":
+               vStr==="false"||vStr.includes("⚠")?"bad":
+               /^\d+\/100$/.test(vStr)&&parseInt(vStr)>50?"warn":"";
+    kvHtml+=`<div class="kv-row">
+      <span class="kv-k">${esc(k)}</span>
+      <span class="kv-v ${cls}">${fmtVal(k,vStr)}</span>
+    </div>`;
+    hasContent=true;
+  }
+  kvHtml+=`</div>`;
+  if(scoreData){
+    const pct=Math.min(100,Math.round(scoreData.val/scoreData.max*100));
+    const col=pct>60?"var(--c4)":pct>30?"var(--gold)":"var(--c3)";
+    kvHtml+=`<div style="margin-top:8px">
+      <div style="font-size:9px;color:var(--dim);margin-bottom:4px;letter-spacing:2px">${esc(scoreData.label)}: ${scoreData.val}/${scoreData.max}</div>
+      <div class="sbar"><div class="sbar-f" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }
+  return hasContent?kvHtml:"";
+}
+
+function fmtVal(k,v){
+  if(v==="true") return `<span style="color:var(--c4)">● EVET</span>`;
+  if(v==="false") return `<span style="color:var(--c3)">○ HAYIR</span>`;
+  if(v.startsWith("http")&&v.length<200) return `<span style="color:var(--c1)">${esc(v)}</span>`;
+  return esc(v);
+}
+
+async function checkProfile(url,el){
+  el.querySelector(".pcheck").textContent="kontrol ediliyor...";
+  try{
+    const r=await fetch("/api/scan/url",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({target:url})});
+    const d=await r.json();
+    if(d.ok){
+      const raw=JSON.stringify(d.data);
+      const exists=raw.includes("200")||raw.includes("OK");
+      el.querySelector(".pcheck").textContent=exists?"✓ Mevcut":"✗ Bulunamadı";
+      el.querySelector(".pcheck").className=`pcheck ${exists?"pok":""}`;
+    }
+  }catch(e){ el.querySelector(".pcheck").textContent="hata"; }
+}
+
+// ═══════════════════════════════════════════
+// STATUS + API
+// ═══════════════════════════════════════════
+function buildStatusBar(tools){
+  const names=["nmap","whois","curl","dig","exiftool","traceroute"];
+  const h=names.map(n=>`<div class="tool-ind"><div class="ti-d ${tools[n]?"on":"off"}"></div><span style="font-size:8px;color:var(--dim)">${n}</span></div>`).join("");
+  document.getElementById("stbar-r").innerHTML=h;
+}
+
+function buildKeyChips(keys){
+  const all=["shodan","virustotal","abuseipdb","hunter","hibp","urlscan","securitytrails","leakcheck","etherscan"];
+  document.getElementById("kchips").innerHTML=all.map(k=>`<span class="kchip ${keys.includes(k)?"set":"unset"}">${k}</span>`).join("");
+}
+
+function countHits(data){
+  const s=JSON.stringify(data).toLowerCase();
+  const matches=(s.match(/breach|malicious|found|pwned|vulnerable|hit|✅|⚠/g)||[]).length;
+  hitCount+=matches;
+  document.getElementById("st-hi").textContent=hitCount;
+}
+
+function openApiM(){document.getElementById("apiM").classList.add("open")}
+function closeApiM(e){if(!e||e.target===document.getElementById("apiM"))document.getElementById("apiM").classList.remove("open")}
+
+async function saveKeys(){
+  const ks={};
+  ["shodan","virustotal","abuseipdb","hunter","hibp","urlscan","securitytrails","leakcheck","etherscan"].forEach(k=>{
+    const v=document.getElementById("k-"+k).value.trim();
+    if(v) ks[k]=v;
+  });
+  try{
+    const r=await fetch("/api/keys",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(ks)});
+    const d=await r.json();
+    if(d.ok){
+      closeApiM();
+      buildKeyChips(Object.keys(ks));
+      toast("API keys kaydedildi: "+d.data.saved.join(", "),"ok");
+    }
+  }catch(e){toast("Hata: "+e.message,"err");}
+}
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function rmEmpty(){document.getElementById("empt")&&document.getElementById("empt").remove()}
+function clearAll(){
+  document.getElementById("RES").innerHTML=`<div class="empty" id="empt">
+    <div class="em-eye">👁</div>
+    <div class="em-t1">PHANTOM OSINT v4.0</div>
+    <div class="em-t2">HEDEF GİRİN · MOD SEÇİN · TARAMAYI BAŞLATIN</div>
+    <div class="em-cats" id="em-cats"></div>
+  </div>`;
+  buildEmptyCats();
+  scanCount=0;hitCount=0;
+  document.getElementById("st-sc").textContent=0;
+  document.getElementById("st-hi").textContent=0;
+  document.getElementById("st-ms").textContent="—";
+  document.getElementById("st-mo").textContent="—";
+}
+function addErr(msg){
+  rmEmpty();
+  document.getElementById("RES").insertAdjacentHTML("afterbegin",
+    `<div class="rblock"><div class="rb-body">
+      <div class="mc full" style="border-color:var(--c4)">
+        <div class="mc-key" style="color:var(--c4)">❌ HATA</div>
+        <div class="mc-cnt" style="color:var(--c4)">${esc(msg)}</div>
+      </div></div></div>`);
+}
+let _toastTimer=null;
+function toast(msg,type="ok"){
+  if(_toastTimer) clearTimeout(_toastTimer);
+  let t=document.querySelector(".toast");
+  if(!t){t=document.createElement("div");document.body.appendChild(t);}
+  t.className=`toast ${type}`;t.textContent=msg;t.style.opacity="1";
+  _toastTimer=setTimeout(()=>{t.style.opacity="0";setTimeout(()=>t.remove(),300)},2800);
+}
+</script>
+</body>
+</html>
+HTMLEOF
+
+# ── Backend başlat ──
+python3 "$WD/server.py" "$PORT" "$WD" &
+SPID=$!
+sleep 1
+
+if kill -0 $SPID 2>/dev/null; then
+  echo -e "\033[32m  [✓] Phantom OSINT v4 hazır!\033[0m"
+  echo -e "\033[36m  [→] http://localhost:$PORT\033[0m"
+  echo ""
+else
+  echo -e "\033[31m  [✗] Başlatma hatası\033[0m"; exit 1
+fi
+
+cleanup(){ kill $SPID 2>/dev/null; rm -rf "$WD"; exit 0; }
+trap cleanup INT TERM
+wait $SPID
