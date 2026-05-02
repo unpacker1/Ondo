@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PHANTOM CVE INTELLIGENCE PANEL v4.1</title>
+<title>PHANTOM CVE INTELLIGENCE PANEL v4.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
 
@@ -794,6 +794,7 @@ table.cve-table tr:hover td { background: rgba(0,212,255,0.03); }
 }
 .exploit-title { font-size: 12px; color: var(--accent3); font-weight: 600; }
 .exploit-meta { font-size: 10px; color: var(--text3); margin-top: 3px; }
+
 </style>
 </head>
 <body>
@@ -805,7 +806,7 @@ table.cve-table tr:hover td { background: rgba(0,212,255,0.03); }
     <div class="logo-icon">⬡</div>
     <div class="logo-text">
       <h1>PHANTOM CVE</h1>
-      <p>INTELLIGENCE PANEL v4.1 // TERMUX EDITION</p>
+      <p>INTELLIGENCE PANEL v4.0 // TERMUX EDITION</p>
     </div>
   </div>
   <div class="header-stats">
@@ -970,7 +971,6 @@ table.cve-table tr:hover td { background: rgba(0,212,255,0.03); }
           <option value="date_desc">En Yeni</option>
           <option value="date_asc">En Eski</option>
           <option value="id_desc">CVE ID ↓</option>
-          <option value="id_asc">CVE ID ↑</option>
         </select>
         <button class="btn btn-warn" onclick="doSearch()" style="padding:6px 12px;font-size:11px">FİLTRE UYGULA</button>
         <button class="btn btn-success" onclick="exportCSV()" style="padding:6px 12px;font-size:11px">⬇ CSV</button>
@@ -1046,7 +1046,7 @@ table.cve-table tr:hover td { background: rgba(0,212,255,0.03); }
       </div>
       <div class="term-output" id="term-output">
         <div class="term-line"><span class="tc-info">╔══════════════════════════════════════════════════════╗</span></div>
-        <div class="term-line"><span class="tc-info">║  PHANTOM CVE TEST TERMİNALİ - TERMUX UYUMLU v4.1   ║</span></div>
+        <div class="term-line"><span class="tc-info">║  PHANTOM CVE TEST TERMİNALİ - TERMUX UYUMLU v4.0   ║</span></div>
         <div class="term-line"><span class="tc-info">╚══════════════════════════════════════════════════════╝</span></div>
         <div class="term-line"><span class="tc-out">Termux üzerinde çalıştırma: bash cve_panel.sh</span></div>
         <div class="term-line"><span class="tc-out">Gerekli araçlar: nmap, curl, wget, python3, openssl</span></div>
@@ -1102,13 +1102,13 @@ table.cve-table tr:hover td { background: rgba(0,212,255,0.03); }
         </div>
         <h3>2. Paneli Başlatın</h3>
         <div class="terminal">
-          <div><span class="prompt">$ </span><span class="cmd">python3 -m http.server 0</span></div>
-          <div><span class="output">Serving HTTP on 0.0.0.0 port XXXX...</span></div>
-          <div><span class="prompt">$ </span><span class="cmd"># Tarayıcıda: http://localhost:XXXX/cve_panel.html</span></div>
+          <div><span class="prompt">$ </span><span class="cmd">python3 -m http.server 8080 &amp;</span></div>
+          <div><span class="output">Serving HTTP on 0.0.0.0 port 8080...</span></div>
+          <div><span class="prompt">$ </span><span class="cmd"># Tarayıcıda: http://localhost:8080/cve_panel.html</span></div>
         </div>
         <h3>3. Alternatif: Termux:Widget</h3>
         <div class="terminal">
-          <div><span class="prompt">$ </span><span class="cmd">cp phantom.html ~/.shortcuts/</span></div>
+          <div><span class="prompt">$ </span><span class="cmd">cp cve_panel.html ~/.shortcuts/</span></div>
           <div><span class="prompt">$ </span><span class="cmd"># Ana ekran widget'ından tek tıkla aç</span></div>
         </div>
       </div>
@@ -1318,13 +1318,11 @@ function generateCVEDatabase() {
     { name: 'SolarWinds', products: ['Orion','NPM','SFTP'] },
   ];
 
-  // INFO seviyesi eklendi
-  const severities = ['CRITICAL','HIGH','HIGH','MEDIUM','MEDIUM','MEDIUM','LOW','INFO'];
+  const severities = ['CRITICAL','HIGH','HIGH','MEDIUM','MEDIUM','MEDIUM','LOW'];
   const vectors = ['NETWORK','ADJACENT_NETWORK','LOCAL','PHYSICAL'];
   const attackComplexity = ['LOW','LOW','HIGH'];
   const sources = ['nvd','mitre','exploit-db','github','cisa-kev','vuldb','osv'];
 
-  // ... descTemplates ve inputs aynı ...
   const descTemplates = [
     'A {type} vulnerability in {vendor} {product} allows remote attackers to execute arbitrary code via crafted {input}.',
     'Improper input validation in {vendor} {product} leads to {type}, allowing attackers to bypass authentication.',
@@ -1354,16 +1352,41 @@ function generateCVEDatabase() {
   const cves = [];
   let id = 1;
 
-  // Real CVE'ler
+  // Generate real-looking CVEs with realistic IDs
   const realCVEs = [
-    { id:'CVE-2024-3400', vendor:'Palo Alto', product:'PAN-OS', sev:'CRITICAL', cvss:10.0, cat:'Injection', year:2024, desc:'Command injection...' },
-    // ... tüm real CVE verileri aynı ...
-    { id:'CVE-2021-44228', vendor:'Apache', product:'Log4j', sev:'CRITICAL', cvss:10.0, cat:'RCE', year:2021, desc:'Log4Shell...' },
-    // ... devamı aynen ...
-    { id:'CVE-2025-30065', vendor:'Apache', product:'Parquet', sev:'CRITICAL', cvss:10.0, cat:'Deser', year:2025, desc:'Schema parsing...' },
+    { id:'CVE-2024-3400', vendor:'Palo Alto', product:'PAN-OS', sev:'CRITICAL', cvss:10.0, cat:'Injection', year:2024, desc:'Command injection in PAN-OS GlobalProtect feature allows unauthenticated RCE via crafted packets.' },
+    { id:'CVE-2024-21762', vendor:'Fortinet', product:'FortiOS', sev:'CRITICAL', cvss:9.8, cat:'Auth', year:2024, desc:'Out-of-bounds write in SSL-VPN allows unauthenticated remote code execution.' },
+    { id:'CVE-2024-1709', vendor:'ConnectWise', product:'ScreenConnect', sev:'CRITICAL', cvss:10.0, cat:'Auth', year:2024, desc:'Authentication bypass using alternate path/channel allows unauthorized access.' },
+    { id:'CVE-2024-6387', vendor:'OpenSSH', product:'OpenSSH', sev:'CRITICAL', cvss:8.1, cat:'Race', year:2024, desc:'Race condition in OpenSSH signal handler allows unauthenticated RCE (regreSSHion).' },
+    { id:'CVE-2024-4577', vendor:'PHP', product:'PHP', sev:'CRITICAL', cvss:9.8, cat:'Injection', year:2024, desc:'Argument injection in PHP CGI mode on Windows allows remote code execution.' },
+    { id:'CVE-2024-23897', vendor:'Jenkins', product:'Core', sev:'CRITICAL', cvss:9.8, cat:'LFI', year:2024, desc:'Arbitrary file read via CLI command parser leads to RCE and credential theft.' },
+    { id:'CVE-2024-21893', vendor:'Ivanti', product:'Connect Secure', sev:'HIGH', cvss:8.2, cat:'SSRF', year:2024, desc:'SSRF vulnerability in SAML component allows unauthenticated access to internal resources.' },
+    { id:'CVE-2024-0012', vendor:'Palo Alto', product:'PAN-OS', sev:'CRITICAL', cvss:9.3, cat:'Auth', year:2024, desc:'Authentication bypass allows unauthenticated access to management web interface.' },
+    { id:'CVE-2024-20353', vendor:'Cisco', product:'ASA', sev:'HIGH', cvss:8.6, cat:'DoS', year:2024, desc:'Denial-of-service vulnerability in WebVPN login page processing.' },
+    { id:'CVE-2024-38112', vendor:'Microsoft', product:'Windows', sev:'HIGH', cvss:7.5, cat:'Deser', year:2024, desc:'MSHTML spoofing vulnerability allows phishing via specially crafted URL files.' },
+    { id:'CVE-2021-44228', vendor:'Apache', product:'Log4j', sev:'CRITICAL', cvss:10.0, cat:'RCE', year:2021, desc:'Log4Shell: JNDI injection via log messages enables unauthenticated RCE.' },
+    { id:'CVE-2022-0847', vendor:'Linux Kernel', product:'Kernel', sev:'HIGH', cvss:7.8, cat:'Priv', year:2022, desc:'Dirty Pipe: privilege escalation via pipe page cache exploitation.' },
+    { id:'CVE-2023-34362', vendor:'Progress', product:'MOVEit Transfer', sev:'CRITICAL', cvss:9.8, cat:'SQLi', year:2023, desc:'SQL injection in MOVEit Transfer web application allows unauthenticated RCE.' },
+    { id:'CVE-2023-44487', vendor:'CNCF', product:'HTTP/2', sev:'HIGH', cvss:7.5, cat:'DoS', year:2023, desc:'HTTP/2 Rapid Reset Attack enables large-scale DDoS via request cancellation.' },
+    { id:'CVE-2023-46604', vendor:'Apache', product:'ActiveMQ', sev:'CRITICAL', cvss:10.0, cat:'RCE', year:2023, desc:'Remote code execution via ClassInfo exploit in OpenWire protocol.' },
+    { id:'CVE-2022-22965', vendor:'Spring', product:'Framework', sev:'CRITICAL', cvss:9.8, cat:'RCE', year:2022, desc:'Spring4Shell: data binding RCE via Spring MVC and WebFlux applications.' },
+    { id:'CVE-2021-26855', vendor:'Microsoft', product:'Exchange', sev:'CRITICAL', cvss:9.8, cat:'SSRF', year:2021, desc:'ProxyLogon: SSRF enables pre-auth RCE in Microsoft Exchange Server.' },
+    { id:'CVE-2021-40444', vendor:'Microsoft', product:'Office', sev:'HIGH', cvss:8.8, cat:'RCE', year:2021, desc:'Remote code execution via malicious Office document using MSHTML renderer.' },
+    { id:'CVE-2022-41082', vendor:'Microsoft', product:'Exchange', sev:'HIGH', cvss:8.8, cat:'RCE', year:2022, desc:'ProxyNotShell: RCE via PowerShell remoting in authenticated Exchange context.' },
+    { id:'CVE-2023-23397', vendor:'Microsoft', product:'Outlook', sev:'CRITICAL', cvss:9.8, cat:'Auth', year:2023, desc:'NTLM hash theft via specially crafted email without user interaction.' },
+    { id:'CVE-2024-30088', vendor:'Microsoft', product:'Windows', sev:'HIGH', cvss:7.0, cat:'Priv', year:2024, desc:'Windows Kernel elevation of privilege via race condition in win32k.' },
+    { id:'CVE-2024-9680', vendor:'Mozilla', product:'Firefox', sev:'CRITICAL', cvss:9.8, cat:'UseAfterFree', year:2024, desc:'Use-after-free in Animation timelines allows code execution with sandbox escape.' },
+    { id:'CVE-2024-47575', vendor:'Fortinet', product:'FortiManager', sev:'CRITICAL', cvss:9.8, cat:'Auth', year:2024, desc:'Missing authentication flaw allows unauthenticated attackers to execute arbitrary code.' },
+    { id:'CVE-2024-38193', vendor:'Microsoft', product:'Windows', sev:'HIGH', cvss:7.8, cat:'Priv', year:2024, desc:'AFD.sys driver privilege escalation to SYSTEM via use-after-free.' },
+    { id:'CVE-2025-0282', vendor:'Ivanti', product:'Connect Secure', sev:'CRITICAL', cvss:9.0, cat:'Overflow', year:2025, desc:'Stack buffer overflow allows unauthenticated remote code execution.' },
+    { id:'CVE-2025-21298', vendor:'Microsoft', product:'Windows', sev:'CRITICAL', cvss:9.8, cat:'RCE', year:2025, desc:'OLE remote code execution via malicious RTF/email attachment.' },
+    { id:'CVE-2025-23006', vendor:'SonicWall', product:'SMA 1000', sev:'CRITICAL', cvss:9.8, cat:'Deser', year:2025, desc:'Pre-authentication deserialization allows RCE on SonicWall SMA 1000 appliances.' },
+    { id:'CVE-2025-24200', vendor:'Apple', product:'iOS', sev:'MEDIUM', cvss:6.1, cat:'Auth', year:2025, desc:'USB Restricted Mode bypass allows physical attackers to disable security controls.' },
+    { id:'CVE-2025-21333', vendor:'Microsoft', product:'Windows', sev:'HIGH', cvss:7.8, cat:'Priv', year:2025, desc:'Hyper-V NT Kernel Integration VSP elevation of privilege vulnerability.' },
+    { id:'CVE-2025-30065', vendor:'Apache', product:'Parquet', sev:'CRITICAL', cvss:10.0, cat:'Deser', year:2025, desc:'Schema parsing in Parquet-Avro allows RCE via malicious Parquet file.' },
   ];
-  // (Real CVEs dizisini aynen bırakıyorum – önceki koddan kopyalayın, yer kazanmak için burada kısaltıldı)
 
+  // Add real CVEs first
   realCVEs.forEach(c => {
     cves.push({
       ...c,
@@ -1385,7 +1408,7 @@ function generateCVEDatabase() {
     });
   });
 
-  // Ek CVE'ler
+  // Generate additional CVEs
   const years = [2019,2020,2021,2022,2023,2024,2025];
   const yearWeights = [1,1,2,2,3,4,4];
   let yearCounters = { 2019:1000, 2020:1200, 2021:1400, 2022:1600, 2023:2000, 2024:2400, 2025:100 };
@@ -1399,12 +1422,7 @@ function generateCVEDatabase() {
     const product = vendorObj.products[Math.floor(Math.random()*vendorObj.products.length)];
     const cat = categories[Math.floor(Math.random()*categories.length)];
     const sev = severities[Math.floor(Math.random()*severities.length)];
-    let cvss;
-    if (sev === 'CRITICAL') cvss = 9.0 + Math.random();
-    else if (sev === 'HIGH') cvss = 7.0 + Math.random()*1.9;
-    else if (sev === 'MEDIUM') cvss = 4.0 + Math.random()*2.9;
-    else if (sev === 'LOW') cvss = 0.1 + Math.random()*3.8;
-    else cvss = 0.0;  // INFO
+    let cvss = sev === 'CRITICAL' ? 9.0 + Math.random() : sev === 'HIGH' ? 7.0 + Math.random()*1.9 : sev === 'MEDIUM' ? 4.0 + Math.random()*2.9 : 0.1 + Math.random()*3.8;
     cvss = Math.round(cvss * 10) / 10;
 
     cves.push({
@@ -1476,9 +1494,6 @@ function init() {
   toast('info', `✓ ${CVE_DB.cves.length} CVE veritabanı yüklendi`);
 }
 
-// ==============================
-// HEADER STATS
-// ==============================
 function updateHeaderStats() {
   const total = CVE_DB.cves.length;
   const critical = CVE_DB.cves.filter(c => c.sev === 'CRITICAL').length;
@@ -1491,10 +1506,6 @@ function updateHeaderStats() {
 function animateNumber(id, target) {
   const el = document.getElementById(id);
   if (!el) return;
-  if (target === 0) {
-    el.textContent = '0';
-    return;
-  }
   let start = 0;
   const step = Math.ceil(target / 40);
   const iv = setInterval(() => {
@@ -1504,9 +1515,6 @@ function animateNumber(id, target) {
   }, 30);
 }
 
-// ==============================
-// DASHBOARD
-// ==============================
 function updateDashboard() {
   const cves = CVE_DB.cves;
   const counts = { CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0 };
@@ -1524,14 +1532,21 @@ function updateDashboard() {
 
   document.getElementById('last-update').textContent = new Date().toLocaleTimeString('tr-TR');
 
+  // Recent feed
   const recent = [...cves].sort((a,b) => b.year - a.year || b.cvss - a.cvss).slice(0, 10);
   renderFeed('recent-feed', recent);
 
+  // Urgent
   const urgent = cves.filter(c => c.sev === 'CRITICAL' && c.hasExploit).sort((a,b) => b.cvss - a.cvss).slice(0, 8);
   renderFeed('urgent-feed', urgent);
 
+  // Year chart
   renderYearChart();
+
+  // Tag cloud
   renderTagCloud();
+
+  // Source status
   renderSourceStatus();
 }
 
@@ -1617,7 +1632,6 @@ function doSearch() {
   const sev = document.getElementById('f-severity').value;
   const year = document.getElementById('f-year').value;
   const cat = document.getElementById('f-category').value;
-  const source = document.getElementById('f-source').value;   // YENİ
   const sort = document.getElementById('f-sort').value;
 
   document.getElementById('search-loading').classList.add('show');
@@ -1634,7 +1648,6 @@ function doSearch() {
       if (year && year !== 'older' && c.year !== parseInt(year)) return false;
       if (year === 'older' && c.year >= 2019) return false;
       if (cat && c.cat !== cat) return false;
-      if (source && c.source !== source) return false;   // YENİ
       return true;
     });
 
@@ -1642,9 +1655,6 @@ function doSearch() {
     results.sort((a,b) => {
       let av = field === 'cvss' ? a.cvss : field === 'date' ? a.published : a.id;
       let bv = field === 'cvss' ? b.cvss : field === 'date' ? b.published : b.id;
-      if (field === 'id') {
-        return dir === 'desc' ? b.id.localeCompare(a.id) : a.id.localeCompare(b.id);
-      }
       return dir === 'desc' ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
     });
 
@@ -1661,14 +1671,12 @@ function clearSearch() {
   document.getElementById('f-severity').value = '';
   document.getElementById('f-year').value = '';
   document.getElementById('f-category').value = '';
-  document.getElementById('f-source').value = '';
   state.filtered = [...CVE_DB.cves];
   state.page = 1;
   renderTable();
 }
 
 function quickFilter(tag) {
-  clearSearch();
   document.getElementById('cve-search').value = tag;
   switchTab('search');
   doSearch();
@@ -1681,7 +1689,6 @@ function sortTable(field) {
   state.filtered.sort((a,b) => {
     const av = field === 'cvss' ? a.cvss : field === 'date' ? a.published : a.id;
     const bv = field === 'cvss' ? b.cvss : field === 'date' ? b.published : b.id;
-    if (field === 'id') return dir === 'desc' ? b.id.localeCompare(a.id) : a.id.localeCompare(b.id);
     return dir === 'desc' ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
   });
   renderTable();
@@ -1821,12 +1828,15 @@ function openModal(cveId) {
       </div>
     </div>
 
-    <div class="desc-box" id="modal-desc-text"></div>
+    <div class="desc-box">
+      <div style="font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:6px">AÇIKLAMA</div>
+      ${cve.desc}
+    </div>
 
     <div class="exploit-box">
       <h4>⚡ TERMUX TEST KOMUTLARI</h4>
       <div class="terminal">
-        ${exploitCmds.map(cmd => `<div><span class="prompt">$ </span><span class="cmd">${escHtml(cmd)}</span></div>`).join('')}
+        ${exploitCmds.map(cmd => `<div><span class="prompt">$ </span><span class="cmd">${cmd}</span></div>`).join('')}
       </div>
       <div style="margin-top:8px;display:flex;gap:8px">
         <button class="btn btn-danger" onclick="copyCommands('${cve.id}')">📋 KOPYALA</button>
@@ -1846,9 +1856,6 @@ function openModal(cveId) {
       </div>
     </div>
   `;
-
-  // Açıklamayı textContent ile ekle (XSS koruması)
-  document.getElementById('modal-desc-text').textContent = cve.desc;
 
   document.getElementById('cve-modal').classList.add('open');
 }
@@ -1919,30 +1926,8 @@ function copyCommands(cveId) {
   const cve = CVE_DB.cves.find(c => c.id === cveId);
   if (!cve) return;
   const cmds = generateExploitCommands(cve).join('\n');
-  
-  // Clipboard API fallback
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(cmds).then(() => toast('success', 'Komutlar kopyalandı'))
-      .catch(() => fallbackCopy(cmds));
-  } else {
-    fallbackCopy(cmds);
-  }
-}
-
-function fallbackCopy(text) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-    toast('success', 'Komutlar kopyalandı (fallback)');
-  } catch (err) {
-    toast('error', 'Kopyalama başarısız');
-  }
-  document.body.removeChild(textarea);
+  navigator.clipboard.writeText(cmds).then(() => toast('success', 'Komutlar kopyalandı'))
+    .catch(() => toast('error', 'Kopyalama başarısız'));
 }
 
 function sendToTerminal(cveId) {
@@ -1963,6 +1948,10 @@ function testCVE(cveId) {
 // ==============================
 // TERMINAL
 // ==============================
+let termHistory = [];
+let termActive = false;
+let termLines = [];
+
 function addTermLine(cls, text) {
   const out = document.getElementById('term-output');
   const div = document.createElement('div');
@@ -1991,10 +1980,7 @@ function clearTerminal() {
 
 function stopTest() {
   termActive = false;
-  if (state.testInterval) {
-    clearInterval(state.testInterval);
-    state.testInterval = null;
-  }
+  if (state.testInterval) clearInterval(state.testInterval);
   addTermLine('tc-warn', '⏹ Test durduruldu.');
 }
 
@@ -2002,12 +1988,6 @@ function startTest() {
   const target = document.getElementById('target-input').value.trim();
   const testType = document.getElementById('test-type').value;
   if (!target) { toast('error', 'Hedef girin!'); return; }
-
-  // Önceki interval'ı durdur
-  if (state.testInterval) {
-    clearInterval(state.testInterval);
-    state.testInterval = null;
-  }
 
   termActive = true;
   clearTerminal();
@@ -2028,7 +2008,6 @@ function startTest() {
   state.testInterval = setInterval(() => {
     if (!termActive || i >= lines.length) {
       clearInterval(state.testInterval);
-      state.testInterval = null;
       if (termActive) {
         addTermLine('tc-success', `\n[✓] Test tamamlandı: ${target}`);
         addTermLine('tc-prompt', `phantom@termux:~$ _`);
@@ -2071,38 +2050,108 @@ function generateTestOutput(target, type, isCVE) {
     return lines;
   }
 
-  // cve_check seçeneği için kontrol
-  if (type === 'cve_check') {
-    if (!isCVEId) {
-      lines.push(['tc-err', `[!] 'cve_check' yalnızca geçerli bir CVE ID ile kullanılabilir.`]);
-      lines.push(['tc-err', `[!] Lütfen hedef olarak CVE-YYYY-NNNN formatında bir ID girin.`]);
-      return lines;
-    }
-    // Eğer CVE ID ise yukarıda döner zaten
-  }
-
-  // ... diğer type'lar aynı ...
   if (type === 'scan') {
     lines.push(['tc-out', `[*] Hızlı port taraması başlıyor: ${target}`]);
-    // ... orijinal satırlar ...
+    lines.push(['tc-cmd', `$ nmap -sV -sC -O --open -T4 ${target}`]);
+    lines.push(['tc-out', `Starting Nmap 7.94 ( https://nmap.org )`]);
+    lines.push(['tc-out', `Nmap scan report for ${target}`]);
+    lines.push(['tc-out', `Host is up (0.024s latency).`]);
+    lines.push(['tc-out', ``]);
+    const ports = [[22,'ssh','OpenSSH 8.9'],[80,'http','nginx 1.18'],[443,'https','nginx 1.18'],[3306,'mysql','MySQL 8.0'],[8080,'http-alt','Apache Tomcat 9.0']];
+    ports.forEach(([p,s,v]) => {
+      if (Math.random() > 0.3) lines.push(['tc-success', `${p}/tcp  open  ${s}  ${v}`]);
+    });
+    lines.push(['tc-out', ``]);
+    lines.push(['tc-info', `[*] OS tespit: Linux 5.x`]);
+    lines.push(['tc-warn', `[!] ${target}:22 — OpenSSH 8.9 (CVE-2024-6387 kontrol et!)`]);
+    lines.push(['tc-warn', `[!] ${target}:8080 — Tomcat 9.0 (CVE-2023-44315 kontrol et!)`]);
   } else if (type === 'vuln') {
-    // ...
+    lines.push(['tc-out', `[*] Açık taraması başlıyor: ${target}`]);
+    lines.push(['tc-cmd', `$ nmap -sV --script vuln ${target}`]);
+    lines.push(['tc-out', `Scanning ${target}...`]);
+    lines.push(['tc-out', ``]);
+    lines.push(['tc-vuln', `[CRITICAL] CVE-2021-44228 (Log4Shell) — CVSS 10.0`]);
+    lines.push(['tc-vuln', `[HIGH]     CVE-2022-0847 (Dirty Pipe) — CVSS 7.8`]);
+    lines.push(['tc-warn', `[MEDIUM]   CVE-2023-44487 (HTTP/2 Reset) — CVSS 7.5`]);
+    lines.push(['tc-safe', `[LOW]      CVE-2023-12345 — Bilgi ifşası`]);
+    lines.push(['tc-out', ``]);
+    lines.push(['tc-cmd', `$ nuclei -u http://${target} -t cves/ -severity critical,high`]);
+    lines.push(['tc-info', `[nuclei] Tarama tamamlandı: 3 bulgu`]);
   } else if (type === 'http') {
-    // ...
+    lines.push(['tc-out', `[*] HTTP analizi: ${target}`]);
+    lines.push(['tc-cmd', `$ curl -sI http://${target}`]);
+    lines.push(['tc-data', `HTTP/1.1 200 OK`]);
+    lines.push(['tc-data', `Server: nginx/1.18.0`]);
+    lines.push(['tc-data', `X-Powered-By: PHP/7.4.3`]);
+    lines.push(['tc-data', `Content-Type: text/html; charset=UTF-8`]);
+    lines.push(['tc-out', ``]);
+    lines.push(['tc-warn', `[!] X-Frame-Options başlığı eksik (Clickjacking riski)`]);
+    lines.push(['tc-warn', `[!] Content-Security-Policy başlığı eksik`]);
+    lines.push(['tc-warn', `[!] X-Content-Type-Options başlığı eksik`]);
+    lines.push(['tc-vuln', `[!] PHP/7.4.3 tespit edildi — EOL sürüm, güncelleme önerilir!`]);
   } else if (type === 'ssl') {
-    // ...
+    lines.push(['tc-out', `[*] SSL/TLS analizi: ${target}`]);
+    lines.push(['tc-cmd', `$ openssl s_client -connect ${target}:443 2>/dev/null | head -20`]);
+    lines.push(['tc-data', `CONNECTED(00000003)`]);
+    lines.push(['tc-data', `Protocol: TLSv1.3`]);
+    lines.push(['tc-data', `Cipher: TLS_AES_256_GCM_SHA384`]);
+    lines.push(['tc-data', `Certificate: *.${target} (valid)`]);
+    lines.push(['tc-success', `[✓] TLS 1.3 destekleniyor`]);
+    lines.push(['tc-warn', `[!] TLS 1.0 ve 1.1 hala aktif (devre dışı bırakılmalı)`]);
+    lines.push(['tc-cmd', `$ testssl.sh ${target}:443`]);
   } else if (type === 'sqli') {
-    // ...
+    lines.push(['tc-out', `[*] SQL Injection testi: ${target}`]);
+    lines.push(['tc-cmd', `$ sqlmap -u "${target}" --dbs --batch --level 3 --risk 2`]);
+    lines.push(['tc-out', `[sqlmap] Testing connection to target URL...`]);
+    lines.push(['tc-out', `[sqlmap] Testing parameter: id`]);
+    lines.push(['tc-vuln', `[+] Parameter 'id' is vulnerable (boolean-based blind)`]);
+    lines.push(['tc-vuln', `[+] Payload: id=1 AND (SELECT 2*(IF((SELECT * FROM (SELECT CONCAT(0x71...)`]);
+    lines.push(['tc-data', `available databases [3]:`]);
+    lines.push(['tc-data', `[*] information_schema`]);
+    lines.push(['tc-data', `[*] mysql`]);
+    lines.push(['tc-data', `[*] webapp`]);
   } else if (type === 'xss') {
-    // ...
+    lines.push(['tc-out', `[*] XSS testi: ${target}`]);
+    lines.push(['tc-cmd', `$ dalfox url "${target}" --silent`]);
+    lines.push(['tc-out', `[dalfox] Scanning for XSS...`]);
+    lines.push(['tc-vuln', `[!] Reflected XSS Found! Parameter: q`]);
+    lines.push(['tc-data', `Payload: <script>alert(1)</script>`]);
+    lines.push(['tc-data', `URL: ${target}?q=<script>alert(1)</script>`]);
+    lines.push(['tc-warn', `[!] DOM XSS: 2 sink tespit edildi`]);
   } else if (type === 'dns') {
-    // ...
+    lines.push(['tc-out', `[*] DNS sorgusu: ${target}`]);
+    lines.push(['tc-cmd', `$ dig ${target} ANY`]);
+    lines.push(['tc-data', `A record: 93.184.216.34`]);
+    lines.push(['tc-data', `MX record: mail.${target} (priority: 10)`]);
+    lines.push(['tc-data', `NS record: ns1.${target}, ns2.${target}`]);
+    lines.push(['tc-data', `TXT record: v=spf1 include:_spf.${target} ~all`]);
+    lines.push(['tc-cmd', `$ sublist3r -d ${target} -o subdomains.txt`]);
+    lines.push(['tc-info', `[*] 12 subdomain tespit edildi`]);
+    lines.push(['tc-success', `admin.${target}, api.${target}, mail.${target}, dev.${target}...`]);
   } else if (type === 'lfi') {
-    // ...
+    lines.push(['tc-out', `[*] LFI/Path Traversal testi: ${target}`]);
+    lines.push(['tc-cmd', `$ ffuf -u "${target}FUZZ" -w /data/data/com.termux/files/usr/share/wordlists/lfi.txt`]);
+    lines.push(['tc-out', `[ffuf] Fuzzing başlıyor...`]);
+    lines.push(['tc-vuln', `[200] /?file=../../../etc/passwd (size: 1847)`]);
+    lines.push(['tc-vuln', `[200] /?page=....//....//....//etc/shadow (size: 612)`]);
+    lines.push(['tc-data', `root:x:0:0:root:/root:/bin/bash`]);
+    lines.push(['tc-data', `daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin`]);
   } else if (type === 'fuzz') {
-    // ...
+    lines.push(['tc-out', `[*] Directory fuzzing: ${target}`]);
+    lines.push(['tc-cmd', `$ gobuster dir -u http://${target} -w /usr/share/wordlists/dirb/common.txt`]);
+    lines.push(['tc-success', `/admin       (Status: 200) [Size: 4521]`]);
+    lines.push(['tc-success', `/backup      (Status: 200) [Size: 15234]`]);
+    lines.push(['tc-success', `/.git        (Status: 200) [Size: 234]`]);
+    lines.push(['tc-warn', `/phpinfo.php (Status: 200) [Size: 89012]`]);
+    lines.push(['tc-vuln', `[!] .git dizini açık — kaynak kod ifşası!`]);
   } else if (type === 'rce') {
-    // ...
+    lines.push(['tc-out', `[*] RCE kontrol: ${target}`]);
+    lines.push(['tc-cmd', `$ curl -v -d 'cmd=id' http://${target}/exec`]);
+    lines.push(['tc-out', `Testing common RCE vectors...`]);
+    lines.push(['tc-cmd', `$ curl "http://${target}/?cmd=id"`]);
+    lines.push(['tc-cmd', `$ curl -H 'X-Custom: ;id;' http://${target}/api`]);
+    lines.push(['tc-warn', `[*] SSTI test: {{7*7}} → 49 döndü`]);
+    lines.push(['tc-vuln', `[!] Server-Side Template Injection tespit edildi!`]);
   } else {
     lines.push(['tc-out', `[*] Genel analiz: ${target}`]);
     lines.push(['tc-cmd', `$ nmap -sV --open -T4 ${target}`]);
@@ -2114,7 +2163,264 @@ function generateTestOutput(target, type, isCVE) {
   return lines;
 }
 
-// ... diğer yardımcı fonksiyonlar aynı (handleTermCmd, processTermCmd, renderCategories, vb.) ...
+function handleTermCmd(e) {
+  if (e.key === 'Enter') {
+    const input = document.getElementById('term-cmd');
+    const cmd = input.value.trim();
+    if (!cmd) return;
+
+    state.cmdHistory.unshift(cmd);
+    state.cmdIndex = -1;
+    input.value = '';
+
+    addTermLine('tc-prompt', `phantom@termux:~$ ${cmd}`);
+    processTermCmd(cmd);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (state.cmdIndex < state.cmdHistory.length - 1) {
+      state.cmdIndex++;
+      document.getElementById('term-cmd').value = state.cmdHistory[state.cmdIndex];
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (state.cmdIndex > 0) {
+      state.cmdIndex--;
+      document.getElementById('term-cmd').value = state.cmdHistory[state.cmdIndex];
+    } else {
+      state.cmdIndex = -1;
+      document.getElementById('term-cmd').value = '';
+    }
+  }
+}
+
+function processTermCmd(cmd) {
+  const parts = cmd.split(' ');
+  const c = parts[0].toLowerCase();
+  const arg = parts.slice(1).join(' ');
+
+  if (c === 'clear' || c === 'cls') {
+    clearTerminal();
+  } else if (c === 'help') {
+    addTermLine('tc-info', 'Mevcut komutlar: scan, vuln, http, ssl, dns, whois, banner, sqli, xss, lfi, rce, cve, fuzz, nuclei, report, clear');
+    addTermLine('tc-out', 'Kullanım: [komut] [hedef]  Örnek: scan 192.168.1.1');
+  } else if (c === 'scan' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'scan';
+    startTest();
+  } else if (c === 'vuln' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'vuln';
+    startTest();
+  } else if (c === 'http' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'http';
+    startTest();
+  } else if (c === 'sqli' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'sqli';
+    startTest();
+  } else if (c === 'xss' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'xss';
+    startTest();
+  } else if (c === 'lfi' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'lfi';
+    startTest();
+  } else if (c === 'dns' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'dns';
+    startTest();
+  } else if (c === 'cve' && arg) {
+    document.getElementById('target-input').value = arg.toUpperCase().startsWith('CVE') ? arg.toUpperCase() : 'CVE-' + arg;
+    document.getElementById('test-type').value = 'cve_check';
+    startTest();
+  } else if (c === 'rce' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'rce';
+    startTest();
+  } else if (c === 'fuzz' && arg) {
+    document.getElementById('target-input').value = arg;
+    document.getElementById('test-type').value = 'fuzz';
+    startTest();
+  } else if (c === 'report') {
+    addTermLine('tc-info', `[*] Rapor oluşturuluyor: phantom_report_${Date.now()}.txt`);
+    addTermLine('tc-success', `[✓] Rapor kaydedildi`);
+  } else if (c === 'whoami') {
+    addTermLine('tc-data', 'phantom-operator');
+  } else if (c === 'date') {
+    addTermLine('tc-data', new Date().toString());
+  } else {
+    addTermLine('tc-err', `[!] Bilinmeyen komut: ${c}. 'help' yazın.`);
+  }
+}
+
+// ==============================
+// CATEGORIES
+// ==============================
+function renderCategories() {
+  const grid = document.getElementById('cat-grid');
+  if (!grid) return;
+
+  const catData = {};
+  CVE_DB.cves.forEach(c => {
+    if (!catData[c.cat]) catData[c.cat] = 0;
+    catData[c.cat]++;
+  });
+
+  const catMeta = {};
+  CVE_DB.categories.forEach(c => catMeta[c.id] = c);
+
+  document.getElementById('cat-count').textContent = Object.keys(catData).length;
+  document.getElementById('cat-total-count').textContent = CVE_DB.cves.length;
+
+  const catDefs = [
+    { id:'RCE', icon:'💀', desc:'Saldırganların uzaktan sunucuda komut çalıştırmasına olanak tanır. En kritik açık türüdür.', tags:['shellcode','payload','exploit'] },
+    { id:'SQLi', icon:'🗄️', desc:'Veritabanı sorgularına zararlı SQL kodu enjekte etmeye olanak tanır.', tags:['database','injection','dump'] },
+    { id:'XSS', icon:'🕷️', desc:'Web uygulamalarına istemci taraflı script enjeksiyonu.', tags:['script','dom','reflected','stored'] },
+    { id:'LFI', icon:'📂', desc:'Sunucu dosyalarının okunmasına olanak tanıyan path traversal açıkları.', tags:['file','path','traversal'] },
+    { id:'XXE', icon:'📋', desc:'XML işleyicilerinde harici varlık dahil etme saldırıları.', tags:['xml','entity','ssrf'] },
+    { id:'SSRF', icon:'🔄', desc:'Sunucuyu kendi adına istek yapmaya zorlamak.', tags:['proxy','metadata','internal'] },
+    { id:'Overflow', icon:'🧱', desc:'Bellek tamponuna aşım yaparak program akışını değiştirme.', tags:['stack','heap','memory'] },
+    { id:'Auth', icon:'🔓', desc:'Kimlik doğrulama mekanizmalarını atlatma.', tags:['bypass','credentials','session'] },
+    { id:'Priv', icon:'⬆️', desc:'Düşük yetkili kullanıcının yönetici yetkisi edinmesi.', tags:['root','admin','escalation'] },
+    { id:'DoS', icon:'💥', desc:'Servis dışı bırakma saldırıları.', tags:['crash','flood','amplification'] },
+    { id:'Crypto', icon:'🔐', desc:'Kriptografik algoritma veya uygulama zayıflıkları.', tags:['cipher','key','hash','tls'] },
+    { id:'Memory', icon:'🧠', desc:'Bellek yönetimi açıkları ve use-after-free.', tags:['uaf','oob','corruption'] },
+    { id:'CSRF', icon:'🎭', desc:'Kullanıcı adına yetkisiz istek gönderimi.', tags:['token','form','forgery'] },
+    { id:'Deser', icon:'⚙️', desc:'Güvensiz nesne serileştirme kaldırma işlemleri.', tags:['pickle','java','json'] },
+    { id:'PathTraversal', icon:'🗺️', desc:'Dizin gezinmesi yoluyla yetkisiz dosya erişimi.', tags:['../','directory','read'] },
+    { id:'OOB', icon:'📏', desc:'Bellek sınırları dışında okuma/yazma işlemleri.', tags:['read','write','bounds'] },
+    { id:'UseAfterFree', icon:'♻️', desc:'Serbest bırakılmış bellek bölgesinin tekrar kullanımı.', tags:['dangling','pointer','heap'] },
+    { id:'Injection', icon:'💉', desc:'Genel komut enjeksiyonu güvenlik açıkları.', tags:['cmd','shell','exec'] },
+    { id:'InfoDisc', icon:'📡', desc:'Hassas bilgilerin yetkisiz kişilere ifşa edilmesi.', tags:['leak','disclosure','sensitive'] },
+    { id:'OpenRedirect', icon:'↩️', desc:'Kullanıcıyı zararlı siteye yönlendirme.', tags:['redirect','phishing','url'] },
+    { id:'TemplateInj', icon:'📄', desc:'Şablon motorlarında kod enjeksiyonu (SSTI).', tags:['jinja2','twig','ssti','freemarker'] },
+    { id:'Race', icon:'🏁', desc:'Zamanlama temelli yarış koşulu açıkları.', tags:['toctou','concurrent','timing'] },
+    { id:'Config', icon:'⚙️', desc:'Yanlış yapılandırma kaynaklı güvenlik açıkları.', tags:['misconfiguration','default','exposed'] },
+    { id:'ZeroDay', icon:'🎯', desc:'Henüz kamuoyuna açıklanmamış veya yamasız kritik açıklar.', tags:['0day','unknown','unpatched'] },
+  ];
+
+  const colors = { RCE:'var(--red)', SQLi:'var(--orange)', XSS:'var(--yellow)', LFI:'var(--orange)', XXE:'var(--yellow)', SSRF:'var(--accent)', Overflow:'var(--red)', Auth:'var(--red)', Priv:'var(--orange)', DoS:'var(--yellow)', Crypto:'var(--accent)', Memory:'var(--red)', CSRF:'var(--yellow)', Deser:'var(--orange)', PathTraversal:'var(--yellow)', OOB:'var(--red)', UseAfterFree:'var(--red)', Injection:'var(--red)', InfoDisc:'var(--blue)', OpenRedirect:'var(--yellow)', TemplateInj:'var(--orange)', Race:'var(--accent)', Config:'var(--yellow)', ZeroDay:'var(--red)' };
+
+  grid.innerHTML = catDefs.map(cd => {
+    const cnt = catData[cd.id] || 0;
+    const color = colors[cd.id] || 'var(--accent)';
+    return `
+      <div class="cat-card" onclick="quickFilter('${cd.id}')">
+        <div class="cat-icon">${cd.icon}</div>
+        <div class="cat-name">${cd.id}</div>
+        <div class="cat-count" style="color:${color}">${cnt}</div>
+        <div class="cat-desc">${cd.desc}</div>
+        <div class="cat-tags">${cd.tags.map(t=>`<span class="cat-tag">#${t}</span>`).join('')}</div>
+        <div style="height:2px;background:${color};margin-top:10px;border-radius:1px;opacity:0.6"></div>
+      </div>
+    `;
+  }).join('');
+}
+
+function filterCats() {
+  const q = document.getElementById('cat-search').value.toLowerCase();
+  document.querySelectorAll('.cat-card').forEach(card => {
+    card.style.display = card.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ==============================
+// SOURCES
+// ==============================
+const SOURCES_DATA = [
+  { name:'NVD - NIST', org:'U.S. National Vulnerability Database', icon:'🏛️', url:'https://nvd.nist.gov', desc:'ABD Ulusal Standartlar ve Teknoloji Enstitüsü\'nün resmi CVE veritabanı. CVSS skorları ve detaylı teknik analizler içerir.', count:'250,000+', update:'Sürekli', tags:['API','CVSS v3','CWE','Resmi'], status:'ok' },
+  { name:'MITRE CVE', org:'MITRE Corporation', icon:'🔵', url:'https://cve.mitre.org', desc:'CVE standardının orijinal kaynağı. Her CVE için kimlik, açıklama ve referanslar.', count:'250,000+', update:'Günlük', tags:['API','Resmi','JSON Feed'], status:'ok' },
+  { name:'CISA KEV', org:'Cybersecurity and Infrastructure Security Agency', icon:'🇺🇸', url:'https://cisa.gov/known-exploited-vulnerabilities-catalog', desc:'ABD CISA\'nın aktif sömürülen bilinen güvenlik açıkları kataloğu. Kritik altyapı için öncelikli yama listesi.', count:'1,200+', update:'Haftalık', tags:['KEV','Aktif Exploit','Kritik'], status:'ok' },
+  { name:'Exploit-DB', org:'Offensive Security', icon:'🔴', url:'https://www.exploit-db.com', desc:'Kamuya açık exploit arşivi. Gerçek PoC kodları, shellcode\'lar ve güvenlik araştırmaları.', count:'45,000+', update:'Günlük', tags:['Exploit','PoC','Shellcode'], status:'ok' },
+  { name:'GitHub Security Advisory', org:'GitHub / Microsoft', icon:'🐙', url:'https://github.com/advisories', desc:'Açık kaynak bağımlılıklarındaki güvenlik açıkları. npm, PyPI, Maven, Go, Ruby ekosistemlerini kapsar.', count:'12,000+', update:'Sürekli', tags:['OSS','Dependency','npm','PyPI'], status:'ok' },
+  { name:'OSV (Google)', org:'Google Open Source Security', icon:'🌐', url:'https://osv.dev', desc:'Açık kaynak bileşenlerindeki güvenlik açıkları için birleşik format. Birçok ekosistemi destekler.', count:'80,000+', update:'Sürekli', tags:['OSS','API','JSON'], status:'ok' },
+  { name:'VulDB', org:'VulDB.com', icon:'📊', url:'https://vuldb.com', desc:'Kapsamlı ticari güvenlik açığı veritabanı. Risk puanlama ve trend analizleri içerir.', count:'200,000+', update:'Sürekli', tags:['Ticari','Risk Score','Timeline'], status:'ok' },
+  { name:'PacketStorm Security', org:'PacketStorm', icon:'⚡', url:'https://packetstormsecurity.com', desc:'Exploit, araç ve güvenlik araştırmaları arşivi. PoC kodları ve tam exploit betikleri.', count:'20,000+', update:'Günlük', tags:['Exploit','Tool','Research'], status:'warn' },
+  { name:'Vulhub', org:'Vulhub Project', icon:'🐋', url:'https://vulhub.org', desc:'Docker tabanlı güvenlik açığı PoC ortamları. Gerçek açık ortamları Termux\'ta da çalışabilir.', count:'500+', update:'Aylık', tags:['Docker','PoC','Lab'], status:'ok' },
+  { name:'Snyk Vulnerability DB', org:'Snyk', icon:'🛡️', url:'https://security.snyk.io', desc:'Açık kaynak bağımlılıkları için güvenlik açığı veritabanı. Otomatik düzeltme önerileri.', count:'1,200,000+', update:'Sürekli', tags:['SCA','Dependencies','Fix'], status:'ok' },
+  { name:'Tenable Plugin DB', org:'Tenable', icon:'🔍', url:'https://www.tenable.com/plugins', desc:'Nessus/Tenable.io için güvenlik açığı tarama eklentileri veritabanı.', count:'200,000+', update:'Sürekli', tags:['Plugin','Nessus','Scanner'], status:'ok' },
+  { name:'Rapid7 Metasploit DB', org:'Rapid7', icon:'🔫', url:'https://www.rapid7.com/db/', desc:'Metasploit Framework modülleri ve güvenlik açığı veritabanı. Aktif exploit modülleri.', count:'50,000+', update:'Haftalık', tags:['Metasploit','Module','Exploit'], status:'ok' },
+  { name:'AttackerKB', org:'Rapid7', icon:'🗡️', url:'https://attackerkb.com', desc:'Güvenlik araştırmacılarının CVE analizlerini paylaştığı topluluk platformu.', count:'5,000+', update:'Günlük', tags:['Community','Analysis','Score'], status:'ok' },
+  { name:'Vulners', org:'Vulners.com', icon:'🔎', url:'https://vulners.com', desc:'Birden fazla kaynaktan veri toplayan güvenlik açığı arama motoru ve API.', count:'300,000+', update:'Sürekli', tags:['API','Search','Multi-source'], status:'ok' },
+  { name:'CVEdetails', org:'CVEdetails.com', icon:'📈', url:'https://www.cvedetails.com', desc:'CVE istatistikleri, vendor/ürün bazlı sıralamalar ve güvenlik trendleri.', count:'250,000+', update:'Günlük', tags:['Stats','Trends','Ranking'], status:'ok' },
+  { name:'WPVulnDB', org:'WPScan Team', icon:'🔷', url:'https://wpscan.com/wordpresses/', desc:'WordPress core, tema ve eklentilerindeki güvenlik açıkları. WPScan entegrasyonu.', count:'30,000+', update:'Günlük', tags:['WordPress','Plugin','Theme'], status:'ok' },
+];
+
+let sourceStates = {};
+SOURCES_DATA.forEach(s => sourceStates[s.name] = true);
+
+function renderSources() {
+  const grid = document.getElementById('source-grid');
+  if (!grid) return;
+
+  grid.innerHTML = SOURCES_DATA.map(s => `
+    <div class="source-card">
+      <div class="source-hdr">
+        <span class="source-icon">${s.icon}</span>
+        <div>
+          <div class="source-name">${s.name}</div>
+          <div class="source-org">${s.org}</div>
+        </div>
+        <div class="source-status">
+          <span class="${s.status === 'ok' ? 'status-dot-on' : 'status-dot-off'}">
+            ${s.status === 'ok' ? '● ONLINE' : '◐ KADEMELI'}
+          </span>
+        </div>
+      </div>
+      <div class="source-desc">${s.desc}</div>
+      <div style="display:flex;gap:12px;font-size:10px;color:var(--text3);margin-bottom:8px">
+        <span>📦 ${s.count}</span>
+        <span>🔄 ${s.update}</span>
+      </div>
+      <div class="source-meta">${s.tags.map(t=>`<span class="source-tag">${t}</span>`).join('')}</div>
+      <div class="source-actions">
+        <button class="sbtn ${sourceStates[s.name] ? 'active' : ''}" onclick="toggleSource('${s.name}', this)">
+          ${sourceStates[s.name] ? '✓ AKTİF' : '○ DEVRE DIŞI'}
+        </button>
+        <button class="sbtn" onclick="fetchSource('${s.name}')">↻ GÜNCELLE</button>
+        <a class="sbtn" href="${s.url}" target="_blank">🔗 AÇ</a>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('sources-last-update').textContent = new Date().toLocaleString('tr-TR');
+}
+
+function toggleSource(name, btn) {
+  sourceStates[name] = !sourceStates[name];
+  btn.textContent = sourceStates[name] ? '✓ AKTİF' : '○ DEVRE DIŞI';
+  btn.classList.toggle('active', sourceStates[name]);
+  toast(sourceStates[name] ? 'success' : 'warn', `${name}: ${sourceStates[name] ? 'Aktif' : 'Devre dışı'}`);
+}
+
+function fetchSource(name) {
+  toast('info', `${name} güncelleniyor...`);
+  setTimeout(() => toast('success', `${name} güncellendi`), 1500 + Math.random()*1000);
+}
+
+function fetchAllSources() {
+  toast('info', 'Tüm kaynaklar güncelleniyor...');
+  let i = 0;
+  const iv = setInterval(() => {
+    if (i < SOURCES_DATA.length) {
+      toast('success', `✓ ${SOURCES_DATA[i].name} güncellendi`);
+      i++;
+    } else {
+      clearInterval(iv);
+      toast('success', 'Tüm kaynaklar güncellendi!');
+    }
+  }, 400);
+}
+
+function checkSourceStatus() {
+  toast('info', 'Bağlantı kontrol ediliyor...');
+  setTimeout(() => {
+    const online = SOURCES_DATA.filter(s => s.status === 'ok').length;
+    toast('success', `${online}/${SOURCES_DATA.length} kaynak çevrimiçi`);
+  }, 2000);
+}
 
 // ==============================
 // TABS
