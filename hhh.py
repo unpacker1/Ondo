@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-import os
-import sys
-import json
-import socket
-import subprocess
-import requests
-import re
-import urllib3
+import os, sys, json, socket, subprocess, requests, re, urllib3, textwrap
 from datetime import datetime, timedelta
 from flask import Flask, request, render_template_string
 
@@ -14,12 +7,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 NUCLEI_PATH = "/data/data/com.termux/files/home/go/bin/nuclei"
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
 app = Flask(__name__)
 
-# ---------- Yardımcı fonksiyonlar ----------
+# ---------- Yardımcı Fonksiyonlar ----------
 def fetch_cves(params):
-    headers = {"User-Agent": "Termux-CVE-Web/1.0"}
+    headers = {"User-Agent": "Termux-CVE-Web/2.0"}
     try:
         resp = requests.get(NVD_API_URL, params=params, headers=headers, timeout=30)
         resp.raise_for_status()
@@ -59,7 +53,20 @@ def extract_cve_info(vuln):
         "published": published
     }
 
+def load_kev():
+    """CISA KEV verisini JSON olarak indirip bir kümeye çevirir."""
+    try:
+        resp = requests.get(KEV_URL, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        # KEV'deki CVE ID'lerini al (ör: "CVE-2021-44228")
+        return {vuln["cveID"] for vuln in data.get("vulnerabilities", [])}
+    except Exception as e:
+        print(f"[!] KEV yüklenemedi: {e}")
+        return set()
+
 def filter_testable_cves(cve_ids):
+    """Nuclei şablonu olan CVE'leri filtreler."""
     testable = []
     for cid in cve_ids:
         cmd = f"{NUCLEI_PATH} -id {cid} -s -stats"
@@ -69,6 +76,7 @@ def filter_testable_cves(cve_ids):
     return testable
 
 def run_nuclei_test(target, cve_id=None, tags=None):
+    """Nuclei çağrısı."""
     if cve_id:
         cmd = f"{NUCLEI_PATH} -target {target} -id {cve_id} -silent -stats"
     elif tags:
@@ -84,6 +92,34 @@ def run_nuclei_test(target, cve_id=None, tags=None):
         return "Test zaman aşımına uğradı (120 sn)."
     except Exception as e:
         return f"Test başarısız: {e}"
+
+def run_wapiti(url):
+    """Wapiti taraması başlatır ve JSON raporu döndürür."""
+    output_dir = "/tmp/wapiti_report"
+    cmd = f"wapiti3 -u {url} -f json -o {output_dir} --scope page"
+    try:
+        subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=180)
+        # Raporu oku
+        for f in os.listdir(output_dir):
+            if f.endswith(".json"):
+                with open(os.path.join(output_dir, f)) as fp:
+                    return fp.read()
+        return "Wapiti taraması tamamlandı, ancak rapor bulunamadı."
+    except subprocess.TimeoutExpired:
+        return "Wapiti zaman aşımına uğradı (3 dk)."
+    except Exception as e:
+        return f"Wapiti hatası: {e}"
+
+def run_nikto(url):
+    """Nikto taraması (temel) ve çıktısını döndürür."""
+    cmd = f"nikto -h {url} -T 4 -maxtime 120s"
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+        return result.stdout if result.returncode == 0 else f"Nikto hatası:\n{result.stderr}"
+    except subprocess.TimeoutExpired:
+        return "Nikto zaman aşımına uğradı."
+    except Exception as e:
+        return f"Nikto başlatılamadı: {e}"
 
 def detect_technologies(url):
     detected = set()
@@ -112,7 +148,7 @@ def detect_technologies(url):
         detected.add(server.split('/')[0].strip())
     return detected
 
-# ---------- Base HTML (içerik {{ content|safe }} ile eklenir) ----------
+# ---------- HTML Şablonu ----------
 BASE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -120,23 +156,29 @@ BASE_HTML = """
     <title>CVE Paneli</title>
     <meta charset="utf-8">
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
-        h1 { color: #333; }
+        body { font-family: Arial; margin: 20px; background: #f4f4f4; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+        h1, h2, h3 { color: #333; }
         input, select, button { padding: 8px; margin: 5px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
         th { background: #eee; }
         .alert { padding: 10px; background: #ffe0e0; border-left: 5px solid red; margin: 10px 0; }
-        .success { background: #e0ffe0; border-left: 5px solid green; }
-        pre { background: #333; color: #fff; padding: 10px; overflow-x: auto; }
+        .kev { background: #fff3cd; border-left: 5px solid orange; padding: 5px; }
+        pre { background: #333; color: #fff; padding: 10px; overflow-x: auto; white-space: pre-wrap; }
         a { color: #0066cc; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🔍 CVE Sorgulama & Test Paneli</h1>
-    <p><a href="/">Ana Sayfa</a> | <a href="/search">CVE Arama</a> | <a href="/scan">Site Tara</a></p>
+    <h1>🔍 CVE Sorgulama & Test Paneli (Nuclei + Wapiti + Nikto + KEV)</h1>
+    <p>
+        <a href="/">Ana Sayfa</a> | 
+        <a href="/search">CVE Arama</a> | 
+        <a href="/scan">Site Tara</a> | 
+        <a href="/wapiti">Wapiti Tarama</a> | 
+        <a href="/nikto">Nikto Tarama</a>
+    </p>
     <hr>
     {{ content|safe }}
 </div>
@@ -151,7 +193,9 @@ def index():
     <h2>Hoş geldiniz</h2>
     <ul>
         <li><a href="/search">CVE Arama</a> – anahtar kelime, üretici, ID veya son kritikler</li>
-        <li><a href="/scan">Site Tara</a> – hedef siteyi tara, teknoloji bul ve CVE'leri test et</li>
+        <li><a href="/scan">Site Tara</a> – hedef siteyi tara, teknoloji bul ve CVE'leri test et (Nuclei + KEV)</li>
+        <li><a href="/wapiti">Wapiti Tarama</a> – derin web uygulama taraması (SQLi, XSS)</li>
+        <li><a href="/nikto">Nikto Tarama</a> – web sunucu konfigürasyon/zafiyet taraması</li>
     </ul>
     """
     return render_template_string(BASE_HTML, content=content)
@@ -164,8 +208,7 @@ def search():
         results = []
         if search_type == 'keyword':
             kw = request.form.get('keyword')
-            if not kw:
-                return render_template_string(BASE_HTML, content='<div class="alert">Anahtar kelime gerekli.</div>')
+            if not kw: return render_template_string(BASE_HTML, content='<div class="alert">Anahtar kelime gerekli.</div>')
             params["keywordSearch"] = kw
             data = fetch_cves(params)
             if data and "vulnerabilities" in data:
@@ -173,8 +216,7 @@ def search():
         elif search_type == 'vendor':
             vendor = request.form.get('vendor')
             product = request.form.get('product')
-            if not vendor:
-                return render_template_string(BASE_HTML, content='<div class="alert">Üretici adı gerekli.</div>')
+            if not vendor: return render_template_string(BASE_HTML, content='<div class="alert">Üretici adı gerekli.</div>')
             query = f"{vendor} {product}" if product else vendor
             params["keywordSearch"] = query
             data = fetch_cves(params)
@@ -182,49 +224,41 @@ def search():
                 results = [extract_cve_info(v) for v in data["vulnerabilities"]]
         elif search_type == 'id':
             cve_id = request.form.get('cveid', '').upper()
-            if not cve_id.startswith("CVE-"):
-                return render_template_string(BASE_HTML, content='<div class="alert">Geçerli CVE ID girin.</div>')
+            if not cve_id.startswith("CVE-"): return render_template_string(BASE_HTML, content='<div class="alert">Geçerli CVE ID girin.</div>')
             url = f"{NVD_API_URL}?cveId={cve_id}"
-            headers = {"User-Agent": "Termux-CVE-Web/1.0"}
+            headers = {"User-Agent": "Termux-CVE-Web/2.0"}
             try:
                 resp = requests.get(url, headers=headers, timeout=30)
                 resp.raise_for_status()
                 data = resp.json()
                 if data.get("vulnerabilitiesCount", 0) > 0:
-                    vuln = data["vulnerabilities"][0]
-                    results = [extract_cve_info(vuln)]
+                    results = [extract_cve_info(data["vulnerabilities"][0])]
             except Exception as e:
-                return render_template_string(BASE_HTML, content=f'<div class="alert">ID sorgulanamadı: {e}</div>')
+                return render_template_string(BASE_HTML, content=f'<div class="alert">Hata: {e}</div>')
         elif search_type == 'recent':
             end = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000")
             start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.000")
-            params = {
-                "pubStartDate": start,
-                "pubEndDate": end,
-                "severity": "CRITICAL",
-                "resultsPerPage": 15
-            }
+            params = {"pubStartDate": start, "pubEndDate": end, "severity": "CRITICAL", "resultsPerPage": 15}
             data = fetch_cves(params)
             if data and "vulnerabilities" in data:
                 results = [extract_cve_info(v) for v in data["vulnerabilities"]]
         else:
             return render_template_string(BASE_HTML, content='<div class="alert">Geçersiz arama türü.</div>')
 
-        # Sonuçları tablo ile göster
-        if results:
-            table_rows = ""
-            for r in results:
-                table_rows += f"<tr><td>{r['id']}</td><td>{r['severity']}</td><td>{r['score']}</td><td>{r['desc']}</td></tr>"
-            content = f"""
-            <h2>Arama Sonuçları ({len(results)} adet)</h2>
-            <table><tr><th>CVE ID</th><th>Önem</th><th>Puan</th><th>Açıklama</th></tr>{table_rows}</table>
-            <p><a href="/search">Yeni Arama</a></p>
-            """
-        else:
-            content = '<p>Hiç sonuç bulunamadı.</p><a href="/search">Yeni Arama</a>'
+        # KEV ile işaretle
+        kev_set = load_kev()
+        table_rows = ""
+        for r in results:
+            kev_badge = ' <span class="kev">[KEV]</span>' if r['id'] in kev_set else ''
+            table_rows += f"<tr><td>{r['id']}{kev_badge}</td><td>{r['severity']}</td><td>{r['score']}</td><td>{r['desc']}</td></tr>"
+        content = f"""
+        <h2>Arama Sonuçları ({len(results)} adet)</h2>
+        <table><tr><th>CVE ID</th><th>Önem</th><th>Puan</th><th>Açıklama</th></tr>{table_rows}</table>
+        <p><a href="/search">Yeni Arama</a></p>
+        """ if results else '<p>Sonuç bulunamadı.</p><a href="/search">Yeni Arama</a>'
         return render_template_string(BASE_HTML, content=content)
 
-    # GET isteği: arama formu
+    # GET form
     content = """
     <h2>CVE Arama</h2>
     <form method="POST">
@@ -269,15 +303,13 @@ def search():
 def scan():
     if request.method == 'POST':
         url = request.form.get('url', '').strip()
-        if not url:
-            return render_template_string(BASE_HTML, content='<div class="alert">URL gerekli.</div>')
-        if not url.startswith(('http://','https://')):
-            url = 'https://' + url
+        if not url: return render_template_string(BASE_HTML, content='<div class="alert">URL gerekli.</div>')
+        if not url.startswith(('http://','https://')): url = 'https://' + url
 
         techs = detect_technologies(url)
-        if not techs:
-            return render_template_string(BASE_HTML, content='<div class="alert">Teknoloji tespit edilemedi.</div>')
+        if not techs: return render_template_string(BASE_HTML, content='<div class="alert">Teknoloji tespit edilemedi.</div>')
 
+        kev_set = load_kev()
         all_cve_info = []
         for tech in techs:
             data = fetch_cves({"keywordSearch": tech, "resultsPerPage": 10})
@@ -288,32 +320,31 @@ def scan():
                     all_cve_info.append(info)
 
         testable_ids = filter_testable_cves([c['id'] for c in all_cve_info])
-
-        # Tablo: test edilebilir olanları göster
         testable_rows = ""
         if testable_ids:
             for c in all_cve_info:
                 if c['id'] in testable_ids:
-                    testable_rows += f"<tr><td>{c['id']}</td><td>{c['tech']}</td><td>{c['severity']}</td><td>{c['score']}</td></tr>"
+                    kev_badge = ' [KEV]' if c['id'] in kev_set else ''
+                    testable_rows += f"<tr><td>{c['id']}{kev_badge}</td><td>{c['tech']}</td><td>{c['severity']}</td><td>{c['score']}</td></tr>"
 
         content = f"""
         <h2>Tarama Sonuçları: {url}</h2>
         <p><b>Tespit edilen teknolojiler:</b> {', '.join(techs)}</p>
-        <p>Toplam CVE sayısı: {len(all_cve_info)} | Test edilebilir: {len(testable_ids)}</p>
+        <p>Toplam CVE sayısı: {len(all_cve_info)} | Test edilebilir (Nuclei): {len(testable_ids)}</p>
         """
         if testable_ids:
             content += f"""
-            <h3>Test Edilebilir CVE'ler</h3>
+            <h3>Test Edilebilir CVE'ler (Nuclei + KEV)</h3>
             <table><tr><th>CVE ID</th><th>Teknoloji</th><th>Önem</th><th>Puan</th></tr>{testable_rows}</table>
             <form method="POST" action="/test">
                 <input type="hidden" name="url" value="{url}">
                 <input type="hidden" name="techs" value="{','.join(techs)}">
                 <p>Test Seçenekleri:</p>
-                <button name="action" value="all_ids">Tüm test edilebilir CVE'leri test et</button>
-                <button name="action" value="tags">Teknoloji etiketleriyle toplu test</button><br><br>
-                <label>veya belirli CVE'leri seçin (virgülle ayırarak):</label>
+                <button name="action" value="all_ids">Tüm test edilebilir CVE'leri Nuclei ile test et</button>
+                <button name="action" value="tags">Teknoloji etiketleriyle toplu Nuclei testi</button><br><br>
+                <label>veya belirli CVE'leri seçin (virgülle):</label>
                 <input type="text" name="selected_cves" placeholder="CVE-2021-...">
-                <button name="action" value="selected">Seçilenleri test et</button>
+                <button name="action" value="selected">Seçilenleri Nuclei ile test et</button>
             </form>
             """
         else:
@@ -321,7 +352,6 @@ def scan():
         content += '<p><a href="/scan">Yeni tarama</a></p>'
         return render_template_string(BASE_HTML, content=content)
 
-    # GET isteği
     content = """
     <h2>Site Tara</h2>
     <form method="POST">
@@ -342,14 +372,13 @@ def test():
     if action == 'tags' and techs:
         tags = ','.join(techs)
         output = run_nuclei_test(url, tags=tags)
-        content = f"<h2>Toplu Etiket Testi ({tags})</h2><pre>{output}</pre><a href='/scan'>Geri dön</a>"
+        content = f"<h2>Toplu Nuclei Testi ({tags})</h2><pre>{output}</pre><a href='/scan'>Geri dön</a>"
         return render_template_string(BASE_HTML, content=content)
 
-    if action == 'all_ids' or action == 'selected':
+    if action in ('all_ids', 'selected'):
         if action == 'selected' and selected:
             ids = [s.strip() for s in selected.split(',') if s.strip().startswith('CVE-')]
         else:
-            # Tekrar teknoloji tespiti yapıp test edilebilir ID'leri al
             techs_detected = detect_technologies(url)
             all_ids = []
             for tech in techs_detected:
@@ -357,18 +386,61 @@ def test():
                 if data and "vulnerabilities" in data:
                     all_ids.extend([v["cve"]["id"] for v in data["vulnerabilities"]])
             ids = filter_testable_cves(all_ids)
-
         outputs = []
         for cid in ids:
             out = run_nuclei_test(url, cve_id=cid)
             outputs.append((cid, out))
-        content = "<h2>Bireysel CVE Testleri</h2>"
+        content = "<h2>Nuclei Bireysel Testler</h2>"
         for cid, out in outputs:
             content += f"<h3>{cid}</h3><pre>{out}</pre>"
         content += "<a href='/scan'>Geri dön</a>"
         return render_template_string(BASE_HTML, content=content)
 
     return render_template_string(BASE_HTML, content="<div class='alert'>Geçersiz işlem.</div>")
+
+@app.route('/wapiti', methods=['GET','POST'])
+def wapiti():
+    if request.method == 'POST':
+        url = request.form.get('url', '').strip()
+        if not url: return render_template_string(BASE_HTML, content='<div class="alert">URL gerekli.</div>')
+        if not url.startswith(('http://','https://')): url = 'https://' + url
+        output = run_wapiti(url)
+        # JSON formatını güzelleştirmeye çalış
+        try:
+            data = json.loads(output)
+            pretty = json.dumps(data, indent=2)
+        except:
+            pretty = output
+        content = f"<h2>Wapiti Tarama Sonucu ({url})</h2><pre>{pretty}</pre><a href='/wapiti'>Yeni tarama</a>"
+        return render_template_string(BASE_HTML, content=content)
+    content = """
+    <h2>Wapiti Web Uygulama Tarama</h2>
+    <form method="POST">
+        <input type="text" name="url" placeholder="https://example.com" required>
+        <button type="submit">Taramayı Başlat</button>
+    </form>
+    <p><small>Wapiti, hedef uygulamada SQLi, XSS, komut enjeksiyonu gibi açıkları arar. Tarama süresi hedefin büyüklüğüne göre değişir.</small></p>
+    """
+    return render_template_string(BASE_HTML, content=content)
+
+@app.route('/nikto', methods=['GET','POST'])
+def nikto():
+    if request.method == 'POST':
+        url = request.form.get('url', '').strip()
+        if not url: return render_template_string(BASE_HTML, content='<div class="alert">URL gerekli.</div>')
+        if not url.startswith(('http://','https://')): url = 'https://' + url
+        output = run_nikto(url)
+        content = f"<h2>Nikto Tarama Sonucu ({url})</h2><pre>{output}</pre><a href='/nikto'>Yeni tarama</a>"
+        return render_template_string(BASE_HTML, content=content)
+    content = """
+    <h2>Nikto Web Sunucu Tarama</h2>
+    <form method="POST">
+        <input type="text" name="url" placeholder="https://example.com" required>
+        <button type="submit">Taramayı Başlat</button>
+    </form>
+    <p><small>Nikto, sunucu konfigürasyon hatalarını, eski yazılımları ve bilinen 6700+ açığı tarar.</small></p>
+    """
+    return render_template_string(BASE_HTML, content=content)
 
 # ---------- Başlat ----------
 def get_random_port():
@@ -378,6 +450,6 @@ def get_random_port():
 
 if __name__ == '__main__':
     port = get_random_port()
-    print(f"\n🌐 Web paneli başlatıldı: http://127.0.0.1:{port}")
-    print("Tarayıcınızda bu adresi açın. (Durdurmak için CTRL+C)")
+    print(f"\n🌐 Panel başlatıldı: http://127.0.0.1:{port}")
+    print("Durdurmak için CTRL+C")
     app.run(host='0.0.0.0', port=port, debug=False)
