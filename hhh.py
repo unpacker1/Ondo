@@ -8,18 +8,16 @@ import requests
 import re
 import urllib3
 from datetime import datetime, timedelta
-from threading import Thread
-from flask import Flask, request, render_template_string, redirect, url_for
+from flask import Flask, request, render_template_string
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Nuclei binary yolu (Termux'taki tam yol)
 NUCLEI_PATH = "/data/data/com.termux/files/home/go/bin/nuclei"
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
 app = Flask(__name__)
 
-# -------------------- Yardımcı Fonksiyonlar --------------------
+# ---------- Yardımcı fonksiyonlar ----------
 def fetch_cves(params):
     headers = {"User-Agent": "Termux-CVE-Web/1.0"}
     try:
@@ -31,19 +29,15 @@ def fetch_cves(params):
         return None
 
 def extract_cve_info(vuln):
-    """Bir CVE öğesinden temel bilgileri döndürür."""
     cve = vuln.get("cve", {})
     cve_id = cve.get("id", "")
-    # İngilizce açıklama
     desc = "Açıklama yok"
     for d in cve.get("descriptions", []):
         if d.get("lang") == "en":
             desc = d.get("value", desc)
             break
-    # CVSS
     metrics = cve.get("metrics", {})
-    cvss_score = "N/A"
-    severity = "N/A"
+    cvss_score, severity = "N/A", "N/A"
     if "cvssMetricV31" in metrics:
         m = metrics["cvssMetricV31"][0]["cvssData"]
         cvss_score = m.get("baseScore", "N/A")
@@ -66,7 +60,6 @@ def extract_cve_info(vuln):
     }
 
 def filter_testable_cves(cve_ids):
-    """Nuclei şablonu olan CVE ID'lerini filtreler."""
     testable = []
     for cid in cve_ids:
         cmd = f"{NUCLEI_PATH} -id {cid} -s -stats"
@@ -76,7 +69,6 @@ def filter_testable_cves(cve_ids):
     return testable
 
 def run_nuclei_test(target, cve_id=None, tags=None):
-    """Nuclei testini çalıştırır, çıktıyı döndürür."""
     if cve_id:
         cmd = f"{NUCLEI_PATH} -target {target} -id {cve_id} -silent -stats"
     elif tags:
@@ -87,15 +79,13 @@ def run_nuclei_test(target, cve_id=None, tags=None):
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout
-        else:
-            return f"Zafiyet bulunamadı veya hedef erişilemez.\nHata: {result.stderr.strip()}"
+        return f"Zafiyet bulunamadı veya hedef erişilemez.\nHata: {result.stderr.strip()}"
     except subprocess.TimeoutExpired:
         return "Test zaman aşımına uğradı (120 sn)."
     except Exception as e:
         return f"Test başarısız: {e}"
 
 def detect_technologies(url):
-    """Bir URL'den teknoloji isimlerini çıkarır."""
     detected = set()
     try:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, verify=False)
@@ -122,9 +112,8 @@ def detect_technologies(url):
         detected.add(server.split('/')[0].strip())
     return detected
 
-# -------------------- Web Arayüzü Rotaları --------------------
-
-HTML_TEMPLATE = """
+# ---------- Base HTML (içerik {{ content|safe }} ile eklenir) ----------
+BASE_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -149,53 +138,52 @@ HTML_TEMPLATE = """
     <h1>🔍 CVE Sorgulama & Test Paneli</h1>
     <p><a href="/">Ana Sayfa</a> | <a href="/search">CVE Arama</a> | <a href="/scan">Site Tara</a></p>
     <hr>
-    {% block content %}{% endblock %}
+    {{ content|safe }}
 </div>
 </body>
 </html>
 """
 
+# ---------- Rotalar ----------
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE + """
-    {% block content %}
+    content = """
     <h2>Hoş geldiniz</h2>
     <ul>
         <li><a href="/search">CVE Arama</a> – anahtar kelime, üretici, ID veya son kritikler</li>
         <li><a href="/scan">Site Tara</a> – hedef siteyi tara, teknoloji bul ve CVE'leri test et</li>
     </ul>
-    {% endblock %}
-    """)
+    """
+    return render_template_string(BASE_HTML, content=content)
 
-# --- CVE Arama Sayfası ---
 @app.route('/search', methods=['GET','POST'])
 def search():
-    results = None
     if request.method == 'POST':
         search_type = request.form.get('type')
         params = {"resultsPerPage": 20}
+        results = []
         if search_type == 'keyword':
             kw = request.form.get('keyword')
             if not kw:
-                return render_template_string(HTML_TEMPLATE + """
-                {% block content %}<div class="alert">Anahtar kelime gerekli.</div>{% endblock %}
-                """)
+                return render_template_string(BASE_HTML, content='<div class="alert">Anahtar kelime gerekli.</div>')
             params["keywordSearch"] = kw
+            data = fetch_cves(params)
+            if data and "vulnerabilities" in data:
+                results = [extract_cve_info(v) for v in data["vulnerabilities"]]
         elif search_type == 'vendor':
             vendor = request.form.get('vendor')
             product = request.form.get('product')
             if not vendor:
-                return render_template_string(HTML_TEMPLATE + """
-                {% block content %}<div class="alert">Üretici adı gerekli.</div>{% endblock %}
-                """)
+                return render_template_string(BASE_HTML, content='<div class="alert">Üretici adı gerekli.</div>')
             query = f"{vendor} {product}" if product else vendor
             params["keywordSearch"] = query
+            data = fetch_cves(params)
+            if data and "vulnerabilities" in data:
+                results = [extract_cve_info(v) for v in data["vulnerabilities"]]
         elif search_type == 'id':
-            cve_id = request.form.get('cveid').upper()
+            cve_id = request.form.get('cveid', '').upper()
             if not cve_id.startswith("CVE-"):
-                return render_template_string(HTML_TEMPLATE + """
-                {% block content %}<div class="alert">Geçerli CVE ID girin.</div>{% endblock %}
-                """)
+                return render_template_string(BASE_HTML, content='<div class="alert">Geçerli CVE ID girin.</div>')
             url = f"{NVD_API_URL}?cveId={cve_id}"
             headers = {"User-Agent": "Termux-CVE-Web/1.0"}
             try:
@@ -205,12 +193,8 @@ def search():
                 if data.get("vulnerabilitiesCount", 0) > 0:
                     vuln = data["vulnerabilities"][0]
                     results = [extract_cve_info(vuln)]
-                else:
-                    results = []
             except Exception as e:
-                return render_template_string(HTML_TEMPLATE + """
-                {% block content %}<div class="alert">ID sorgulanamadı: {{e}}</div>{% endblock %}
-                """, e=str(e))
+                return render_template_string(BASE_HTML, content=f'<div class="alert">ID sorgulanamadı: {e}</div>')
         elif search_type == 'recent':
             end = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000")
             start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.000")
@@ -220,40 +204,28 @@ def search():
                 "severity": "CRITICAL",
                 "resultsPerPage": 15
             }
-        else:
-            return render_template_string(HTML_TEMPLATE + """
-            {% block content %}<div class="alert">Geçersiz arama türü.</div>{% endblock %}
-            """)
-        if search_type != 'id':
             data = fetch_cves(params)
             if data and "vulnerabilities" in data:
                 results = [extract_cve_info(v) for v in data["vulnerabilities"]]
-            else:
-                results = []
-        return render_template_string(HTML_TEMPLATE + """
-        {% block content %}
-        <h2>Arama Sonuçları ({{ results|length }} adet)</h2>
-        {% if results %}
-        <table>
-            <tr><th>CVE ID</th><th>Önem</th><th>Puan</th><th>Açıklama</th></tr>
-            {% for r in results %}
-            <tr>
-                <td>{{ r.id }}</td>
-                <td>{{ r.severity }}</td>
-                <td>{{ r.score }}</td>
-                <td>{{ r.desc }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% else %}
-        <p>Hiç sonuç bulunamadı.</p>
-        {% endif %}
-        <a href="/search">Yeni Arama</a>
-        {% endblock %}
-        """, results=results)
-    # GET isteği
-    return render_template_string(HTML_TEMPLATE + """
-    {% block content %}
+        else:
+            return render_template_string(BASE_HTML, content='<div class="alert">Geçersiz arama türü.</div>')
+
+        # Sonuçları tablo ile göster
+        if results:
+            table_rows = ""
+            for r in results:
+                table_rows += f"<tr><td>{r['id']}</td><td>{r['severity']}</td><td>{r['score']}</td><td>{r['desc']}</td></tr>"
+            content = f"""
+            <h2>Arama Sonuçları ({len(results)} adet)</h2>
+            <table><tr><th>CVE ID</th><th>Önem</th><th>Puan</th><th>Açıklama</th></tr>{table_rows}</table>
+            <p><a href="/search">Yeni Arama</a></p>
+            """
+        else:
+            content = '<p>Hiç sonuç bulunamadı.</p><a href="/search">Yeni Arama</a>'
+        return render_template_string(BASE_HTML, content=content)
+
+    # GET isteği: arama formu
+    content = """
     <h2>CVE Arama</h2>
     <form method="POST">
         <label>Tür:</label><br>
@@ -290,27 +262,22 @@ def search():
     radios.forEach(r => r.addEventListener('change', update));
     update();
     </script>
-    {% endblock %}
-    """)
+    """
+    return render_template_string(BASE_HTML, content=content)
 
-# --- Site Tarama ve Test Sayfaları ---
 @app.route('/scan', methods=['GET','POST'])
 def scan():
     if request.method == 'POST':
-        url = request.form.get('url')
+        url = request.form.get('url', '').strip()
         if not url:
-            return render_template_string(HTML_TEMPLATE + """
-            {% block content %}<div class="alert">URL gerekli.</div>{% endblock %}
-            """)
+            return render_template_string(BASE_HTML, content='<div class="alert">URL gerekli.</div>')
         if not url.startswith(('http://','https://')):
             url = 'https://' + url
-        # Teknolojileri tespit et
+
         techs = detect_technologies(url)
         if not techs:
-            return render_template_string(HTML_TEMPLATE + """
-            {% block content %}<div class="alert">Teknoloji tespit edilemedi.</div>{% endblock %}
-            """)
-        # Her teknoloji için CVE'leri topla
+            return render_template_string(BASE_HTML, content='<div class="alert">Teknoloji tespit edilemedi.</div>')
+
         all_cve_info = []
         for tech in techs:
             data = fetch_cves({"keywordSearch": tech, "resultsPerPage": 10})
@@ -319,46 +286,50 @@ def scan():
                     info = extract_cve_info(v)
                     info["tech"] = tech
                     all_cve_info.append(info)
-        # Test edilebilir CVE ID'lerini filtrele
+
         testable_ids = filter_testable_cves([c['id'] for c in all_cve_info])
-        return render_template_string(HTML_TEMPLATE + """
-        {% block content %}
-        <h2>Tarama Sonuçları: {{ url }}</h2>
-        <p><b>Tespit edilen teknolojiler:</b> {{ techs|join(', ') }}</p>
-        <p>Toplam CVE sayısı: {{ all|length }} | Test edilebilir: {{ testable|length }}</p>
-        {% if testable %}
-        <h3>Test Edilebilir CVE'ler</h3>
-        <table>
-            <tr><th>CVE ID</th><th>Teknoloji</th><th>Önem</th><th>Puan</th></tr>
-            {% for c in all if c.id in testable %}
-            <tr><td>{{ c.id }}</td><td>{{ c.tech }}</td><td>{{ c.severity }}</td><td>{{ c.score }}</td></tr>
-            {% endfor %}
-        </table>
-        <form method="POST" action="/test">
-            <input type="hidden" name="url" value="{{ url }}">
-            <input type="hidden" name="techs" value="{{ techs|join(',') }}">
-            <p>Test Seçenekleri:</p>
-            <button name="action" value="all_ids">Tüm test edilebilir CVE'leri test et</button>
-            <button name="action" value="tags">Teknoloji etiketleriyle toplu test</button><br><br>
-            <label>veya belirli CVE'leri seçin (virgülle ayırarak):</label>
-            <input type="text" name="selected_cves" placeholder="CVE-2021-...">
-            <button name="action" value="selected">Seçilenleri test et</button>
-        </form>
-        {% else %}
-        <p>Test edilebilir CVE bulunamadı.</p>
-        {% endif %}
-        <p><a href="/scan">Yeni tarama</a></p>
-        {% endblock %}
-        """, url=url, techs=list(techs), all=all_cve_info, testable=testable_ids)
-    return render_template_string(HTML_TEMPLATE + """
-    {% block content %}
+
+        # Tablo: test edilebilir olanları göster
+        testable_rows = ""
+        if testable_ids:
+            for c in all_cve_info:
+                if c['id'] in testable_ids:
+                    testable_rows += f"<tr><td>{c['id']}</td><td>{c['tech']}</td><td>{c['severity']}</td><td>{c['score']}</td></tr>"
+
+        content = f"""
+        <h2>Tarama Sonuçları: {url}</h2>
+        <p><b>Tespit edilen teknolojiler:</b> {', '.join(techs)}</p>
+        <p>Toplam CVE sayısı: {len(all_cve_info)} | Test edilebilir: {len(testable_ids)}</p>
+        """
+        if testable_ids:
+            content += f"""
+            <h3>Test Edilebilir CVE'ler</h3>
+            <table><tr><th>CVE ID</th><th>Teknoloji</th><th>Önem</th><th>Puan</th></tr>{testable_rows}</table>
+            <form method="POST" action="/test">
+                <input type="hidden" name="url" value="{url}">
+                <input type="hidden" name="techs" value="{','.join(techs)}">
+                <p>Test Seçenekleri:</p>
+                <button name="action" value="all_ids">Tüm test edilebilir CVE'leri test et</button>
+                <button name="action" value="tags">Teknoloji etiketleriyle toplu test</button><br><br>
+                <label>veya belirli CVE'leri seçin (virgülle ayırarak):</label>
+                <input type="text" name="selected_cves" placeholder="CVE-2021-...">
+                <button name="action" value="selected">Seçilenleri test et</button>
+            </form>
+            """
+        else:
+            content += "<p>Test edilebilir CVE bulunamadı.</p>"
+        content += '<p><a href="/scan">Yeni tarama</a></p>'
+        return render_template_string(BASE_HTML, content=content)
+
+    # GET isteği
+    content = """
     <h2>Site Tara</h2>
     <form method="POST">
         <input type="text" name="url" placeholder="https://example.com" required>
         <button type="submit">Taramayı Başlat</button>
     </form>
-    {% endblock %}
-    """)
+    """
+    return render_template_string(BASE_HTML, content=content)
 
 @app.route('/test', methods=['POST'])
 def test():
@@ -371,43 +342,35 @@ def test():
     if action == 'tags' and techs:
         tags = ','.join(techs)
         output = run_nuclei_test(url, tags=tags)
-        return render_template_string(HTML_TEMPLATE + """
-        {% block content %}
-        <h2>Toplu Etiket Testi ({{ tags }})</h2>
-        <pre>{{ output }}</pre>
-        <a href="/scan">Geri dön</a>
-        {% endblock %}
-        """, tags=tags, output=output)
-    elif action == 'all_ids' or action == 'selected':
+        content = f"<h2>Toplu Etiket Testi ({tags})</h2><pre>{output}</pre><a href='/scan'>Geri dön</a>"
+        return render_template_string(BASE_HTML, content=content)
+
+    if action == 'all_ids' or action == 'selected':
         if action == 'selected' and selected:
             ids = [s.strip() for s in selected.split(',') if s.strip().startswith('CVE-')]
         else:
-            # URL'yi yeniden tarayıp testable listesini al (tekrar filtreleme)
-            techs = detect_technologies(url)
+            # Tekrar teknoloji tespiti yapıp test edilebilir ID'leri al
+            techs_detected = detect_technologies(url)
             all_ids = []
-            for tech in techs:
+            for tech in techs_detected:
                 data = fetch_cves({"keywordSearch": tech, "resultsPerPage": 10})
                 if data and "vulnerabilities" in data:
                     all_ids.extend([v["cve"]["id"] for v in data["vulnerabilities"]])
             ids = filter_testable_cves(all_ids)
+
         outputs = []
         for cid in ids:
             out = run_nuclei_test(url, cve_id=cid)
             outputs.append((cid, out))
-        return render_template_string(HTML_TEMPLATE + """
-        {% block content %}
-        <h2>Bireysel CVE Testleri</h2>
-        {% for id, out in outputs %}
-            <h3>{{ id }}</h3>
-            <pre>{{ out }}</pre>
-        {% endfor %}
-        <a href="/scan">Geri dön</a>
-        {% endblock %}
-        """, outputs=outputs)
-    else:
-        return "Geçersiz işlem."
+        content = "<h2>Bireysel CVE Testleri</h2>"
+        for cid, out in outputs:
+            content += f"<h3>{cid}</h3><pre>{out}</pre>"
+        content += "<a href='/scan'>Geri dön</a>"
+        return render_template_string(BASE_HTML, content=content)
 
-# --- Uygulama Başlatma ---
+    return render_template_string(BASE_HTML, content="<div class='alert'>Geçersiz işlem.</div>")
+
+# ---------- Başlat ----------
 def get_random_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('', 0))
@@ -416,5 +379,5 @@ def get_random_port():
 if __name__ == '__main__':
     port = get_random_port()
     print(f"\n🌐 Web paneli başlatıldı: http://127.0.0.1:{port}")
-    print("Termux tarayıcınızda veya aynı ağdaki bir cihazda bu adresi açabilirsiniz.")
+    print("Tarayıcınızda bu adresi açın. (Durdurmak için CTRL+C)")
     app.run(host='0.0.0.0', port=port, debug=False)
