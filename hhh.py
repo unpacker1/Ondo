@@ -452,4 +452,4 @@ if __name__ == '__main__':
     port = get_random_port()
     print(f"\n🌐 Panel başlatıldı: http://127.0.0.1:{port}")
     print("Durdurmak için CTRL+C")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False) 
