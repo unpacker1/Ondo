@@ -1,168 +1,118 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-HızlıSetup Global Eye v1
-Güvenli/Pasif OSINT Harita Paneli
 
-Özellikler:
-- Termux, Linux, macOS, Windows üzerinde Python 3 ile çalışır.
-- Dışa saldırı, port tarama veya güvenlik açığı taraması yapmaz.
-- Açık veri kaynaklarını okur:
-  - USGS Depremler
-  - Open Notify ISS canlı konum
-  - GDELT haberleri
-- Kendi alan adın için pasif DNS/HTTPS/SSL sağlık kontrolü yapar.
-
-Çalıştırma:
-    python hizlisetup_global_eye.py
-
-Termux kurulum:
-    pkg update -y
-    pkg install python -y
-    python hizlisetup_global_eye.py
-"""
-
-from __future__ import annotations
-
-import datetime as _dt
 import json
 import random
 import socket
 import ssl
-import sys
 import time
-import traceback
-import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+
+APP = "HızlıSetup Global Eye"
+DOMAIN = "www.hızlısetup.com"
+TIMEOUT = 12
+
+USGS = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+ISS = "http://api.open-notify.org/iss-now.json"
+GDELT = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 
-APP_NAME = "HızlıSetup Global Eye"
-APP_VERSION = "1.0"
-DEFAULT_DOMAIN = "www.hızlısetup.com"
-USER_AGENT = "HizliSetupGlobalEye/1.0 passive-osint-dashboard"
-REQUEST_TIMEOUT = 12
-
-USGS_ALL_DAY = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
-OPEN_NOTIFY_ISS = "http://api.open-notify.org/iss-now.json"
-GDELT_DOC = "https://api.gdeltproject.org/api/v2/doc/doc"
+def now():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def now_iso() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
-
-
-def json_response(handler: BaseHTTPRequestHandler, data: Any, status: int = 200) -> None:
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Cache-Control", "no-store")
-    handler.send_header("Content-Length", str(len(payload)))
-    handler.end_headers()
-    handler.wfile.write(payload)
-
-
-def html_response(handler: BaseHTTPRequestHandler, html: str, status: int = 200) -> None:
-    payload = html.encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "text/html; charset=utf-8")
-    handler.send_header("Cache-Control", "no-store")
-    handler.send_header("Content-Length", str(len(payload)))
-    handler.end_headers()
-    handler.wfile.write(payload)
-
-
-def fetch_json(
-    url: str,
-    params: Optional[Dict[str, str]] = None,
-    timeout: int = REQUEST_TIMEOUT
-) -> Dict[str, Any]:
+def fetch_json(url, params=None):
     if params:
-        query = urllib.parse.urlencode(params)
-        sep = "&" if "?" in url else "?"
-        url = f"{url}{sep}{query}"
+        url += "?" + urllib.parse.urlencode(params)
 
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/json"
-        }
+            "User-Agent": "HizliSetupGlobalEye/1.0",
+            "Accept": "application/json",
+        },
     )
 
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read(4 * 1024 * 1024)
-
-    return json.loads(raw.decode("utf-8", errors="replace"))
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        return json.loads(r.read().decode("utf-8", "replace"))
 
 
-def normalize_target(target: str) -> Tuple[str, str]:
-    cleaned = (target or DEFAULT_DOMAIN).strip()
-    cleaned = cleaned.replace("https://", "").replace("http://", "").split("/")[0].strip()
+def send_json(h, data, code=200):
+    raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    h.send_response(code)
+    h.send_header("Content-Type", "application/json; charset=utf-8")
+    h.send_header("Cache-Control", "no-store")
+    h.send_header("Content-Length", str(len(raw)))
+    h.end_headers()
+    h.wfile.write(raw)
 
-    if not cleaned:
-        cleaned = DEFAULT_DOMAIN
+
+def send_html(h, data):
+    raw = data.encode("utf-8")
+    h.send_response(200)
+    h.send_header("Content-Type", "text/html; charset=utf-8")
+    h.send_header("Cache-Control", "no-store")
+    h.send_header("Content-Length", str(len(raw)))
+    h.end_headers()
+    h.wfile.write(raw)
+
+
+def clean_host(host):
+    host = (host or DOMAIN).strip()
+    host = host.replace("https://", "").replace("http://", "")
+    host = host.split("/")[0]
 
     try:
-        idna = cleaned.encode("idna").decode("ascii")
+        idna = host.encode("idna").decode("ascii")
     except Exception:
-        idna = cleaned
+        idna = host
 
-    return cleaned, idna
+    return host, idna
 
 
-def resolve_ips(host: str) -> List[str]:
-    ips: List[str] = []
+def domain_check(target):
+    display, host = clean_host(target)
+    ips = []
 
     try:
-        infos = socket.getaddrinfo(host, None)
-
-        for info in infos:
-            ip = info[4][0]
+        for item in socket.getaddrinfo(host, None):
+            ip = item[4][0]
             if ip not in ips:
                 ips.append(ip)
-
     except Exception:
         pass
 
-    return ips
-
-
-def https_check(host: str) -> Dict[str, Any]:
-    result: Dict[str, Any] = {
+    https = {
         "ok": False,
+        "error": None,
         "status": None,
-        "elapsed_ms": None,
-        "error": None
+        "ms": None
     }
 
-    url = f"https://{host}/"
     start = time.time()
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        req = urllib.request.Request(
+            "https://" + host + "/",
+            headers={"User-Agent": "HizliSetupGlobalEye/1.0"},
+        )
 
-        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
-            result["status"] = getattr(resp, "status", None)
-            result["final_url"] = resp.geturl()
-            result["server"] = resp.headers.get("server")
-            result["content_type"] = resp.headers.get("content-type")
-            result["ok"] = True
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            https["ok"] = True
+            https["status"] = getattr(r, "status", None)
+            https["final_url"] = r.geturl()
+            https["server"] = r.headers.get("server")
 
-    except Exception as exc:
-        result["error"] = str(exc)
+    except Exception as e:
+        https["error"] = str(e)
 
-    finally:
-        result["elapsed_ms"] = int((time.time() - start) * 1000)
+    https["ms"] = int((time.time() - start) * 1000)
 
-    return result
-
-
-def ssl_info(host: str) -> Dict[str, Any]:
-    info: Dict[str, Any] = {
+    ssl_info = {
         "ok": False,
         "error": None
     }
@@ -170,987 +120,374 @@ def ssl_info(host: str) -> Dict[str, Any]:
     try:
         ctx = ssl.create_default_context()
 
-        with socket.create_connection((host, 443), timeout=REQUEST_TIMEOUT) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                cert = ssock.getpeercert()
+        with socket.create_connection((host, 443), timeout=TIMEOUT) as s:
+            with ctx.wrap_socket(s, server_hostname=host) as ss:
+                cert = ss.getpeercert()
 
-        not_after = cert.get("notAfter")
-        expires = None
-        days_left = None
-
-        if not_after:
-            expires_dt = _dt.datetime.strptime(
-                not_after,
-                "%b %d %H:%M:%S %Y %Z"
-            ).replace(tzinfo=_dt.timezone.utc)
-
-            expires = expires_dt.isoformat(timespec="seconds")
-            days_left = (expires_dt - _dt.datetime.now(_dt.timezone.utc)).days
-
-        subject = dict(x[0] for x in cert.get("subject", []) if x)
+        exp = cert.get("notAfter")
         issuer = dict(x[0] for x in cert.get("issuer", []) if x)
+        subject = dict(x[0] for x in cert.get("subject", []) if x)
 
-        info.update({
+        ssl_info = {
             "ok": True,
-            "subject_cn": subject.get("commonName"),
-            "issuer_cn": issuer.get("commonName"),
-            "expires": expires,
-            "days_left": days_left
-        })
+            "subject": subject.get("commonName"),
+            "issuer": issuer.get("commonName"),
+            "expires": exp,
+        }
 
-    except Exception as exc:
-        info["error"] = str(exc)
+    except Exception as e:
+        ssl_info["error"] = str(e)
 
-    return info
+    return {
+        "ok": True,
+        "target": display,
+        "idna": host,
+        "ips": ips,
+        "https": https,
+        "ssl": ssl_info,
+        "note": "Bu kontrol pasiftir. Port tarama veya saldırı yapmaz.",
+        "updated": now(),
+    }
 
 
-def get_earthquakes() -> Dict[str, Any]:
-    data = fetch_json(USGS_ALL_DAY)
-    features = data.get("features", [])[:300]
+def earthquakes():
+    data = fetch_json(USGS)
     events = []
 
-    for f in features:
-        props = f.get("properties", {}) or {}
-        geom = f.get("geometry", {}) or {}
-        coords = geom.get("coordinates") or []
+    for f in data.get("features", [])[:250]:
+        p = f.get("properties", {})
+        g = f.get("geometry", {})
+        c = g.get("coordinates") or []
 
-        if len(coords) < 2:
-            continue
-
-        events.append({
-            "id": f.get("id"),
-            "type": "earthquake",
-            "title": props.get("title") or props.get("place") or "Deprem",
-            "place": props.get("place"),
-            "mag": props.get("mag"),
-            "time": props.get("time"),
-            "url": props.get("url"),
-            "lon": coords[0],
-            "lat": coords[1],
-            "depth_km": coords[2] if len(coords) > 2 else None
-        })
+        if len(c) >= 2:
+            events.append({
+                "title": p.get("title") or "Deprem",
+                "place": p.get("place"),
+                "mag": p.get("mag"),
+                "url": p.get("url"),
+                "lon": c[0],
+                "lat": c[1],
+                "depth": c[2] if len(c) > 2 else None,
+            })
 
     return {
         "ok": True,
-        "updated": now_iso(),
         "count": len(events),
-        "events": events
+        "events": events,
+        "updated": now()
     }
 
 
-def get_iss() -> Dict[str, Any]:
-    data = fetch_json(OPEN_NOTIFY_ISS)
-    pos = data.get("iss_position", {}) or {}
-
-    lat = float(pos.get("latitude"))
-    lon = float(pos.get("longitude"))
+def iss():
+    data = fetch_json(ISS)
+    pos = data.get("iss_position", {})
 
     return {
-        "ok": data.get("message") == "success",
-        "updated": now_iso(),
-        "timestamp": data.get("timestamp"),
-        "lat": lat,
-        "lon": lon,
-        "title": "ISS - Uluslararası Uzay İstasyonu"
+        "ok": True,
+        "title": "ISS - Uluslararası Uzay İstasyonu",
+        "lat": float(pos.get("latitude")),
+        "lon": float(pos.get("longitude")),
+        "updated": now(),
     }
 
 
-def get_news() -> Dict[str, Any]:
-    query = (
-        '(earthquake OR flood OR wildfire OR "cyber attack" OR security '
-        'OR conflict OR emergency OR disaster OR deprem OR yangın OR sel)'
-    )
-
+def news():
     params = {
-        "query": query,
+        "query": "earthquake OR flood OR wildfire OR security OR emergency OR disaster OR deprem OR yangın OR sel",
         "mode": "ArtList",
         "format": "json",
-        "maxrecords": "30",
-        "sort": "HybridRel"
+        "maxrecords": "25",
+        "sort": "HybridRel",
     }
 
-    data = fetch_json(GDELT_DOC, params=params)
-    articles = []
+    data = fetch_json(GDELT, params)
+    out = []
 
-    for item in (data.get("articles") or [])[:30]:
-        articles.append({
-            "title": item.get("title"),
-            "url": item.get("url"),
-            "domain": item.get("domain"),
-            "sourcecountry": item.get("sourcecountry"),
-            "language": item.get("language"),
-            "seendate": item.get("seendate"),
-            "image": item.get("socialimage")
+    for a in data.get("articles", [])[:25]:
+        out.append({
+            "title": a.get("title"),
+            "url": a.get("url"),
+            "domain": a.get("domain"),
+            "country": a.get("sourcecountry"),
+            "date": a.get("seendate"),
         })
 
     return {
         "ok": True,
-        "updated": now_iso(),
-        "count": len(articles),
-        "articles": articles
+        "count": len(out),
+        "articles": out,
+        "updated": now()
     }
 
 
-def domain_report(target: str) -> Dict[str, Any]:
-    display_host, idna_host = normalize_target(target)
-    ips = resolve_ips(idna_host)
-
-    return {
-        "ok": True,
-        "updated": now_iso(),
-        "target": display_host,
-        "idna": idna_host,
-        "ips": ips,
-        "https": https_check(idna_host),
-        "ssl": ssl_info(idna_host),
-        "note": "Bu modül pasif sağlık kontrolüdür; port/vuln taraması yapmaz."
-    }
-
-
-INDEX_HTML = r'''<!doctype html>
+HTML = r"""
+<!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HızlıSetup Global Eye</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-:root {
-  --bg: #07111f;
-  --panel: #0d1b2f;
-  --panel2: #10243d;
-  --muted: #8fb0d1;
-  --text: #eef7ff;
-  --blue: #2f8cff;
-  --cyan: #36d8ff;
-  --red: #ff4d6d;
-  --yellow: #ffd166;
-  --green: #3ddc97;
-  --line: rgba(255,255,255,.12);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: radial-gradient(circle at 20% 0%, #123960, #07111f 44%, #030914);
-  font-family: Arial, Helvetica, sans-serif;
-  color: var(--text);
-  overflow: hidden;
-}
-
-.app {
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  height: 100vh;
-  width: 100vw;
-}
-
-.sidebar {
-  background: linear-gradient(180deg, rgba(13,27,47,.98), rgba(6,14,26,.98));
-  border-right: 1px solid var(--line);
-  padding: 14px;
-  overflow: auto;
-  box-shadow: 14px 0 40px rgba(0,0,0,.25);
-  z-index: 5;
-}
-
-.brand {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin: 4px 0 14px;
-}
-
-.logo {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--blue), var(--cyan));
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-  color: #03101f;
-  box-shadow: 0 10px 28px rgba(47,140,255,.35);
-}
-
-.brand h1 {
-  font-size: 20px;
-  margin: 0;
-}
-
-.brand p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.card {
-  background: rgba(16,36,61,.78);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 12px;
-  margin: 12px 0;
-  backdrop-filter: blur(10px);
-}
-
-.card h2 {
-  font-size: 14px;
-  margin: 0 0 10px;
-  letter-spacing: .2px;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.stat {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(255,255,255,.045);
-}
-
-.stat b {
-  display: block;
-  font-size: 22px;
-}
-
-.stat span {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.btn {
-  width: 100%;
-  border: 1px solid var(--line);
-  background: rgba(47,140,255,.15);
-  color: var(--text);
-  border-radius: 14px;
-  padding: 10px 12px;
-  margin: 5px 0;
-  cursor: pointer;
-  text-align: left;
-  font-weight: 700;
-}
-
-.btn:hover {
-  background: rgba(47,140,255,.28);
-}
-
-.btn.small {
-  font-size: 12px;
-  text-align: center;
-  padding: 9px;
-}
-
-.btn.active {
-  border-color: rgba(54,216,255,.75);
-  box-shadow: 0 0 0 2px rgba(54,216,255,.13) inset;
-}
-
-.danger {
-  background: rgba(255,77,109,.14);
-}
-
-.inputrow {
-  display: flex;
-  gap: 8px;
-}
-
-input {
-  width: 100%;
-  background: #06101d;
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px;
-  outline: none;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  max-height: 280px;
-  overflow: auto;
-}
-
-.item {
-  border: 1px solid var(--line);
-  background: rgba(255,255,255,.045);
-  border-radius: 14px;
-  padding: 10px;
-}
-
-.item a {
-  color: #9bdcff;
-  text-decoration: none;
-  font-weight: 700;
-}
-
-.item small {
-  display: block;
-  color: var(--muted);
-  margin-top: 6px;
-  line-height: 1.35;
-}
-
-.mono {
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #cde8ff;
-}
-
-.mapwrap {
-  position: relative;
-}
-
-.topbar {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  z-index: 4;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  pointer-events: none;
-}
-
-.pill {
-  pointer-events: auto;
-  background: rgba(7,17,31,.78);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 9px 12px;
-  color: #d9efff;
-  box-shadow: 0 12px 30px rgba(0,0,0,.25);
-  backdrop-filter: blur(10px);
-  font-size: 13px;
-}
-
-.pill strong {
-  color: #fff;
-}
-
-.map {
-  height: 100vh;
-  width: 100%;
-}
-
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
-  background: #081526;
-  color: #eef7ff;
-}
-
-.leaflet-container a {
-  color: #7bdcff;
-}
-
-.legend {
-  position: absolute;
-  right: 12px;
-  bottom: 20px;
-  z-index: 4;
-  background: rgba(7,17,31,.82);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 10px 12px;
-  font-size: 12px;
-  backdrop-filter: blur(10px);
-}
-
-.dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 6px;
-}
-
-.eq {
-  background: var(--red);
-}
-
-.iss {
-  background: var(--cyan);
-}
-
-.night {
-  background: #1b2544;
-}
-
-.warn {
-  font-size: 12px;
-  color: #ffdca1;
-  line-height: 1.45;
-}
-
-.footer {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.45;
-  margin: 12px 0 5px;
-}
-
-@media(max-width: 840px) {
-  body {
-    overflow: auto;
-  }
-
-  .app {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-
-  .sidebar {
-    height: auto;
-    max-height: none;
-  }
-
-  .map {
-    height: 68vh;
-  }
-
-  .topbar {
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    flex-wrap: wrap;
-  }
-
-  .pill {
-    font-size: 12px;
-    padding: 8px 10px;
-  }
-
-  .legend {
-    bottom: 10px;
-    right: 8px;
-  }
-
-  .list {
-    max-height: 220px;
-  }
-}
+*{box-sizing:border-box}
+body{margin:0;background:#07111f;color:#eef7ff;font-family:Arial,Helvetica,sans-serif}
+.app{display:grid;grid-template-columns:350px 1fr;height:100vh}
+.side{background:#0d1b2f;padding:14px;overflow:auto;border-right:1px solid rgba(255,255,255,.12)}
+h1{font-size:22px;margin:0 0 5px}
+p{color:#9bb8d8;margin:0 0 12px}
+.card{background:#10243d;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:12px;margin:12px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:rgba(255,255,255,.06);border-radius:14px;padding:10px}
+.stat b{display:block;font-size:22px}
+.stat span{font-size:12px;color:#9bb8d8}
+button,input{width:100%;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#06101d;color:#fff;margin:4px 0}
+button{cursor:pointer;background:#17416d;font-weight:bold}
+button:hover{background:#20588f}
+#map{height:100vh;width:100%}
+.item{background:rgba(255,255,255,.06);border-radius:12px;padding:9px;margin:8px 0}
+.item a{color:#80dcff;text-decoration:none;font-weight:bold}
+.item small{display:block;color:#9bb8d8;margin-top:5px}
+pre{white-space:pre-wrap;word-break:break-word;color:#d9efff;font-size:12px}
+.warn{color:#ffdca1;font-size:13px;line-height:1.45}
+@media(max-width:850px){.app{grid-template-columns:1fr;height:auto}.side{height:auto}#map{height:70vh}}
 </style>
 </head>
 
 <body>
 <div class="app">
 
-  <aside class="sidebar">
+<aside class="side">
+<h1>🌐 HızlıSetup Global Eye</h1>
+<p>Pasif OSINT harita paneli</p>
 
-    <div class="brand">
-      <div class="logo">HS</div>
-      <div>
-        <h1>HızlıSetup Global Eye</h1>
-        <p>Pasif OSINT • Harita • Haber • Deprem • ISS</p>
-      </div>
-    </div>
+<div class="card">
+<h3>Canlı Özet</h3>
+<div class="grid">
+<div class="stat"><b id="eqc">-</b><span>Deprem</span></div>
+<div class="stat"><b id="newsc">-</b><span>Haber</span></div>
+<div class="stat"><b id="isslat">-</b><span>ISS Lat</span></div>
+<div class="stat"><b id="isslon">-</b><span>ISS Lon</span></div>
+</div>
+</div>
 
-    <div class="card">
-      <h2>Canlı Özet</h2>
-      <div class="grid">
-        <div class="stat">
-          <b id="eqCount">-</b>
-          <span>Deprem / 24s</span>
-        </div>
-        <div class="stat">
-          <b id="newsCount">-</b>
-          <span>Haber</span>
-        </div>
-        <div class="stat">
-          <b id="issLat">-</b>
-          <span>ISS Enlem</span>
-        </div>
-        <div class="stat">
-          <b id="issLon">-</b>
-          <span>ISS Boylam</span>
-        </div>
-      </div>
-    </div>
+<div class="card">
+<h3>Kontroller</h3>
+<button onclick="refreshAll()">🔄 Verileri yenile</button>
+<button onclick="map.setView([20,0],2.5)">🌍 Dünya görünümü</button>
+</div>
 
-    <div class="card">
-      <h2>Katmanlar</h2>
-      <button id="btnEq" class="btn active" onclick="toggleLayer('eq')">🌍 Depremler</button>
-      <button id="btnIss" class="btn active" onclick="toggleLayer('iss')">🛰️ ISS Konumu</button>
-      <button id="btnNight" class="btn active" onclick="toggleLayer('night')">🌗 Gündüz / Gece Yaklaşık</button>
-      <button class="btn" onclick="refreshAll()">🔄 Verileri Yenile</button>
-    </div>
+<div class="card">
+<h3>Domain Kontrolü</h3>
+<input id="domain" value="www.hızlısetup.com">
+<button onclick="checkDomain()">Kontrol et</button>
+<pre id="domainOut">Hazır.</pre>
+</div>
 
-    <div class="card">
-      <h2>Domain Sağlık Kontrolü</h2>
-      <div class="inputrow">
-        <input id="domainInput" value="www.hızlısetup.com" />
-        <button class="btn small" onclick="checkDomain()">Kontrol</button>
-      </div>
-      <div id="domainResult" class="mono" style="margin-top:10px">Hazır.</div>
-    </div>
+<div class="card">
+<h3>Son Haberler</h3>
+<div id="news">Yükleniyor...</div>
+</div>
 
-    <div class="card">
-      <h2>Son Açık Kaynak Haberleri</h2>
-      <div id="newsList" class="list">
-        <div class="item">
-          <small>Yükleniyor...</small>
-        </div>
-      </div>
-    </div>
+<div class="card">
+<div class="warn">
+Bu panel saldırı, zafiyet tarama veya izinsiz işlem yapmaz. Sadece açık veri kaynaklarını okur.
+</div>
+</div>
+</aside>
 
-    <div class="card danger">
-      <h2>Güvenli Kullanım</h2>
-      <div class="warn">
-        Bu sürüm saldırı, port tarama, zafiyet tarama veya veri sızıntısı arama yapmaz.
-        Sadece açık kaynak veri okur ve kendi domainin için pasif kontrol yapar.
-      </div>
-    </div>
-
-    <div class="footer">
-      v1.0 • Yerel panel cihazında çalışır. Harita ve veri kaynakları için internet gerekir.
-    </div>
-
-  </aside>
-
-  <main class="mapwrap">
-    <div class="topbar">
-      <div class="pill"><strong>Durum:</strong> <span id="status">Başlatılıyor</span></div>
-      <div class="pill"><strong>UTC:</strong> <span id="utcClock">-</span></div>
-      <div class="pill"><strong>Merkez:</strong> Dünya görünümü</div>
-    </div>
-
-    <div id="map" class="map"></div>
-
-    <div class="legend">
-      <div><span class="dot eq"></span>Deprem</div>
-      <div><span class="dot iss"></span>ISS</div>
-      <div><span class="dot night"></span>Yaklaşık gece alanı</div>
-    </div>
-  </main>
+<main>
+<div id="map"></div>
+</main>
 
 </div>
 
 <script>
-const map = L.map('map', {
-  worldCopyJump: true,
-  zoomControl: true
-}).setView([20, 0], 2.5);
+const map=L.map("map").setView([20,0],2.5);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18,
-  attribution: '&copy; OpenStreetMap'
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+maxZoom:18,
+attribution:"OpenStreetMap"
 }).addTo(map);
 
-let eqLayer = L.layerGroup().addTo(map);
-let issLayer = L.layerGroup().addTo(map);
-let nightLayer = L.layerGroup().addTo(map);
+const eqLayer=L.layerGroup().addTo(map);
+const issLayer=L.layerGroup().addTo(map);
 
-let layers = {
-  eq: true,
-  iss: true,
-  night: true
-};
-
-let issMarker = null;
-
-function setStatus(s) {
-  document.getElementById('status').textContent = s;
+async function getj(url){
+const r=await fetch(url,{cache:"no-store"});
+if(!r.ok)throw new Error("HTTP "+r.status);
+return await r.json();
 }
 
-function fmt(n, d = 2) {
-  return Number(n).toFixed(d);
+function esc(s){
+return String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#039;",'"':"&quot;"}[c]));
 }
 
-function utcTick() {
-  document.getElementById('utcClock').textContent =
-    new Date().toISOString().replace('T', ' ').slice(0, 19);
+async function loadEq(){
+try{
+const d=await getj("/api/earthquakes");
+eqLayer.clearLayers();
+document.getElementById("eqc").textContent=d.count;
+
+d.events.forEach(e=>{
+let mag=Number(e.mag||0);
+let color=mag>=5?"#ff4d6d":mag>=3?"#ffd166":"#3ddc97";
+
+let m=L.circleMarker([e.lat,e.lon],{
+radius:Math.max(5,Math.min(24,5+mag*4)),
+color:color,
+fillColor:color,
+fillOpacity:.65,
+weight:1
+}).addTo(eqLayer);
+
+m.bindPopup(
+`<b>${esc(e.title)}</b><br>
+<small>Büyüklük: ${esc(e.mag)}</small><br>
+<small>Derinlik: ${esc(e.depth)} km</small><br>
+<a target="_blank" href="${e.url}">Kaynak</a>`
+);
+});
+}catch(e){console.log(e)}
 }
 
-setInterval(utcTick, 1000);
-utcTick();
+async function loadIss(){
+try{
+const d=await getj("/api/iss");
+issLayer.clearLayers();
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>'"]/g, function(c) {
-    return {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      "'": '&#039;',
-      '"': '&quot;'
-    }[c];
-  });
+document.getElementById("isslat").textContent=d.lat.toFixed(2);
+document.getElementById("isslon").textContent=d.lon.toFixed(2);
+
+L.marker([d.lat,d.lon])
+.addTo(issLayer)
+.bindPopup(`<b>${esc(d.title)}</b><br>${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}`);
+
+}catch(e){console.log(e)}
 }
 
-function popupHtml(title, rows, url) {
-  let h = `<b>${escapeHtml(title || 'Olay')}</b>`;
+async function loadNews(){
+try{
+const d=await getj("/api/news");
+document.getElementById("newsc").textContent=d.count;
 
-  rows.forEach(function(r) {
-    h += `<br><small>${escapeHtml(r)}</small>`;
-  });
+let html="";
 
-  if (url) {
-    h += `<br><a target="_blank" href="${url}">Kaynağı aç</a>`;
-  }
+d.articles.forEach(a=>{
+html+=`<div class="item">
+<a target="_blank" href="${a.url}">${esc(a.title)}</a>
+<small>${esc(a.domain)} • ${esc(a.country)} • ${esc(a.date)}</small>
+</div>`;
+});
 
-  return h;
+document.getElementById("news").innerHTML=html||"Haber bulunamadı.";
+
+}catch(e){
+document.getElementById("news").textContent="Haber alınamadı.";
+}
 }
 
-async function jget(url) {
-  const r = await fetch(url, {
-    cache: 'no-store'
-  });
+async function checkDomain(){
+let target=document.getElementById("domain").value;
+let out=document.getElementById("domainOut");
 
-  if (!r.ok) {
-    throw new Error('HTTP ' + r.status);
-  }
+out.textContent="Kontrol ediliyor...";
 
-  return await r.json();
+try{
+let d=await getj("/api/domain?target="+encodeURIComponent(target));
+out.textContent=JSON.stringify(d,null,2);
+}catch(e){
+out.textContent="Hata: "+e.message;
+}
 }
 
-async function loadEarthquakes() {
-  try {
-    const data = await jget('/api/earthquakes');
-
-    eqLayer.clearLayers();
-
-    data.events.forEach(function(e) {
-      const mag = Number(e.mag || 0);
-      const radius = Math.max(5, Math.min(26, 5 + mag * 4));
-
-      const color =
-        mag >= 5 ? '#ff4d6d' :
-        mag >= 3 ? '#ffd166' :
-        '#3ddc97';
-
-      const marker = L.circleMarker([e.lat, e.lon], {
-        radius: radius,
-        color: color,
-        fillColor: color,
-        fillOpacity: .62,
-        weight: 1
-      });
-
-      marker.bindPopup(
-        popupHtml(
-          e.title,
-          [
-            `Büyüklük: ${e.mag ?? '-'}`,
-            `Derinlik: ${e.depth_km ?? '-'} km`,
-            e.place || ''
-          ],
-          e.url
-        )
-      );
-
-      marker.addTo(eqLayer);
-    });
-
-    document.getElementById('eqCount').textContent = data.count;
-
-  } catch (err) {
-    console.error(err);
-    setStatus('Deprem verisi alınamadı');
-  }
-}
-
-async function loadISS() {
-  try {
-    const data = await jget('/api/iss');
-
-    issLayer.clearLayers();
-
-    const icon = L.divIcon({
-      className: '',
-      html: '<div style="width:24px;height:24px;border-radius:50%;background:#36d8ff;border:3px solid white;box-shadow:0 0 24px #36d8ff"></div>',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-
-    issMarker = L.marker([data.lat, data.lon], {
-      icon: icon
-    }).bindPopup(
-      popupHtml(
-        data.title,
-        [
-          `Lat: ${fmt(data.lat, 4)}`,
-          `Lon: ${fmt(data.lon, 4)}`,
-          `Zaman: ${data.timestamp || '-'}`
-        ]
-      )
-    );
-
-    issMarker.addTo(issLayer);
-
-    document.getElementById('issLat').textContent = fmt(data.lat, 2);
-    document.getElementById('issLon').textContent = fmt(data.lon, 2);
-
-  } catch (err) {
-    console.error(err);
-    setStatus('ISS verisi alınamadı');
-  }
-}
-
-async function loadNews() {
-  try {
-    const data = await jget('/api/news');
-
-    document.getElementById('newsCount').textContent = data.count;
-
-    const box = document.getElementById('newsList');
-    box.innerHTML = '';
-
-    data.articles.forEach(function(a) {
-      const div = document.createElement('div');
-      div.className = 'item';
-
-      const title = escapeHtml(a.title || 'Başlıksız haber');
-      const url = a.url || '#';
-
-      div.innerHTML =
-        `<a target="_blank" href="${url}">${title}</a>` +
-        `<small>${escapeHtml(a.domain || '')} • ${escapeHtml(a.sourcecountry || '')} • ${escapeHtml(a.seendate || '')}</small>`;
-
-      box.appendChild(div);
-    });
-
-    if (!data.articles.length) {
-      box.innerHTML = '<div class="item"><small>Haber bulunamadı.</small></div>';
-    }
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById('newsList').innerHTML =
-      '<div class="item"><small>Haber verisi alınamadı.</small></div>';
-  }
-}
-
-function drawNight() {
-  nightLayer.clearLayers();
-
-  const now = new Date();
-  const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
-
-  const sunLon = 180 - utcHours * 15;
-  const nightCenter = ((sunLon + 180 + 540) % 360) - 180;
-
-  let west = nightCenter - 90;
-  let east = nightCenter + 90;
-
-  const polys = [];
-
-  function rect(w, e) {
-    return [
-      [-85, w],
-      [85, w],
-      [85, e],
-      [-85, e]
-    ];
-  }
-
-  if (west < -180) {
-    polys.push(rect(west + 360, 180));
-    polys.push(rect(-180, east));
-  } else if (east > 180) {
-    polys.push(rect(west, 180));
-    polys.push(rect(-180, east - 360));
-  } else {
-    polys.push(rect(west, east));
-  }
-
-  polys.forEach(function(p) {
-    L.polygon(p, {
-      color: '#1b2544',
-      weight: 0,
-      fillColor: '#1b2544',
-      fillOpacity: .28,
-      interactive: false
-    }).addTo(nightLayer);
-  });
-}
-
-setInterval(function() {
-  if (layers.night) {
-    drawNight();
-  }
-}, 60000);
-
-function toggleLayer(name) {
-  layers[name] = !layers[name];
-
-  const obj =
-    name === 'eq' ? eqLayer :
-    name === 'iss' ? issLayer :
-    nightLayer;
-
-  const btn =
-    document.getElementById('btn' + name.charAt(0).toUpperCase() + name.slice(1));
-
-  if (layers[name]) {
-    obj.addTo(map);
-    btn.classList.add('active');
-
-    if (name === 'night') {
-      drawNight();
-    }
-
-  } else {
-    map.removeLayer(obj);
-    btn.classList.remove('active');
-  }
-}
-
-async function checkDomain() {
-  const target = document.getElementById('domainInput').value;
-  const out = document.getElementById('domainResult');
-
-  out.textContent = 'Kontrol ediliyor...';
-
-  try {
-    const data = await jget('/api/domain?target=' + encodeURIComponent(target));
-    out.textContent = JSON.stringify(data, null, 2);
-  } catch (err) {
-    out.textContent = 'Hata: ' + err.message;
-  }
-}
-
-async function refreshAll() {
-  setStatus('Veriler yenileniyor...');
-
-  await Promise.allSettled([
-    loadEarthquakes(),
-    loadISS(),
-    loadNews()
-  ]);
-
-  if (layers.night) {
-    drawNight();
-  }
-
-  setStatus('Hazır');
+async function refreshAll(){
+await Promise.allSettled([
+loadEq(),
+loadIss(),
+loadNews()
+]);
 }
 
 refreshAll();
-
-setInterval(loadISS, 10000);
-setInterval(loadEarthquakes, 5 * 60 * 1000);
-setInterval(loadNews, 10 * 60 * 1000);
-
 checkDomain();
+
+setInterval(loadIss,10000);
+setInterval(loadEq,300000);
+setInterval(loadNews,600000);
 </script>
+
 </body>
-</html>'''
+</html>
+"""
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = f"HizliSetupGlobalEye/{APP_VERSION}"
+    def log_message(self, fmt, *args):
+        print("[%s] %s" % (self.log_date_time_string(), fmt % args))
 
-    def log_message(self, fmt: str, *args: Any) -> None:
-        sys.stdout.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
-
-    def do_GET(self) -> None:
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        qs = urllib.parse.parse_qs(parsed.query)
+    def do_GET(self):
+        p = urllib.parse.urlparse(self.path)
+        q = urllib.parse.parse_qs(p.query)
 
         try:
-            if path == "/" or path == "/index.html":
-                html_response(self, INDEX_HTML)
+            if p.path in ["/", "/index.html"]:
+                send_html(self, HTML)
 
-            elif path == "/api/status":
-                json_response(self, {
-                    "ok": True,
-                    "app": APP_NAME,
-                    "version": APP_VERSION,
-                    "time": now_iso()
-                })
+            elif p.path == "/api/earthquakes":
+                send_json(self, earthquakes())
 
-            elif path == "/api/earthquakes":
-                json_response(self, get_earthquakes())
+            elif p.path == "/api/iss":
+                send_json(self, iss())
 
-            elif path == "/api/iss":
-                json_response(self, get_iss())
+            elif p.path == "/api/news":
+                send_json(self, news())
 
-            elif path == "/api/news":
-                json_response(self, get_news())
-
-            elif path == "/api/domain":
-                target = (qs.get("target") or [DEFAULT_DOMAIN])[0]
-                json_response(self, domain_report(target))
+            elif p.path == "/api/domain":
+                target = (q.get("target") or [DOMAIN])[0]
+                send_json(self, domain_check(target))
 
             else:
-                json_response(self, {
-                    "ok": False,
-                    "error": "Not found"
-                }, 404)
+                send_json(self, {"ok": False, "error": "Bulunamadı"}, 404)
 
-        except urllib.error.HTTPError as exc:
-            json_response(self, {
-                "ok": False,
-                "error": f"HTTPError: {exc.code} {exc.reason}",
-                "path": path
-            }, 502)
-
-        except Exception as exc:
-            json_response(self, {
-                "ok": False,
-                "error": str(exc),
-                "trace": traceback.format_exc(limit=2)
-            }, 500)
+        except Exception as e:
+            send_json(self, {"ok": False, "error": str(e)}, 500)
 
 
-def find_port() -> int:
+def find_port():
     for _ in range(50):
         port = random.randint(41000, 62000)
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
+        try:
+            s = socket.socket()
+            s.bind(("127.0.0.1", port))
+            s.close()
+            return port
+
+        except OSError:
+            pass
 
     return 8080
 
 
-def main() -> None:
+def main():
     port = find_port()
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    url = "http://127.0.0.1:%s" % port
 
-    local_url = f"http://127.0.0.1:{port}"
-    lan_url = f"http://0.0.0.0:{port}"
-
-    print("\n" + "=" * 64)
-    print(f" {APP_NAME} v{APP_VERSION}")
-    print(" Güvenli/Pasif OSINT harita paneli başlatıldı")
-    print(f" Yerel adres : {local_url}")
-    print(f" Ağ adresi   : {lan_url}")
-    print(" Durdurmak için CTRL + C")
-    print("=" * 64 + "\n")
+    print("=" * 55)
+    print(APP)
+    print("Panel açıldı:", url)
+    print("Durdurmak için: CTRL + C")
+    print("=" * 55)
 
     try:
-        try:
-            webbrowser.open(local_url)
-        except Exception:
-            pass
+        webbrowser.open(url)
+    except Exception:
+        pass
 
-        server.serve_forever()
-
-    except KeyboardInterrupt:
-        print("\nPanel kapatılıyor...")
-
-    finally:
-        server.server_close()
+    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
