@@ -1,1296 +1,1154 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
-Termux Uyumlu Güvenli OSINT Paneli
-Tek dosya Python web panelidir.
+HızlıSetup Global Eye v1
+Güvenli/Pasif OSINT Harita Paneli
 
-Kapsam:
-- Domain / IP RDAP sorgusu
-- DNS kayıtları
-- HTTP header analizi
-- SSL sertifika özeti
-- crt.sh üzerinden pasif subdomain keşfi
-- robots.txt ve sitemap.xml kontrolü
-- Public IP bilgisi
-- URL yönlendirme zinciri
-- E-posta header analizi
-- IOC çıkarıcı
-- Hash türü tahmini
+Özellikler:
+- Termux, Linux, macOS, Windows üzerinde Python 3 ile çalışır.
+- Dışa saldırı, port tarama veya güvenlik açığı taraması yapmaz.
+- Açık veri kaynaklarını okur:
+  - USGS Depremler
+  - Open Notify ISS canlı konum
+  - GDELT haberleri
+- Kendi alan adın için pasif DNS/HTTPS/SSL sağlık kontrolü yapar.
 
-Çalıştır:
-    python osint_panel.py
+Çalıştırma:
+    python hizlisetup_global_eye.py
 
-Aynı Wi-Fi ağında açmak için:
-    python osint_panel.py --public
+Termux kurulum:
+    pkg update -y
+    pkg install python -y
+    python hizlisetup_global_eye.py
 """
 
-import argparse
-import base64
-import email
-import hashlib
-import html
-import ipaddress
+from __future__ import annotations
+
+import datetime as _dt
 import json
 import random
-import re
 import socket
 import ssl
 import sys
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, Dict, List, Optional, Tuple
 
 
-APP_NAME = "Termux OSINT Panel"
-VERSION = "1.0-safe"
+APP_NAME = "HızlıSetup Global Eye"
+APP_VERSION = "1.0"
+DEFAULT_DOMAIN = "www.hızlısetup.com"
+USER_AGENT = "HizliSetupGlobalEye/1.0 passive-osint-dashboard"
+REQUEST_TIMEOUT = 12
+
+USGS_ALL_DAY = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+OPEN_NOTIFY_ISS = "http://api.open-notify.org/iss-now.json"
+GDELT_DOC = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 
-# ---------------------------------------------------------
-# Yardımcı fonksiyonlar
-# ---------------------------------------------------------
-
-def now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def now_iso() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
 
 
-def clean_text(value, limit=5000):
-    if value is None:
-        return ""
-    value = str(value).strip()
-    if len(value) > limit:
-        value = value[:limit]
-    return value
-
-
-def json_response(handler, data, status=200):
-    body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+def json_response(handler: BaseHTTPRequestHandler, data: Any, status: int = 200) -> None:
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Content-Length", str(len(payload)))
     handler.end_headers()
-    handler.wfile.write(body)
+    handler.wfile.write(payload)
 
 
-def html_response(handler, content, status=200):
-    body = content.encode("utf-8")
+def html_response(handler: BaseHTTPRequestHandler, html: str, status: int = 200) -> None:
+    payload = html.encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Content-Length", str(len(payload)))
     handler.end_headers()
-    handler.wfile.write(body)
+    handler.wfile.write(payload)
 
 
-def fetch_url(url, timeout=12, headers=None, max_bytes=2_000_000):
-    headers = headers or {}
-    default_headers = {
-        "User-Agent": f"{APP_NAME}/{VERSION} Python-Termux",
-        "Accept": "*/*",
-    }
-    default_headers.update(headers)
+def fetch_json(
+    url: str,
+    params: Optional[Dict[str, str]] = None,
+    timeout: int = REQUEST_TIMEOUT
+) -> Dict[str, Any]:
+    if params:
+        query = urllib.parse.urlencode(params)
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}{query}"
 
-    req = urllib.request.Request(url, headers=default_headers)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read(max_bytes)
-            return {
-                "ok": True,
-                "url": resp.geturl(),
-                "status": getattr(resp, "status", None),
-                "headers": dict(resp.headers),
-                "text": raw.decode("utf-8", errors="replace"),
-                "bytes": len(raw),
-            }
-    except urllib.error.HTTPError as e:
-        try:
-            raw = e.read(max_bytes)
-            text = raw.decode("utf-8", errors="replace")
-        except Exception:
-            text = ""
-        return {
-            "ok": False,
-            "url": url,
-            "status": e.code,
-            "headers": dict(e.headers),
-            "text": text,
-            "error": str(e),
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json"
         }
-    except Exception as e:
-        return {
-            "ok": False,
-            "url": url,
-            "status": None,
-            "headers": {},
-            "text": "",
-            "error": str(e),
-        }
+    )
+
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read(4 * 1024 * 1024)
+
+    return json.loads(raw.decode("utf-8", errors="replace"))
 
 
-def normalize_domain(value):
-    value = clean_text(value, 300).lower()
-    value = value.replace("http://", "").replace("https://", "")
-    value = value.split("/")[0]
-    value = value.split("?")[0]
-    value = value.split("#")[0]
-    value = value.strip(". ")
-    if ":" in value and not is_ip(value):
-        value = value.split(":")[0]
-    return value
+def normalize_target(target: str) -> Tuple[str, str]:
+    cleaned = (target or DEFAULT_DOMAIN).strip()
+    cleaned = cleaned.replace("https://", "").replace("http://", "").split("/")[0].strip()
 
+    if not cleaned:
+        cleaned = DEFAULT_DOMAIN
 
-def normalize_url(value):
-    value = clean_text(value, 1000)
-    if not value.startswith(("http://", "https://")):
-        value = "https://" + value
-    return value
-
-
-def is_ip(value):
     try:
-        ipaddress.ip_address(value)
-        return True
+        idna = cleaned.encode("idna").decode("ascii")
     except Exception:
-        return False
+        idna = cleaned
+
+    return cleaned, idna
 
 
-def is_domain(value):
-    value = normalize_domain(value)
-    if len(value) < 3 or len(value) > 253:
-        return False
-    pattern = r"^(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
-    return re.match(pattern, value) is not None
-
-
-def pretty_json(obj):
-    return json.dumps(obj, ensure_ascii=False, indent=2)
-
-
-def safe_error(message):
-    return {"error": str(message)}
-
-
-# ---------------------------------------------------------
-# OSINT Modülleri
-# ---------------------------------------------------------
-
-def module_rdap(target):
-    target = normalize_domain(target)
-
-    if not target:
-        return safe_error("Hedef boş.")
-
-    if is_ip(target):
-        url = f"https://rdap.org/ip/{urllib.parse.quote(target)}"
-    elif is_domain(target):
-        url = f"https://rdap.org/domain/{urllib.parse.quote(target)}"
-    else:
-        return safe_error("Geçerli domain veya IP gir.")
-
-    result = fetch_url(url)
-    if not result["ok"]:
-        return {
-            "source": url,
-            "status": result.get("status"),
-            "error": result.get("error") or "RDAP cevabı alınamadı.",
-            "raw": result.get("text", "")[:2000],
-        }
+def resolve_ips(host: str) -> List[str]:
+    ips: List[str] = []
 
     try:
-        data = json.loads(result["text"])
-    except Exception:
-        return {
-            "source": url,
-            "error": "RDAP cevabı JSON olarak çözülemedi.",
-            "raw": result["text"][:2000],
-        }
+        infos = socket.getaddrinfo(host, None)
 
-    summary = {
-        "source": url,
-        "objectClassName": data.get("objectClassName"),
-        "handle": data.get("handle"),
-        "ldhName": data.get("ldhName"),
-        "name": data.get("name"),
-        "status": data.get("status"),
-        "events": data.get("events"),
-        "nameservers": data.get("nameservers"),
-        "links": data.get("links"),
-        "notices": data.get("notices"),
-    }
-
-    return summary
-
-
-def module_dns(target):
-    domain = normalize_domain(target)
-    if not is_domain(domain):
-        return safe_error("DNS için geçerli domain gir.")
-
-    output = {
-        "domain": domain,
-        "method": None,
-        "records": {},
-        "note": None,
-    }
-
-    try:
-        import dns.resolver  # type: ignore
-        output["method"] = "dnspython"
-
-        resolver = dns.resolver.Resolver()
-        resolver.lifetime = 8
-        resolver.timeout = 4
-
-        record_types = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "CAA"]
-
-        for rtype in record_types:
-            try:
-                answers = resolver.resolve(domain, rtype)
-                values = []
-                for item in answers:
-                    values.append(str(item).strip())
-                output["records"][rtype] = values
-            except Exception as e:
-                output["records"][rtype] = []
-
-        return output
+        for info in infos:
+            ip = info[4][0]
+            if ip not in ips:
+                ips.append(ip)
 
     except Exception:
-        output["method"] = "socket"
-        output["note"] = "Gelişmiş DNS kayıtları için Termux'ta şu komutu kullanabilirsin: pip install dnspython"
+        pass
 
-        try:
-            ipv4 = socket.gethostbyname_ex(domain)
-            output["records"]["A"] = ipv4[2]
-        except Exception as e:
-            output["records"]["A"] = []
-
-        try:
-            infos = socket.getaddrinfo(domain, None, socket.AF_INET6)
-            ipv6s = sorted(set([i[4][0] for i in infos]))
-            output["records"]["AAAA"] = ipv6s
-        except Exception:
-            output["records"]["AAAA"] = []
-
-        return output
+    return ips
 
 
-def module_http_headers(target):
-    url = normalize_url(target)
-    result = fetch_url(url, timeout=12)
-
-    headers = result.get("headers", {})
-    security_headers = {
-        "strict-transport-security": headers.get("Strict-Transport-Security"),
-        "content-security-policy": headers.get("Content-Security-Policy"),
-        "x-frame-options": headers.get("X-Frame-Options"),
-        "x-content-type-options": headers.get("X-Content-Type-Options"),
-        "referrer-policy": headers.get("Referrer-Policy"),
-        "permissions-policy": headers.get("Permissions-Policy"),
+def https_check(host: str) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "ok": False,
+        "status": None,
+        "elapsed_ms": None,
+        "error": None
     }
 
-    missing = [k for k, v in security_headers.items() if not v]
-
-    return {
-        "requested_url": url,
-        "final_url": result.get("url"),
-        "ok": result.get("ok"),
-        "status": result.get("status"),
-        "headers": headers,
-        "security_headers": security_headers,
-        "missing_security_headers": missing,
-        "error": result.get("error"),
-    }
-
-
-def module_ssl(target):
-    domain = normalize_domain(target)
-    if not domain:
-        return safe_error("SSL için domain gir.")
-
-    if is_ip(domain):
-        host = domain
-    elif is_domain(domain):
-        host = domain
-    else:
-        return safe_error("Geçerli domain veya IP gir.")
-
-    port = 443
-    ctx = ssl.create_default_context()
+    url = f"https://{host}/"
+    start = time.time()
 
     try:
-        with socket.create_connection((host, port), timeout=10) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host if not is_ip(host) else None) as ssock:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
+            result["status"] = getattr(resp, "status", None)
+            result["final_url"] = resp.geturl()
+            result["server"] = resp.headers.get("server")
+            result["content_type"] = resp.headers.get("content-type")
+            result["ok"] = True
+
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    finally:
+        result["elapsed_ms"] = int((time.time() - start) * 1000)
+
+    return result
+
+
+def ssl_info(host: str) -> Dict[str, Any]:
+    info: Dict[str, Any] = {
+        "ok": False,
+        "error": None
+    }
+
+    try:
+        ctx = ssl.create_default_context()
+
+        with socket.create_connection((host, 443), timeout=REQUEST_TIMEOUT) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
-                cipher = ssock.cipher()
-                version = ssock.version()
 
-        subject = dict(x[0] for x in cert.get("subject", []))
-        issuer = dict(x[0] for x in cert.get("issuer", []))
+        not_after = cert.get("notAfter")
+        expires = None
+        days_left = None
 
-        return {
-            "host": host,
-            "port": port,
-            "tls_version": version,
-            "cipher": cipher,
-            "subject": subject,
-            "issuer": issuer,
-            "not_before": cert.get("notBefore"),
-            "not_after": cert.get("notAfter"),
-            "subject_alt_names": cert.get("subjectAltName"),
-            "serial_number": cert.get("serialNumber"),
-        }
+        if not_after:
+            expires_dt = _dt.datetime.strptime(
+                not_after,
+                "%b %d %H:%M:%S %Y %Z"
+            ).replace(tzinfo=_dt.timezone.utc)
 
-    except Exception as e:
-        return safe_error(e)
+            expires = expires_dt.isoformat(timespec="seconds")
+            days_left = (expires_dt - _dt.datetime.now(_dt.timezone.utc)).days
 
+        subject = dict(x[0] for x in cert.get("subject", []) if x)
+        issuer = dict(x[0] for x in cert.get("issuer", []) if x)
 
-def module_crtsh(target):
-    domain = normalize_domain(target)
-    if not is_domain(domain):
-        return safe_error("crt.sh için geçerli domain gir.")
-
-    url = "https://crt.sh/?" + urllib.parse.urlencode({
-        "q": f"%.{domain}",
-        "output": "json",
-    })
-
-    result = fetch_url(url, timeout=20, headers={"Accept": "application/json"}, max_bytes=4_000_000)
-
-    if not result["ok"]:
-        return {
-            "source": url,
-            "error": result.get("error") or "crt.sh cevabı alınamadı.",
-            "status": result.get("status"),
-            "raw": result.get("text", "")[:1500],
-        }
-
-    try:
-        data = json.loads(result["text"])
-    except Exception:
-        return {
-            "source": url,
-            "error": "crt.sh cevabı JSON çözülemedi. Bazen servis HTML/limit cevabı döndürebilir.",
-            "raw": result["text"][:1500],
-        }
-
-    subdomains = set()
-    for row in data:
-        name = row.get("name_value", "")
-        for item in str(name).splitlines():
-            item = item.lower().strip()
-            item = item.replace("*.", "")
-            if item.endswith(domain):
-                subdomains.add(item)
-
-    return {
-        "source": url,
-        "domain": domain,
-        "count": len(subdomains),
-        "subdomains": sorted(subdomains)[:1000],
-        "limited": len(subdomains) > 1000,
-    }
-
-
-def module_robots_sitemap(target):
-    base = normalize_url(target)
-    parsed = urllib.parse.urlparse(base)
-    root = f"{parsed.scheme}://{parsed.netloc}"
-
-    robots_url = root + "/robots.txt"
-    sitemap_url = root + "/sitemap.xml"
-
-    robots = fetch_url(robots_url, timeout=10, max_bytes=500_000)
-    sitemap = fetch_url(sitemap_url, timeout=10, max_bytes=800_000)
-
-    return {
-        "root": root,
-        "robots": {
-            "url": robots_url,
-            "ok": robots.get("ok"),
-            "status": robots.get("status"),
-            "content_preview": robots.get("text", "")[:5000],
-            "error": robots.get("error"),
-        },
-        "sitemap": {
-            "url": sitemap_url,
-            "ok": sitemap.get("ok"),
-            "status": sitemap.get("status"),
-            "content_preview": sitemap.get("text", "")[:5000],
-            "error": sitemap.get("error"),
-        },
-    }
-
-
-def module_public_ip(target):
-    target = normalize_domain(target)
-
-    if target and not is_ip(target):
-        try:
-            target = socket.gethostbyname(target)
-        except Exception:
-            return safe_error("IP çözümlenemedi.")
-
-    if not target:
-        result = fetch_url("https://api.ipify.org?format=json", timeout=10)
-        try:
-            target = json.loads(result["text"]).get("ip")
-        except Exception:
-            return safe_error("Public IP alınamadı.")
-
-    services = [
-        f"https://ipapi.co/{urllib.parse.quote(target)}/json/",
-        f"https://ipwho.is/{urllib.parse.quote(target)}",
-    ]
-
-    responses = []
-    for url in services:
-        r = fetch_url(url, timeout=12)
-        item = {
-            "source": url,
-            "ok": r.get("ok"),
-            "status": r.get("status"),
-            "error": r.get("error"),
-        }
-        try:
-            item["data"] = json.loads(r.get("text", "{}"))
-        except Exception:
-            item["raw"] = r.get("text", "")[:1500]
-        responses.append(item)
-
-    return {
-        "ip": target,
-        "results": responses,
-    }
-
-
-def module_redirects(target):
-    url = normalize_url(target)
-    chain = []
-
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
-            return None
-
-    opener = urllib.request.build_opener(NoRedirect)
-
-    current = url
-    for _ in range(10):
-        req = urllib.request.Request(current, headers={
-            "User-Agent": f"{APP_NAME}/{VERSION}",
-            "Accept": "*/*",
+        info.update({
+            "ok": True,
+            "subject_cn": subject.get("commonName"),
+            "issuer_cn": issuer.get("commonName"),
+            "expires": expires,
+            "days_left": days_left
         })
-        try:
-            resp = opener.open(req, timeout=10)
-            chain.append({
-                "url": current,
-                "status": getattr(resp, "status", None),
-                "location": None,
-            })
-            break
-        except urllib.error.HTTPError as e:
-            location = e.headers.get("Location")
-            chain.append({
-                "url": current,
-                "status": e.code,
-                "location": location,
-            })
 
-            if e.code in [301, 302, 303, 307, 308] and location:
-                current = urllib.parse.urljoin(current, location)
-                continue
-            break
-        except Exception as e:
-            chain.append({
-                "url": current,
-                "error": str(e),
-            })
-            break
+    except Exception as exc:
+        info["error"] = str(exc)
 
-    return {
-        "start": url,
-        "chain": chain,
-        "final": chain[-1] if chain else None,
-    }
+    return info
 
 
-def module_email_header(raw_header):
-    raw_header = clean_text(raw_header, 20000)
-    if not raw_header:
-        return safe_error("E-posta header içeriği boş.")
+def get_earthquakes() -> Dict[str, Any]:
+    data = fetch_json(USGS_ALL_DAY)
+    features = data.get("features", [])[:300]
+    events = []
 
-    msg = email.message_from_string(raw_header)
+    for f in features:
+        props = f.get("properties", {}) or {}
+        geom = f.get("geometry", {}) or {}
+        coords = geom.get("coordinates") or []
 
-    received = msg.get_all("Received", [])
-    auth_results = msg.get_all("Authentication-Results", [])
+        if len(coords) < 2:
+            continue
 
-    fields = {
-        "From": msg.get("From"),
-        "To": msg.get("To"),
-        "Subject": msg.get("Subject"),
-        "Date": msg.get("Date"),
-        "Message-ID": msg.get("Message-ID"),
-        "Return-Path": msg.get("Return-Path"),
-        "Reply-To": msg.get("Reply-To"),
-        "DKIM-Signature": "var" if msg.get("DKIM-Signature") else "yok",
-        "SPF/Auth Results": auth_results,
-        "Received Chain": received,
-    }
-
-    ips = sorted(set(re.findall(
-        r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
-        raw_header
-    )))
-
-    domains = sorted(set(re.findall(
-        r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63}\b",
-        raw_header
-    )))
+        events.append({
+            "id": f.get("id"),
+            "type": "earthquake",
+            "title": props.get("title") or props.get("place") or "Deprem",
+            "place": props.get("place"),
+            "mag": props.get("mag"),
+            "time": props.get("time"),
+            "url": props.get("url"),
+            "lon": coords[0],
+            "lat": coords[1],
+            "depth_km": coords[2] if len(coords) > 2 else None
+        })
 
     return {
-        "parsed_fields": fields,
-        "ips_found": ips,
-        "domains_found": domains[:500],
-        "received_count": len(received),
-        "note": "Bu analiz yalnızca header metninden pasif çıkarım yapar.",
+        "ok": True,
+        "updated": now_iso(),
+        "count": len(events),
+        "events": events
     }
 
 
-def module_ioc_extract(text):
-    text = clean_text(text, 50000)
+def get_iss() -> Dict[str, Any]:
+    data = fetch_json(OPEN_NOTIFY_ISS)
+    pos = data.get("iss_position", {}) or {}
 
-    ipv4 = sorted(set(re.findall(
-        r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
-        text
-    )))
-
-    urls = sorted(set(re.findall(
-        r"https?://[^\s\"'<>]+",
-        text
-    )))
-
-    domains = sorted(set(re.findall(
-        r"\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,63}\b",
-        text
-    )))
-
-    emails = sorted(set(re.findall(
-        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}\b",
-        text
-    )))
-
-    hashes = sorted(set(re.findall(
-        r"\b[a-fA-F0-9]{32}\b|\b[a-fA-F0-9]{40}\b|\b[a-fA-F0-9]{64}\b",
-        text
-    )))
+    lat = float(pos.get("latitude"))
+    lon = float(pos.get("longitude"))
 
     return {
-        "ipv4": ipv4,
-        "urls": urls,
-        "domains": domains[:1000],
-        "emails": emails[:1000],
-        "hashes": hashes,
-        "counts": {
-            "ipv4": len(ipv4),
-            "urls": len(urls),
-            "domains": len(domains),
-            "emails": len(emails),
-            "hashes": len(hashes),
-        }
+        "ok": data.get("message") == "success",
+        "updated": now_iso(),
+        "timestamp": data.get("timestamp"),
+        "lat": lat,
+        "lon": lon,
+        "title": "ISS - Uluslararası Uzay İstasyonu"
     }
 
 
-def module_hash_identify(value):
-    value = clean_text(value, 1000).strip()
+def get_news() -> Dict[str, Any]:
+    query = (
+        '(earthquake OR flood OR wildfire OR "cyber attack" OR security '
+        'OR conflict OR emergency OR disaster OR deprem OR yangın OR sel)'
+    )
 
-    value = value.lower()
-    value = re.sub(r"[^a-f0-9]", "", value)
+    params = {
+        "query": query,
+        "mode": "ArtList",
+        "format": "json",
+        "maxrecords": "30",
+        "sort": "HybridRel"
+    }
 
-    length = len(value)
+    data = fetch_json(GDELT_DOC, params=params)
+    articles = []
 
-    guesses = []
-    if re.fullmatch(r"[a-f0-9]+", value or ""):
-        if length == 32:
-            guesses.append("MD5")
-        elif length == 40:
-            guesses.append("SHA1")
-        elif length == 56:
-            guesses.append("SHA224")
-        elif length == 64:
-            guesses.append("SHA256")
-        elif length == 96:
-            guesses.append("SHA384")
-        elif length == 128:
-            guesses.append("SHA512")
+    for item in (data.get("articles") or [])[:30]:
+        articles.append({
+            "title": item.get("title"),
+            "url": item.get("url"),
+            "domain": item.get("domain"),
+            "sourcecountry": item.get("sourcecountry"),
+            "language": item.get("language"),
+            "seendate": item.get("seendate"),
+            "image": item.get("socialimage")
+        })
 
     return {
-        "input_cleaned": value,
-        "length": length,
-        "possible_types": guesses or ["Bilinmiyor"],
-        "note": "Bu modül hash kırmaz; yalnızca uzunluk ve karakter yapısına göre tür tahmini yapar.",
+        "ok": True,
+        "updated": now_iso(),
+        "count": len(articles),
+        "articles": articles
     }
 
 
-def module_all_passive(target):
-    target = clean_text(target, 1000)
+def domain_report(target: str) -> Dict[str, Any]:
+    display_host, idna_host = normalize_target(target)
+    ips = resolve_ips(idna_host)
 
-    results = {
-        "target": target,
-        "generated_at": now(),
-        "modules": {}
+    return {
+        "ok": True,
+        "updated": now_iso(),
+        "target": display_host,
+        "idna": idna_host,
+        "ips": ips,
+        "https": https_check(idna_host),
+        "ssl": ssl_info(idna_host),
+        "note": "Bu modül pasif sağlık kontrolüdür; port/vuln taraması yapmaz."
     }
 
-    for name, func in [
-        ("rdap", module_rdap),
-        ("dns", module_dns),
-        ("http_headers", module_http_headers),
-        ("ssl", module_ssl),
-        ("crtsh", module_crtsh),
-        ("robots_sitemap", module_robots_sitemap),
-        ("redirects", module_redirects),
-        ("public_ip", module_public_ip),
-    ]:
-        try:
-            results["modules"][name] = func(target)
-        except Exception as e:
-            results["modules"][name] = safe_error(e)
 
-    return results
-
-
-MODULES = {
-    "all": module_all_passive,
-    "rdap": module_rdap,
-    "dns": module_dns,
-    "http": module_http_headers,
-    "ssl": module_ssl,
-    "crtsh": module_crtsh,
-    "robots": module_robots_sitemap,
-    "ip": module_public_ip,
-    "redirects": module_redirects,
-    "email_header": module_email_header,
-    "ioc": module_ioc_extract,
-    "hash": module_hash_identify,
-}
-
-
-# ---------------------------------------------------------
-# Web Arayüzü
-# ---------------------------------------------------------
-
-HTML_PAGE = r"""
-<!doctype html>
+INDEX_HTML = r'''<!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Termux OSINT Panel</title>
-  <style>
-    :root {
-      --bg: #07111f;
-      --card: rgba(255,255,255,.075);
-      --card2: rgba(255,255,255,.11);
-      --text: #eaf2ff;
-      --muted: #9db2ca;
-      --line: rgba(255,255,255,.14);
-      --accent: #3b82f6;
-      --accent2: #22c55e;
-      --danger: #fb7185;
-      --warn: #f59e0b;
-      --shadow: 0 20px 55px rgba(0,0,0,.35);
-      --radius: 22px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      --sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HızlıSetup Global Eye</title>
 
-    * { box-sizing: border-box; }
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-    body {
-      margin: 0;
-      font-family: var(--sans);
-      color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(59,130,246,.38), transparent 32%),
-        radial-gradient(circle at top right, rgba(34,197,94,.25), transparent 28%),
-        linear-gradient(135deg, #06101f, #081527 42%, #050916);
-      min-height: 100vh;
-    }
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    .wrap {
-      width: min(1180px, calc(100% - 28px));
-      margin: 0 auto;
-      padding: 26px 0 40px;
-    }
+<style>
+:root {
+  --bg: #07111f;
+  --panel: #0d1b2f;
+  --panel2: #10243d;
+  --muted: #8fb0d1;
+  --text: #eef7ff;
+  --blue: #2f8cff;
+  --cyan: #36d8ff;
+  --red: #ff4d6d;
+  --yellow: #ffd166;
+  --green: #3ddc97;
+  --line: rgba(255,255,255,.12);
+}
 
-    .hero {
-      display: grid;
-      grid-template-columns: 1.25fr .75fr;
-      gap: 18px;
-      align-items: stretch;
-      margin-bottom: 18px;
-    }
+* {
+  box-sizing: border-box;
+}
 
-    .hero-card, .panel, .result {
-      background: linear-gradient(180deg, var(--card2), var(--card));
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-    }
+body {
+  margin: 0;
+  background: radial-gradient(circle at 20% 0%, #123960, #07111f 44%, #030914);
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text);
+  overflow: hidden;
+}
 
-    .hero-card {
-      padding: 26px;
-      overflow: hidden;
-      position: relative;
-    }
+.app {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  height: 100vh;
+  width: 100vw;
+}
 
-    .hero-card::after {
-      content: "";
-      position: absolute;
-      right: -80px;
-      top: -80px;
-      width: 230px;
-      height: 230px;
-      border-radius: 999px;
-      background: rgba(59,130,246,.22);
-      filter: blur(10px);
-    }
+.sidebar {
+  background: linear-gradient(180deg, rgba(13,27,47,.98), rgba(6,14,26,.98));
+  border-right: 1px solid var(--line);
+  padding: 14px;
+  overflow: auto;
+  box-shadow: 14px 0 40px rgba(0,0,0,.25);
+  z-index: 5;
+}
 
-    h1 {
-      margin: 0;
-      font-size: clamp(30px, 4vw, 54px);
-      letter-spacing: -1.5px;
-      line-height: 1;
-    }
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 4px 0 14px;
+}
 
-    .subtitle {
-      margin: 14px 0 0;
-      color: var(--muted);
-      font-size: 16px;
-      line-height: 1.6;
-      max-width: 760px;
-    }
+.logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: #03101f;
+  box-shadow: 0 10px 28px rgba(47,140,255,.35);
+}
 
-    .badges {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 18px;
-    }
+.brand h1 {
+  font-size: 20px;
+  margin: 0;
+}
 
-    .badge {
-      padding: 8px 11px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: rgba(255,255,255,.07);
-      color: #cfe0f5;
-      font-size: 13px;
-    }
+.brand p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
 
-    .status {
-      padding: 22px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      min-height: 190px;
-    }
+.card {
+  background: rgba(16,36,61,.78);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  margin: 12px 0;
+  backdrop-filter: blur(10px);
+}
 
-    .status .big {
-      font-size: 42px;
-      font-weight: 800;
-      letter-spacing: -1px;
-    }
+.card h2 {
+  font-size: 14px;
+  margin: 0 0 10px;
+  letter-spacing: .2px;
+}
 
-    .status .small {
-      color: var(--muted);
-      line-height: 1.5;
-      margin-top: 8px;
-    }
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 
-    .dot {
-      width: 10px;
-      height: 10px;
-      background: var(--accent2);
-      border-radius: 999px;
-      display: inline-block;
-      box-shadow: 0 0 18px var(--accent2);
-      margin-right: 8px;
-    }
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(255,255,255,.045);
+}
 
-    .grid {
-      display: grid;
-      grid-template-columns: 340px 1fr;
-      gap: 18px;
-    }
+.stat b {
+  display: block;
+  font-size: 22px;
+}
 
-    .panel {
-      padding: 18px;
-    }
+.stat span {
+  font-size: 11px;
+  color: var(--muted);
+}
 
-    label {
-      display: block;
-      color: #d9e8fb;
-      font-size: 14px;
-      margin-bottom: 8px;
-      font-weight: 700;
-    }
+.btn {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: rgba(47,140,255,.15);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin: 5px 0;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 700;
+}
 
-    input, textarea, select, button {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: rgba(3, 9, 20, .62);
-      color: var(--text);
-      padding: 13px 14px;
-      outline: none;
-      font: inherit;
-    }
+.btn:hover {
+  background: rgba(47,140,255,.28);
+}
 
-    textarea {
-      min-height: 170px;
-      resize: vertical;
-      font-family: var(--mono);
-      font-size: 13px;
-    }
+.btn.small {
+  font-size: 12px;
+  text-align: center;
+  padding: 9px;
+}
 
-    input:focus, textarea:focus, select:focus {
-      border-color: rgba(59,130,246,.8);
-      box-shadow: 0 0 0 4px rgba(59,130,246,.14);
-    }
+.btn.active {
+  border-color: rgba(54,216,255,.75);
+  box-shadow: 0 0 0 2px rgba(54,216,255,.13) inset;
+}
 
-    .field {
-      margin-bottom: 14px;
-    }
+.danger {
+  background: rgba(255,77,109,.14);
+}
 
-    button {
-      border: none;
-      background: linear-gradient(135deg, var(--accent), #06b6d4);
-      color: white;
-      font-weight: 800;
-      cursor: pointer;
-      transition: transform .15s ease, filter .15s ease;
-    }
+.inputrow {
+  display: flex;
+  gap: 8px;
+}
 
-    button:hover {
-      transform: translateY(-1px);
-      filter: brightness(1.05);
-    }
+input {
+  width: 100%;
+  background: #06101d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  outline: none;
+}
 
-    button.secondary {
-      background: rgba(255,255,255,.08);
-      border: 1px solid var(--line);
-      color: var(--text);
-    }
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 280px;
+  overflow: auto;
+}
 
-    .btn-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
+.item {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.045);
+  border-radius: 14px;
+  padding: 10px;
+}
 
-    .modules {
-      display: grid;
-      gap: 8px;
-      margin-top: 10px;
-    }
+.item a {
+  color: #9bdcff;
+  text-decoration: none;
+  font-weight: 700;
+}
 
-    .module-tip {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 10px;
-      background: rgba(255,255,255,.055);
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
-    }
+.item small {
+  display: block;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.35;
+}
 
-    .result {
-      padding: 18px;
-      min-height: 560px;
-      overflow: hidden;
-    }
+.mono {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #cde8ff;
+}
 
-    .result-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      margin-bottom: 14px;
-    }
+.mapwrap {
+  position: relative;
+}
 
-    .result-title {
-      font-size: 19px;
-      font-weight: 850;
-    }
+.topbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
 
-    .tools {
-      display: flex;
-      gap: 8px;
-    }
+.pill {
+  pointer-events: auto;
+  background: rgba(7,17,31,.78);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 12px;
+  color: #d9efff;
+  box-shadow: 0 12px 30px rgba(0,0,0,.25);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+}
 
-    .tools button {
-      padding: 9px 12px;
-      border-radius: 12px;
-      font-size: 13px;
-    }
+.pill strong {
+  color: #fff;
+}
 
-    pre {
-      margin: 0;
-      padding: 16px;
-      border-radius: 18px;
-      background: rgba(0,0,0,.42);
-      border: 1px solid rgba(255,255,255,.1);
-      color: #d9f99d;
-      overflow: auto;
-      min-height: 480px;
-      max-height: 70vh;
-      font-family: var(--mono);
-      font-size: 13px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
+.map {
+  height: 100vh;
+  width: 100%;
+}
 
-    .notice {
-      margin-top: 14px;
-      border: 1px solid rgba(245,158,11,.35);
-      background: rgba(245,158,11,.10);
-      border-radius: 16px;
-      padding: 12px;
-      color: #fde68a;
-      font-size: 13px;
-      line-height: 1.45;
-    }
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #081526;
+  color: #eef7ff;
+}
 
-    .footer {
-      margin-top: 20px;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
-    }
+.leaflet-container a {
+  color: #7bdcff;
+}
 
-    .hide {
-      display: none;
-    }
+.legend {
+  position: absolute;
+  right: 12px;
+  bottom: 20px;
+  z-index: 4;
+  background: rgba(7,17,31,.82);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px 12px;
+  font-size: 12px;
+  backdrop-filter: blur(10px);
+}
 
-    @media (max-width: 880px) {
-      .hero, .grid {
-        grid-template-columns: 1fr;
-      }
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
 
-      .status {
-        min-height: auto;
-      }
-    }
-  </style>
+.eq {
+  background: var(--red);
+}
+
+.iss {
+  background: var(--cyan);
+}
+
+.night {
+  background: #1b2544;
+}
+
+.warn {
+  font-size: 12px;
+  color: #ffdca1;
+  line-height: 1.45;
+}
+
+.footer {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 12px 0 5px;
+}
+
+@media(max-width: 840px) {
+  body {
+    overflow: auto;
+  }
+
+  .app {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .sidebar {
+    height: auto;
+    max-height: none;
+  }
+
+  .map {
+    height: 68vh;
+  }
+
+  .topbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .legend {
+    bottom: 10px;
+    right: 8px;
+  }
+
+  .list {
+    max-height: 220px;
+  }
+}
+</style>
 </head>
+
 <body>
-  <main class="wrap">
-    <section class="hero">
-      <div class="hero-card">
-        <h1>Termux OSINT Panel</h1>
-        <p class="subtitle">
-          Tek dosya Python paneli. Domain, IP, URL ve metinler üzerinde pasif / izinli OSINT analizi yapar.
-          Saldırı, izinsiz tarama veya kişisel veri avcılığı için tasarlanmamıştır.
-        </p>
-        <div class="badges">
-          <span class="badge">Python</span>
-          <span class="badge">Termux</span>
-          <span class="badge">Tek Dosya</span>
-          <span class="badge">Rastgele Port</span>
-          <span class="badge">Pasif OSINT</span>
+<div class="app">
+
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">HS</div>
+      <div>
+        <h1>HızlıSetup Global Eye</h1>
+        <p>Pasif OSINT • Harita • Haber • Deprem • ISS</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Canlı Özet</h2>
+      <div class="grid">
+        <div class="stat">
+          <b id="eqCount">-</b>
+          <span>Deprem / 24s</span>
+        </div>
+        <div class="stat">
+          <b id="newsCount">-</b>
+          <span>Haber</span>
+        </div>
+        <div class="stat">
+          <b id="issLat">-</b>
+          <span>ISS Enlem</span>
+        </div>
+        <div class="stat">
+          <b id="issLon">-</b>
+          <span>ISS Boylam</span>
         </div>
       </div>
+    </div>
 
-      <div class="hero-card status">
-        <div>
-          <div><span class="dot"></span>Panel aktif</div>
-          <div class="big" id="clock">--:--</div>
-          <div class="small">
-            Modüller: RDAP, DNS, HTTP, SSL, crt.sh, robots, sitemap, IP, IOC, header.
-          </div>
+    <div class="card">
+      <h2>Katmanlar</h2>
+      <button id="btnEq" class="btn active" onclick="toggleLayer('eq')">🌍 Depremler</button>
+      <button id="btnIss" class="btn active" onclick="toggleLayer('iss')">🛰️ ISS Konumu</button>
+      <button id="btnNight" class="btn active" onclick="toggleLayer('night')">🌗 Gündüz / Gece Yaklaşık</button>
+      <button class="btn" onclick="refreshAll()">🔄 Verileri Yenile</button>
+    </div>
+
+    <div class="card">
+      <h2>Domain Sağlık Kontrolü</h2>
+      <div class="inputrow">
+        <input id="domainInput" value="www.hızlısetup.com" />
+        <button class="btn small" onclick="checkDomain()">Kontrol</button>
+      </div>
+      <div id="domainResult" class="mono" style="margin-top:10px">Hazır.</div>
+    </div>
+
+    <div class="card">
+      <h2>Son Açık Kaynak Haberleri</h2>
+      <div id="newsList" class="list">
+        <div class="item">
+          <small>Yükleniyor...</small>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="grid">
-      <aside class="panel">
-        <div class="field">
-          <label>Modül seç</label>
-          <select id="module">
-            <option value="all">Tüm Pasif Kontroller</option>
-            <option value="rdap">RDAP Domain / IP</option>
-            <option value="dns">DNS Kayıtları</option>
-            <option value="http">HTTP Header Analizi</option>
-            <option value="ssl">SSL Sertifika Analizi</option>
-            <option value="crtsh">crt.sh Subdomain Keşfi</option>
-            <option value="robots">robots.txt / sitemap.xml</option>
-            <option value="ip">Public IP OSINT</option>
-            <option value="redirects">URL Yönlendirme Zinciri</option>
-            <option value="email_header">E-posta Header Analizi</option>
-            <option value="ioc">IOC Çıkarıcı</option>
-            <option value="hash">Hash Türü Tahmini</option>
-          </select>
-        </div>
-
-        <div class="field" id="targetBox">
-          <label>Hedef</label>
-          <input id="target" placeholder="ornek.com, https://ornek.com veya 8.8.8.8">
-        </div>
-
-        <div class="field hide" id="textBox">
-          <label>Metin / Header</label>
-          <textarea id="textInput" placeholder="Analiz edilecek metni veya e-posta header bilgisini buraya yapıştır."></textarea>
-        </div>
-
-        <div class="btn-row">
-          <button onclick="runModule()">Analiz Et</button>
-          <button class="secondary" onclick="clearResult()">Temizle</button>
-        </div>
-
-        <div class="modules">
-          <div class="module-tip">
-            <b>İpucu:</b> “Tüm Pasif Kontroller” domain için en kapsamlı çıktıyı verir.
-          </div>
-          <div class="module-tip">
-            <b>DNS notu:</b> MX/TXT/NS için <code>pip install dnspython</code> kurabilirsin.
-          </div>
-        </div>
-
-        <div class="notice">
-          Bu panel sadece kendi sistemlerin, kendi domainlerin veya izinli araştırmalar için kullanılmalıdır.
-        </div>
-      </aside>
-
-      <section class="result">
-        <div class="result-head">
-          <div class="result-title">Sonuç</div>
-          <div class="tools">
-            <button class="secondary" onclick="copyResult()">Kopyala</button>
-            <button class="secondary" onclick="downloadResult()">JSON İndir</button>
-          </div>
-        </div>
-        <pre id="output">Hazır. Bir modül seçip analiz başlat.</pre>
-      </section>
-    </section>
+    <div class="card danger">
+      <h2>Güvenli Kullanım</h2>
+      <div class="warn">
+        Bu sürüm saldırı, port tarama, zafiyet tarama veya veri sızıntısı arama yapmaz.
+        Sadece açık kaynak veri okur ve kendi domainin için pasif kontrol yapar.
+      </div>
+    </div>
 
     <div class="footer">
-      Termux OSINT Panel · Güvenli / pasif analiz sürümü
+      v1.0 • Yerel panel cihazında çalışır. Harita ve veri kaynakları için internet gerekir.
+    </div>
+
+  </aside>
+
+  <main class="mapwrap">
+    <div class="topbar">
+      <div class="pill"><strong>Durum:</strong> <span id="status">Başlatılıyor</span></div>
+      <div class="pill"><strong>UTC:</strong> <span id="utcClock">-</span></div>
+      <div class="pill"><strong>Merkez:</strong> Dünya görünümü</div>
+    </div>
+
+    <div id="map" class="map"></div>
+
+    <div class="legend">
+      <div><span class="dot eq"></span>Deprem</div>
+      <div><span class="dot iss"></span>ISS</div>
+      <div><span class="dot night"></span>Yaklaşık gece alanı</div>
     </div>
   </main>
 
-  <script>
-    const moduleSelect = document.getElementById("module");
-    const targetBox = document.getElementById("targetBox");
-    const textBox = document.getElementById("textBox");
-    const output = document.getElementById("output");
+</div>
 
-    function updateClock() {
-      const d = new Date();
-      document.getElementById("clock").textContent =
-        d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-    }
+<script>
+const map = L.map('map', {
+  worldCopyJump: true,
+  zoomControl: true
+}).setView([20, 0], 2.5);
 
-    setInterval(updateClock, 1000);
-    updateClock();
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
 
-    moduleSelect.addEventListener("change", () => {
-      const mod = moduleSelect.value;
-      if (["email_header", "ioc", "hash"].includes(mod)) {
-        textBox.classList.remove("hide");
-        targetBox.classList.add("hide");
-      } else {
-        textBox.classList.add("hide");
-        targetBox.classList.remove("hide");
-      }
+let eqLayer = L.layerGroup().addTo(map);
+let issLayer = L.layerGroup().addTo(map);
+let nightLayer = L.layerGroup().addTo(map);
+
+let layers = {
+  eq: true,
+  iss: true,
+  night: true
+};
+
+let issMarker = null;
+
+function setStatus(s) {
+  document.getElementById('status').textContent = s;
+}
+
+function fmt(n, d = 2) {
+  return Number(n).toFixed(d);
+}
+
+function utcTick() {
+  document.getElementById('utcClock').textContent =
+    new Date().toISOString().replace('T', ' ').slice(0, 19);
+}
+
+setInterval(utcTick, 1000);
+utcTick();
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>'"]/g, function(c) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#039;',
+      '"': '&quot;'
+    }[c];
+  });
+}
+
+function popupHtml(title, rows, url) {
+  let h = `<b>${escapeHtml(title || 'Olay')}</b>`;
+
+  rows.forEach(function(r) {
+    h += `<br><small>${escapeHtml(r)}</small>`;
+  });
+
+  if (url) {
+    h += `<br><a target="_blank" href="${url}">Kaynağı aç</a>`;
+  }
+
+  return h;
+}
+
+async function jget(url) {
+  const r = await fetch(url, {
+    cache: 'no-store'
+  });
+
+  if (!r.ok) {
+    throw new Error('HTTP ' + r.status);
+  }
+
+  return await r.json();
+}
+
+async function loadEarthquakes() {
+  try {
+    const data = await jget('/api/earthquakes');
+
+    eqLayer.clearLayers();
+
+    data.events.forEach(function(e) {
+      const mag = Number(e.mag || 0);
+      const radius = Math.max(5, Math.min(26, 5 + mag * 4));
+
+      const color =
+        mag >= 5 ? '#ff4d6d' :
+        mag >= 3 ? '#ffd166' :
+        '#3ddc97';
+
+      const marker = L.circleMarker([e.lat, e.lon], {
+        radius: radius,
+        color: color,
+        fillColor: color,
+        fillOpacity: .62,
+        weight: 1
+      });
+
+      marker.bindPopup(
+        popupHtml(
+          e.title,
+          [
+            `Büyüklük: ${e.mag ?? '-'}`,
+            `Derinlik: ${e.depth_km ?? '-'} km`,
+            e.place || ''
+          ],
+          e.url
+        )
+      );
+
+      marker.addTo(eqLayer);
     });
 
-    async function runModule() {
-      const mod = moduleSelect.value;
-      let target = document.getElementById("target").value.trim();
+    document.getElementById('eqCount').textContent = data.count;
 
-      if (["email_header", "ioc", "hash"].includes(mod)) {
-        target = document.getElementById("textInput").value;
-      }
+  } catch (err) {
+    console.error(err);
+    setStatus('Deprem verisi alınamadı');
+  }
+}
 
-      if (!target) {
-        output.textContent = "Lütfen hedef veya metin gir.";
-        return;
-      }
+async function loadISS() {
+  try {
+    const data = await jget('/api/iss');
 
-      output.textContent = "Analiz çalışıyor...";
+    issLayer.clearLayers();
 
-      try {
-        const res = await fetch("/api/run", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            module: mod,
-            target: target
-          })
-        });
+    const icon = L.divIcon({
+      className: '',
+      html: '<div style="width:24px;height:24px;border-radius:50%;background:#36d8ff;border:3px solid white;box-shadow:0 0 24px #36d8ff"></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
 
-        const data = await res.json();
-        output.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        output.textContent = "Hata: " + e;
-      }
+    issMarker = L.marker([data.lat, data.lon], {
+      icon: icon
+    }).bindPopup(
+      popupHtml(
+        data.title,
+        [
+          `Lat: ${fmt(data.lat, 4)}`,
+          `Lon: ${fmt(data.lon, 4)}`,
+          `Zaman: ${data.timestamp || '-'}`
+        ]
+      )
+    );
+
+    issMarker.addTo(issLayer);
+
+    document.getElementById('issLat').textContent = fmt(data.lat, 2);
+    document.getElementById('issLon').textContent = fmt(data.lon, 2);
+
+  } catch (err) {
+    console.error(err);
+    setStatus('ISS verisi alınamadı');
+  }
+}
+
+async function loadNews() {
+  try {
+    const data = await jget('/api/news');
+
+    document.getElementById('newsCount').textContent = data.count;
+
+    const box = document.getElementById('newsList');
+    box.innerHTML = '';
+
+    data.articles.forEach(function(a) {
+      const div = document.createElement('div');
+      div.className = 'item';
+
+      const title = escapeHtml(a.title || 'Başlıksız haber');
+      const url = a.url || '#';
+
+      div.innerHTML =
+        `<a target="_blank" href="${url}">${title}</a>` +
+        `<small>${escapeHtml(a.domain || '')} • ${escapeHtml(a.sourcecountry || '')} • ${escapeHtml(a.seendate || '')}</small>`;
+
+      box.appendChild(div);
+    });
+
+    if (!data.articles.length) {
+      box.innerHTML = '<div class="item"><small>Haber bulunamadı.</small></div>';
     }
 
-    function clearResult() {
-      output.textContent = "Temizlendi.";
+  } catch (err) {
+    console.error(err);
+    document.getElementById('newsList').innerHTML =
+      '<div class="item"><small>Haber verisi alınamadı.</small></div>';
+  }
+}
+
+function drawNight() {
+  nightLayer.clearLayers();
+
+  const now = new Date();
+  const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+
+  const sunLon = 180 - utcHours * 15;
+  const nightCenter = ((sunLon + 180 + 540) % 360) - 180;
+
+  let west = nightCenter - 90;
+  let east = nightCenter + 90;
+
+  const polys = [];
+
+  function rect(w, e) {
+    return [
+      [-85, w],
+      [85, w],
+      [85, e],
+      [-85, e]
+    ];
+  }
+
+  if (west < -180) {
+    polys.push(rect(west + 360, 180));
+    polys.push(rect(-180, east));
+  } else if (east > 180) {
+    polys.push(rect(west, 180));
+    polys.push(rect(-180, east - 360));
+  } else {
+    polys.push(rect(west, east));
+  }
+
+  polys.forEach(function(p) {
+    L.polygon(p, {
+      color: '#1b2544',
+      weight: 0,
+      fillColor: '#1b2544',
+      fillOpacity: .28,
+      interactive: false
+    }).addTo(nightLayer);
+  });
+}
+
+setInterval(function() {
+  if (layers.night) {
+    drawNight();
+  }
+}, 60000);
+
+function toggleLayer(name) {
+  layers[name] = !layers[name];
+
+  const obj =
+    name === 'eq' ? eqLayer :
+    name === 'iss' ? issLayer :
+    nightLayer;
+
+  const btn =
+    document.getElementById('btn' + name.charAt(0).toUpperCase() + name.slice(1));
+
+  if (layers[name]) {
+    obj.addTo(map);
+    btn.classList.add('active');
+
+    if (name === 'night') {
+      drawNight();
     }
 
-    async function copyResult() {
-      try {
-        await navigator.clipboard.writeText(output.textContent);
-        alert("Sonuç kopyalandı.");
-      } catch (e) {
-        alert("Kopyalama başarısız.");
-      }
-    }
+  } else {
+    map.removeLayer(obj);
+    btn.classList.remove('active');
+  }
+}
 
-    function downloadResult() {
-      const blob = new Blob([output.textContent], {type: "application/json"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "osint-sonuc.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  </script>
+async function checkDomain() {
+  const target = document.getElementById('domainInput').value;
+  const out = document.getElementById('domainResult');
+
+  out.textContent = 'Kontrol ediliyor...';
+
+  try {
+    const data = await jget('/api/domain?target=' + encodeURIComponent(target));
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    out.textContent = 'Hata: ' + err.message;
+  }
+}
+
+async function refreshAll() {
+  setStatus('Veriler yenileniyor...');
+
+  await Promise.allSettled([
+    loadEarthquakes(),
+    loadISS(),
+    loadNews()
+  ]);
+
+  if (layers.night) {
+    drawNight();
+  }
+
+  setStatus('Hazır');
+}
+
+refreshAll();
+
+setInterval(loadISS, 10000);
+setInterval(loadEarthquakes, 5 * 60 * 1000);
+setInterval(loadNews, 10 * 60 * 1000);
+
+checkDomain();
+</script>
 </body>
-</html>
-"""
+</html>'''
 
 
-# ---------------------------------------------------------
-# HTTP Handler
-# ---------------------------------------------------------
+class Handler(BaseHTTPRequestHandler):
+    server_version = f"HizliSetupGlobalEye/{APP_VERSION}"
 
-class AppHandler(BaseHTTPRequestHandler):
-    server_version = f"{APP_NAME}/{VERSION}"
+    def log_message(self, fmt: str, *args: Any) -> None:
+        sys.stdout.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
 
-    def log_message(self, fmt, *args):
-        sys.stdout.write("[%s] %s\n" % (now(), fmt % args))
-
-    def do_GET(self):
+    def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
 
-        if parsed.path == "/":
-            html_response(self, HTML_PAGE)
-            return
+        try:
+            if path == "/" or path == "/index.html":
+                html_response(self, INDEX_HTML)
 
-        if parsed.path == "/health":
+            elif path == "/api/status":
+                json_response(self, {
+                    "ok": True,
+                    "app": APP_NAME,
+                    "version": APP_VERSION,
+                    "time": now_iso()
+                })
+
+            elif path == "/api/earthquakes":
+                json_response(self, get_earthquakes())
+
+            elif path == "/api/iss":
+                json_response(self, get_iss())
+
+            elif path == "/api/news":
+                json_response(self, get_news())
+
+            elif path == "/api/domain":
+                target = (qs.get("target") or [DEFAULT_DOMAIN])[0]
+                json_response(self, domain_report(target))
+
+            else:
+                json_response(self, {
+                    "ok": False,
+                    "error": "Not found"
+                }, 404)
+
+        except urllib.error.HTTPError as exc:
             json_response(self, {
-                "ok": True,
-                "app": APP_NAME,
-                "version": VERSION,
-                "time": now(),
-            })
-            return
+                "ok": False,
+                "error": f"HTTPError: {exc.code} {exc.reason}",
+                "path": path
+            }, 502)
 
-        html_response(self, "<h1>404</h1>", status=404)
-
-    def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-
-        if parsed.path != "/api/run":
-            json_response(self, {"error": "Not found"}, status=404)
-            return
-
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length > 250_000:
-                json_response(self, {"error": "Girdi çok büyük."}, status=413)
-                return
-
-            raw = self.rfile.read(length).decode("utf-8", errors="replace")
-            data = json.loads(raw or "{}")
-
-            mod = clean_text(data.get("module"), 50)
-            target = clean_text(data.get("target"), 100000)
-
-            if mod not in MODULES:
-                json_response(self, {"error": "Bilinmeyen modül."}, status=400)
-                return
-
-            started = time.time()
-
-            try:
-                result = MODULES[mod](target)
-            except Exception as e:
-                result = safe_error(e)
-
-            response = {
-                "app": APP_NAME,
-                "version": VERSION,
-                "module": mod,
-                "generated_at": now(),
-                "duration_seconds": round(time.time() - started, 3),
-                "result": result,
-            }
-
-            json_response(self, response)
-
-        except Exception as e:
-            json_response(self, {"error": str(e)}, status=500)
+        except Exception as exc:
+            json_response(self, {
+                "ok": False,
+                "error": str(exc),
+                "trace": traceback.format_exc(limit=2)
+            }, 500)
 
 
-# ---------------------------------------------------------
-# Başlatıcı
-# ---------------------------------------------------------
-
-def find_random_port(host):
+def find_port() -> int:
     for _ in range(50):
-        port = random.randint(25000, 65000)
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind((host, port))
+        port = random.randint(41000, 62000)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
                 return port
-        except OSError:
-            continue
+            except OSError:
+                continue
+
     return 8080
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Termux OSINT Panel - Tek Dosya")
-    parser.add_argument("--public", action="store_true", help="Aynı Wi-Fi ağından erişim için 0.0.0.0 üzerinde açar.")
-    parser.add_argument("--port", type=int, default=0, help="Port belirt. Boşsa rastgele seçilir.")
-    args = parser.parse_args()
-
-    host = "0.0.0.0" if args.public else "127.0.0.1"
-    port = args.port if args.port else find_random_port(host)
-
-    server = ThreadingHTTPServer((host, port), AppHandler)
+def main() -> None:
+    port = find_port()
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
 
     local_url = f"http://127.0.0.1:{port}"
+    lan_url = f"http://0.0.0.0:{port}"
 
-    print("")
-    print("=" * 62)
-    print(f"{APP_NAME} v{VERSION}")
-    print("=" * 62)
-    print(f"Panel adresi: {local_url}")
-
-    if args.public:
-        try:
-            ip = socket.gethostbyname(socket.gethostname())
-        except Exception:
-            ip = "TELEFON_IP_ADRESIN"
-        print(f"Aynı Wi-Fi için: http://{ip}:{port}")
-
-    print("")
-    print("Durdurmak için CTRL + C")
-    print("=" * 62)
-    print("")
+    print("\n" + "=" * 64)
+    print(f" {APP_NAME} v{APP_VERSION}")
+    print(" Güvenli/Pasif OSINT harita paneli başlatıldı")
+    print(f" Yerel adres : {local_url}")
+    print(f" Ağ adresi   : {lan_url}")
+    print(" Durdurmak için CTRL + C")
+    print("=" * 64 + "\n")
 
     try:
+        try:
+            webbrowser.open(local_url)
+        except Exception:
+            pass
+
         server.serve_forever()
+
     except KeyboardInterrupt:
-        print("\nPanel kapatıldı.")
+        print("\nPanel kapatılıyor...")
+
     finally:
         server.server_close()
 
